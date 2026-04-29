@@ -65,7 +65,7 @@ def test_api_session_flow() -> None:
     finish_response = client.post(f"/api/sessions/{session_id}/finish")
     assert finish_response.status_code == 200
     assert finish_response.json()["session"]["status"] == "finished"
-    assert "Final interest:" in finish_response.json()["report"]
+    assert "Итог тренировки" in finish_response.json()["report"]
 
     report_response = client.get(f"/api/sessions/{session_id}/report")
     assert report_response.status_code == 200
@@ -242,8 +242,8 @@ def test_api_report_reveals_hidden_profile_only_after_finish() -> None:
     create_response = client.post("/api/sessions", json={})
     session_id = create_response.json()["session"]["session_id"]
     detail_before = client.get(f"/api/sessions/{session_id}")
-    assert "Hidden role:" not in detail_before.text
+    assert "Кто был клиент" not in detail_before.text
 
     finish_response = client.post(f"/api/sessions/{session_id}/finish")
     assert finish_response.status_code == 200
-    assert "Hidden role:" in finish_response.json()["report"]
+    assert "Кто был клиент" in finish_response.json()["report"]

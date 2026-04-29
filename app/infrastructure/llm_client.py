@@ -12,6 +12,7 @@ from app.domain.errors import LLMProviderConfigurationError
 from app.domain.interest import interest_band
 from app.domain.models import LLMTurnInput, LLMTurnResponse, StatePatch
 from app.infrastructure.config import Settings
+from app.infrastructure.fake_llm_client import FakeLLMClient as CleanFakeLLMClient
 from app.prompts.schemas import llm_turn_response_schema_json
 
 logger = logging.getLogger(__name__)
@@ -396,6 +397,8 @@ class FakeLLMClient:
 
 
 Transport = Callable[[dict[str, Any]], Any]
+
+FakeLLMClient = CleanFakeLLMClient
 
 
 class YandexCompatibleLLMClient:
