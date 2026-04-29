@@ -1,0 +1,349 @@
+from __future__ import annotations
+
+import json
+import logging
+from json import JSONDecodeError
+from typing import Any, Callable, Protocol
+
+from pydantic import ValidationError
+
+from app.domain.interest import interest_band
+from app.domain.models import LLMTurnInput, LLMTurnResponse, StatePatch
+from app.infrastructure.config import Settings
+from app.prompts.schemas import llm_turn_response_schema_json
+
+logger = logging.getLogger(__name__)
+
+
+class LLMClient(Protocol):
+    def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
+        ...
+
+
+class LLMClientError(RuntimeError):
+    """Raised when the external LLM client cannot produce a valid structured response."""
+
+
+def _sanitize_api_key(api_key: str) -> str:
+    if not api_key:
+        return ""
+    return f"{api_key[:6]}..."
+
+
+def _response_to_payload(response: Any) -> dict[str, Any] | str:
+    if isinstance(response, (dict, str)):
+        return response
+    model_dump = getattr(response, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump()
+        if isinstance(dumped, dict):
+            return dumped
+    output_text = getattr(response, "output_text", None)
+    if isinstance(output_text, str):
+        return {"output_text": output_text}
+    raise LLMClientError("Provider response cannot be converted to a structured payload.")
+
+
+def _extract_json_object(raw_text: str) -> str:
+    start = raw_text.find("{")
+    if start < 0:
+        raise JSONDecodeError("No JSON object found", raw_text, 0)
+    depth = 0
+    for index in range(start, len(raw_text)):
+        char = raw_text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return raw_text[start : index + 1]
+    raise JSONDecodeError("Unterminated JSON object", raw_text, start)
+
+
+def parse_llm_turn_response(raw_payload: dict[str, Any] | str) -> LLMTurnResponse:
+    if isinstance(raw_payload, dict) and "answer" in raw_payload:
+        return LLMTurnResponse.model_validate(raw_payload)
+    if isinstance(raw_payload, dict):
+        output_text = raw_payload.get("output_text")
+        if isinstance(output_text, str):
+            return LLMTurnResponse.model_validate_json(_extract_json_object(output_text))
+        output = raw_payload.get("output")
+        if isinstance(output, list):
+            for item in output:
+                if not isinstance(item, dict):
+                    continue
+                content = item.get("content")
+                if isinstance(content, list):
+                    for chunk in content:
+                        if not isinstance(chunk, dict):
+                            continue
+                        text = chunk.get("text")
+                        if isinstance(text, str):
+                            return LLMTurnResponse.model_validate_json(_extract_json_object(text))
+        alternatives = raw_payload.get("alternatives")
+        if isinstance(alternatives, list) and alternatives:
+            message = alternatives[0].get("message", {})
+            text = message.get("text")
+            if isinstance(text, str):
+                return LLMTurnResponse.model_validate_json(_extract_json_object(text))
+        raise LLMClientError("Provider response does not contain structured text output.")
+    try:
+        decoded = json.loads(raw_payload)
+    except JSONDecodeError:
+        return LLMTurnResponse.model_validate_json(_extract_json_object(raw_payload))
+    return parse_llm_turn_response(decoded)
+
+
+class FakeLLMClient:
+    def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
+        message = payload.manager_message.strip()
+        message_lower = message.lower()
+        current_interest = int(payload.current_state["interest_score"])
+        delta = self._score_message(message_lower)
+        next_interest = max(0, min(100, current_interest + delta))
+        band = interest_band(next_interest)
+        stage = self._choose_stage(message_lower, current_stage=str(payload.current_state["stage"]), next_interest=next_interest)
+        answer = self._build_answer(band, stage, payload)
+        patch = self._build_patch(message_lower, band)
+        notes = self._build_notes(delta, band, message)
+        return LLMTurnResponse(
+            answer=answer,
+            interest_delta=delta,
+            state_patch=patch,
+            stage=stage,
+            internal_notes=notes,
+        )
+
+    def _score_message(self, message_lower: str) -> int:
+        score = 0
+        if len(message_lower) < 12:
+            score -= 4
+        if "?" in message_lower:
+            score += 4
+        if any(token in message_lower for token in ["audit", "diagnostic", "conversion", "funnel", "loss", "problem"]):
+            score += 3
+        if any(token in message_lower for token in ["you must", "buy", "urgent offer", "only today"]):
+            score -= 6
+        if any(token in message_lower for token in ["price", "cost", "roi", "result"]):
+            score += 2
+        return max(-15, min(15, score))
+
+    def _choose_stage(self, message_lower: str, current_stage: str, next_interest: int) -> str:
+        if next_interest >= 75 and "?" in message_lower:
+            return "next_step_negotiation"
+        if any(token in message_lower for token in ["why", "how", "problem", "loss"]):
+            return "need_discovery"
+        if any(token in message_lower for token in ["example", "result", "roi", "diagnostic"]):
+            return "value_clarification"
+        return current_stage
+
+    def _build_answer(self, band: str, stage: str, payload: LLMTurnInput) -> str:
+        offer = payload.scenario.offer
+        if band == "cold":
+            return "I am not convinced this is relevant. Be specific."
+        if band == "skeptical":
+            return f"What exactly do you review in {offer.lower()}, and why do you think it applies to us?"
+        if band == "neutral":
+            return "Understood. How long does that take, and what do we get at the end?"
+        if band == "warm":
+            return f"That sounds closer to useful. What inputs do you need from us for the next step in {stage}?"
+        return "This is getting clearer. What would the next step look like, and who should be involved from our side?"
+
+    def _build_patch(self, message_lower: str, band: str) -> StatePatch:
+        add_open_objections: list[str] = []
+        remove_open_objections: list[str] = []
+        known_pains: list[str] = []
+        buying_signals: list[str] = []
+        red_flags: list[str] = []
+        trust_delta = 0
+        irritation_delta = 0
+        urgency_delta = 0
+        tone = None
+
+        if "?" in message_lower:
+            trust_delta += 3
+            irritation_delta -= 1
+            known_pains.append("Manager asked a diagnostic question instead of generic pitching.")
+        if any(token in message_lower for token in ["conversion", "loss", "funnel", "diagnostic"]):
+            trust_delta += 2
+            urgency_delta += 1
+            remove_open_objections.append("I do not see why this is necessary.")
+        if any(token in message_lower for token in ["buy", "must", "only today"]):
+            irritation_delta += 4
+            red_flags.append("Manager became pushy.")
+
+        if band in {"neutral", "warm", "hot"}:
+            buying_signals.append("Client asked about scope, time, or next step.")
+        if band == "cold":
+            tone = "cold"
+            add_open_objections.append("Still does not see enough relevance.")
+        elif band == "skeptical":
+            tone = "skeptical"
+            add_open_objections.append("Needs more concrete proof and relevance.")
+        elif band == "neutral":
+            tone = "neutral"
+        elif band == "warm":
+            tone = "warm"
+        else:
+            tone = "ready_next_step"
+
+        return StatePatch(
+            tone=tone,
+            trust_delta=max(-15, min(15, trust_delta)),
+            irritation_delta=max(-15, min(15, irritation_delta)),
+            urgency_delta=max(-15, min(15, urgency_delta)),
+            add_open_objections=add_open_objections,
+            remove_open_objections=remove_open_objections,
+            add_known_pains=known_pains,
+            add_buying_signals=buying_signals,
+            add_red_flags=red_flags,
+        )
+
+    def _build_notes(self, delta: int, band: str, message: str) -> str:
+        direction = "improved" if delta > 0 else "did not improve"
+        return f"Client interest {direction}; resulting band is {band}. Manager message length={len(message)}."
+
+
+Transport = Callable[[dict[str, Any]], Any]
+
+
+class YandexCompatibleLLMClient:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        folder_id: str,
+        agent_id: str,
+        timeout_seconds: int = 30,
+        max_retries: int = 1,
+        fallback_client: LLMClient | None = None,
+        transport: Transport | None = None,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._folder_id = folder_id
+        self._agent_id = agent_id
+        self._timeout_seconds = timeout_seconds
+        self._max_retries = max_retries
+        self._fallback_client = fallback_client
+        self._transport = transport or self._default_transport
+
+    def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
+        last_error: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            retry_instruction = ""
+            if attempt > 0:
+                retry_instruction = (
+                    "\nPrevious answer was invalid. Return one JSON object only. "
+                    "No markdown. No commentary."
+                )
+            request_payload = self._build_request_payload(payload, retry_instruction)
+            logger.info(
+                "yandex_llm_request attempt=%s url=%s api_key=%s project=%s payload=%s",
+                attempt + 1,
+                self.endpoint_url,
+                _sanitize_api_key(self._api_key),
+                self._folder_id,
+                request_payload,
+            )
+            try:
+                raw_response = _response_to_payload(self._transport(request_payload))
+                return parse_llm_turn_response(raw_response)
+            except (LLMClientError, ValidationError, JSONDecodeError, TimeoutError) as error:
+                last_error = error
+                logger.warning("yandex_llm_request_failed attempt=%s error=%s", attempt + 1, error)
+            except Exception as error:
+                last_error = error
+                status_code = getattr(error, "status_code", None)
+                response = getattr(error, "response", None)
+                error_body = ""
+                if response is not None:
+                    response_text = getattr(response, "text", None)
+                    if isinstance(response_text, str):
+                        error_body = response_text
+                    else:
+                        try:
+                            error_body = json.dumps(response.json(), ensure_ascii=True)
+                        except Exception:
+                            error_body = repr(response)
+                logger.warning(
+                    "yandex_llm_http_error attempt=%s status=%s error=%s body=%s",
+                    attempt + 1,
+                    status_code,
+                    error,
+                    error_body,
+                )
+        if self._fallback_client is not None:
+            logger.warning("yandex_llm_fallback_to_fake reason=%s", last_error)
+            return self._fallback_client.generate_client_turn(payload)
+        raise LLMClientError(f"Yandex LLM request failed after retries: {last_error}") from last_error
+
+    def _build_request_payload(self, payload: LLMTurnInput, retry_instruction: str) -> dict[str, Any]:
+        schema = json.loads(llm_turn_response_schema_json())
+        snapshot = {
+            "task": payload.task,
+            "scenario": payload.scenario.model_dump(mode="json"),
+            "persona": payload.persona.model_dump(mode="json"),
+            "current_state": payload.current_state,
+            "conversation_summary": payload.conversation_summary,
+            "recent_turns": payload.recent_turns,
+            "manager_message": payload.manager_message,
+        }
+        if retry_instruction:
+            snapshot["retry_instruction"] = retry_instruction.strip()
+        return {
+            "prompt": {
+                "id": self._agent_id,
+            },
+            "input": json.dumps(snapshot, ensure_ascii=False),
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "llm_turn_response",
+                    "schema": schema,
+                    "strict": True,
+                }
+            },
+        }
+
+    def _default_transport(self, request_payload: dict[str, Any]) -> Any:
+        try:
+            from openai import OpenAI
+        except ImportError as error:
+            raise LLMClientError(
+                "openai package is required for yandex_compatible backend. Reinstall project dependencies."
+            ) from error
+
+        client = OpenAI(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            project=self._folder_id,
+            timeout=self._timeout_seconds,
+        )
+        return client.responses.create(**request_payload)
+
+    @property
+    def endpoint_url(self) -> str:
+        return f"{self._base_url}/responses"
+
+
+def build_llm_client(settings: Settings) -> LLMClient:
+    backend = settings.llm_backend.lower().strip()
+    if backend == "fake":
+        return FakeLLMClient()
+    if backend == "yandex_compatible":
+        if not all([settings.yandex_api_key, settings.yandex_folder_id, settings.yandex_agent_id]):
+            logger.warning("llm_backend_incomplete_config backend=%s fallback=fake", backend)
+            return FakeLLMClient()
+        return YandexCompatibleLLMClient(
+            base_url=settings.yandex_base_url,
+            api_key=settings.yandex_api_key,
+            folder_id=settings.yandex_folder_id,
+            agent_id=settings.yandex_agent_id,
+            timeout_seconds=settings.llm_request_timeout_seconds,
+            max_retries=1,
+            fallback_client=FakeLLMClient(),
+        )
+    logger.warning("llm_backend_unknown backend=%s fallback=fake", settings.llm_backend)
+    return FakeLLMClient()
