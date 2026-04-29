@@ -2,37 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+from typing import Any
 
-LLM_TURN_RESPONSE_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["answer", "interest_delta", "state_patch", "stage", "internal_notes"],
-    "properties": {
-        "answer": {"type": "string"},
-        "interest_delta": {"type": "integer", "minimum": -15, "maximum": 15},
-        "stage": {"type": "string"},
-        "internal_notes": {"type": "string"},
-        "state_patch": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "tone": {
-                    "type": ["string", "null"],
-                    "enum": ["cold", "skeptical", "neutral", "interested", "warm", "ready_next_step", None],
-                },
-                "trust_delta": {"type": "integer", "minimum": -15, "maximum": 15},
-                "irritation_delta": {"type": "integer", "minimum": -15, "maximum": 15},
-                "urgency_delta": {"type": "integer", "minimum": -15, "maximum": 15},
-                "add_open_objections": {"type": "array", "items": {"type": "string"}},
-                "remove_open_objections": {"type": "array", "items": {"type": "string"}},
-                "add_known_pains": {"type": "array", "items": {"type": "string"}},
-                "add_buying_signals": {"type": "array", "items": {"type": "string"}},
-                "add_red_flags": {"type": "array", "items": {"type": "string"}},
-            },
-        },
-    },
-}
+from pydantic import BaseModel
 
+from app.domain.models import LLMTurnResponse
 
 PROMPT_PATH = Path(__file__).with_name("client_simulator.md")
 
@@ -41,5 +15,18 @@ def load_client_simulator_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8").strip()
 
 
+def build_strict_json_schema(model_class: type[BaseModel]) -> dict[str, Any]:
+    """Build the validation JSON schema directly from the Pydantic model.
+
+    "Strict" here relies on model-level constraints such as ``extra="forbid"``.
+    This helper does not add any provider-specific schema adapter semantics.
+    """
+    return model_class.model_json_schema(mode="validation")
+
+
+def llm_turn_response_schema() -> dict[str, Any]:
+    return build_strict_json_schema(LLMTurnResponse)
+
+
 def llm_turn_response_schema_json() -> str:
-    return json.dumps(LLM_TURN_RESPONSE_SCHEMA, ensure_ascii=True, separators=(",", ":"))
+    return json.dumps(llm_turn_response_schema(), ensure_ascii=True, separators=(",", ":"))

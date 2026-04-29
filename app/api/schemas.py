@@ -27,6 +27,7 @@ class SessionPublicDTO(BaseModel):
     scenario_id: str
     status: str
     persona_name: str
+    public_brief: str
     stage: str
     interest: InterestDTO
     client_state_public: dict[str, object]
@@ -51,8 +52,8 @@ class PersonaOptionDTO(BaseModel):
 
 
 class SessionCreateRequest(BaseModel):
-    scenario_id: str
-    persona_id: str
+    scenario_id: str | None = None
+    persona_id: str | None = None
 
 
 class TurnRequest(BaseModel):

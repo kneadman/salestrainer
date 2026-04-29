@@ -6,7 +6,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.application.evaluator import evaluate_turn
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
+from app.domain.errors import SessionNotActiveError, SessionNotFoundError
 from app.domain.interest import apply_interest_delta, interest_band
 from app.domain.models import LLMTurnInput, TrainingSessionState, Turn
 from app.domain.scenarios import get_scenario
@@ -51,17 +53,26 @@ class TurnService:
 
     def process_message(self, session_id: str, manager_message: str) -> TurnResult:
         session = self._require_active_session(session_id)
+        expected_version = session.state_version
         interest_before = session.interest_score
         stage_before = session.stage
         llm_input = LLMTurnInput(
             task="simulate_next_client_reply",
             scenario=get_scenario(session.scenario_id),
-            persona=session.persona,
+            hidden_profile=session.persona,
             current_state={
                 "interest_score": session.interest_score,
                 "interest_band": interest_band(session.interest_score),
                 "stage": session.stage,
                 "client_state": session.client_state.model_dump(mode="json"),
+            },
+            discovered_facts={
+                "role": session.client_state.discovered_role,
+                "authority_level": session.client_state.discovered_authority_level,
+                "pains": session.client_state.discovered_pains,
+                "decision_criteria": session.client_state.discovered_decision_criteria,
+                "constraints": session.client_state.discovered_constraints,
+                "current_process": session.client_state.discovered_current_process,
             },
             conversation_summary=session.summary,
             recent_turns=[
@@ -93,21 +104,30 @@ class TurnService:
             stage_after=resolved_stage,
             created_at=now,
         )
+        full_turns = [*session.turns, turn]
         recent_turns = [*session.recent_turns, turn][-self._recent_turn_limit :]
         overflow_turns = [*session.recent_turns, turn][:-self._recent_turn_limit]
+        evaluation = evaluate_turn(
+            turn_index=turn.index,
+            manager_message=manager_message,
+            client_state=updated_client_state,
+            hidden_profile=session.persona,
+        )
         session.interest_score = interest_after
         session.stage = resolved_stage
         session.client_state = updated_client_state
+        session.turns = full_turns
+        session.turn_evaluations = [*session.turn_evaluations, evaluation]
         session.recent_turns = recent_turns
         session.turn_count += 1
-        session.state_version += 1
+        session.state_version = expected_version + 1
         session.updated_at = now
         session.summary = self._update_summary(
             session,
             latest_internal_notes=llm_response.internal_notes,
             overflow_turns=overflow_turns,
         )
-        self._repository.save(session)
+        self._repository.save(session, expected_version=expected_version)
         logger.info(
             "turn_processed session_id=%s turn_index=%s interest_before=%s interest_after=%s stage_before=%s stage_after=%s",
             session.session_id,
@@ -136,9 +156,9 @@ class TurnService:
     def _require_active_session(self, session_id: str) -> TrainingSessionState:
         session = self._repository.get(session_id)
         if session is None:
-            raise ValueError(f"Session '{session_id}' not found.")
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
         if session.status != "active":
-            raise ValueError(f"Session '{session_id}' is not active.")
+            raise SessionNotActiveError(f"Session '{session_id}' is not active.")
         return session
 
     def _build_summary(self, session: TrainingSessionState, internal_notes: str) -> str:

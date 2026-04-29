@@ -6,9 +6,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
+from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import TrainingSessionState, Turn
 from app.infrastructure.config import Settings
-from app.infrastructure.llm_client import LLMClientError, _response_to_payload, _sanitize_api_key
+from app.infrastructure.llm_client import (
+    LLMClientError,
+    _response_to_payload,
+    _safe_request_metadata,
+    _should_allow_fake_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +70,7 @@ class YandexSummaryCompressor:
         max_retries: int = 1,
         fallback_compressor: SummaryCompressor | None = None,
         transport: Transport | None = None,
+        debug_payload_logging: bool = False,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -71,8 +78,9 @@ class YandexSummaryCompressor:
         self._agent_id = agent_id
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
-        self._fallback_compressor = fallback_compressor or FakeSummaryCompressor()
+        self._fallback_compressor = fallback_compressor
         self._transport = transport or self._default_transport
+        self._debug_payload_logging = debug_payload_logging
 
     @property
     def endpoint_url(self) -> str:
@@ -98,14 +106,18 @@ class YandexSummaryCompressor:
                 latest_internal_notes=latest_internal_notes,
                 retry_instruction=retry_instruction,
             )
-            logger.info(
-                "summary_compression_request attempt=%s url=%s api_key=%s project=%s payload=%s",
-                attempt + 1,
-                self.endpoint_url,
-                _sanitize_api_key(self._api_key),
-                self._folder_id,
-                request_payload,
+            metadata = _safe_request_metadata(
+                provider="yandex_summary_compressor",
+                endpoint_url=self.endpoint_url,
+                api_key=self._api_key,
+                project_id=self._folder_id,
+                prompt_id=self._agent_id,
+                attempt=attempt + 1,
+                request_payload=request_payload,
             )
+            logger.info("summary_compression_request %s", metadata)
+            if self._debug_payload_logging:
+                logger.debug("summary_compression_request_payload %s", request_payload)
             try:
                 raw_response = _response_to_payload(self._transport(request_payload))
                 return parse_summary_text(raw_response)
@@ -133,6 +145,8 @@ class YandexSummaryCompressor:
                     error,
                     error_body,
                 )
+        if self._fallback_compressor is None:
+            raise LLMClientError(f"Summary compression failed after retries: {last_error}") from last_error
         logger.warning("summary_compression_fallback reason=%s", last_error)
         return self._fallback_compressor.compress(
             existing_summary=existing_summary,
@@ -198,8 +212,12 @@ def build_summary_compressor(settings: Settings) -> SummaryCompressor:
     if backend != "yandex_compatible":
         return FakeSummaryCompressor()
     if not all([settings.yandex_api_key, settings.yandex_folder_id, settings.yandex_agent_id]):
-        logger.warning("summary_compressor_incomplete_config fallback=fake")
-        return FakeSummaryCompressor()
+        if _should_allow_fake_fallback(settings):
+            logger.warning("summary_compressor_incomplete_config fallback=fake")
+            return FakeSummaryCompressor()
+        raise LLMProviderConfigurationError(
+            "Incomplete summary compressor configuration and fake fallback is disabled."
+        )
     return YandexSummaryCompressor(
         base_url=settings.yandex_base_url,
         api_key=settings.yandex_api_key,
@@ -207,5 +225,6 @@ def build_summary_compressor(settings: Settings) -> SummaryCompressor:
         agent_id=settings.yandex_agent_id,
         timeout_seconds=settings.llm_request_timeout_seconds,
         max_retries=1,
-        fallback_compressor=FakeSummaryCompressor(),
+        fallback_compressor=FakeSummaryCompressor() if _should_allow_fake_fallback(settings) else None,
+        debug_payload_logging=settings.debug_llm_payload,
     )

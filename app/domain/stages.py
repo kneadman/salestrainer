@@ -5,6 +5,7 @@ from app.domain.models import ClientState
 
 STAGES = {
     "first_contact",
+    "role_discovery",
     "value_clarification",
     "objection_handling",
     "need_discovery",
@@ -16,6 +17,7 @@ STAGES = {
 
 STAGE_ALIASES = {
     "initial_contact": "first_contact",
+    "role_qualification": "role_discovery",
     "discovery": "need_discovery",
     "qualification": "need_discovery",
     "value_discussion": "value_clarification",
@@ -48,7 +50,12 @@ def resolve_next_stage(
             return proposed_stage
         return current_stage
     if proposed_stage == "next_step_negotiation":
-        if interest_score >= 70 and bool(client_state.buying_signals):
+        if (
+            interest_score >= 65
+            and bool(client_state.buying_signals)
+            and client_state.discovered_role is not None
+            and bool(client_state.discovered_pains)
+        ):
             return proposed_stage
         return current_stage
     if proposed_stage == "finished_failed":
@@ -57,10 +64,11 @@ def resolve_next_stage(
         return current_stage
 
     allowed_forward = {
-        "first_contact": {"value_clarification", "need_discovery", "objection_handling"},
+        "first_contact": {"role_discovery", "need_discovery"},
+        "role_discovery": {"need_discovery", "trust_building", "objection_handling"},
         "value_clarification": {"objection_handling", "need_discovery", "trust_building"},
         "objection_handling": {"need_discovery", "trust_building", "value_clarification"},
-        "need_discovery": {"trust_building", "objection_handling", "value_clarification"},
+        "need_discovery": {"trust_building", "objection_handling", "value_clarification", "role_discovery"},
         "trust_building": {"next_step_negotiation", "need_discovery", "objection_handling"},
         "next_step_negotiation": {"trust_building"},
     }

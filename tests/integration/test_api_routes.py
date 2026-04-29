@@ -32,12 +32,14 @@ def test_api_session_flow() -> None:
 
     create_response = client.post(
         "/api/sessions",
-        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "owner"},
+        json={},
     )
     assert create_response.status_code == 201
     session_payload = create_response.json()["session"]
     session_id = session_payload["session_id"]
     assert session_payload["status"] == "active"
+    assert session_payload["persona_name"] == "Unknown B2B contact"
+    assert "public_brief" in session_payload
 
     resume_response = client.post(f"/api/sessions/{session_id}/resume")
     assert resume_response.status_code == 200
@@ -101,7 +103,7 @@ def test_api_returns_openapi_friendly_validation_error_shape() -> None:
 
     response = client.post(
         "/api/sessions",
-        json={"scenario_id": "sales_audit_cold_outreach"},
+        json={"persona_id": 123},
     )
     assert response.status_code == 422
     payload = response.json()
@@ -123,3 +125,125 @@ def test_api_preserves_incoming_request_id() -> None:
     response = client.get("/api/health", headers={"X-Request-ID": "req-123"})
     assert response.status_code == 200
     assert response.headers["X-Request-ID"] == "req-123"
+
+
+def test_api_create_session_returns_controlled_404_for_unknown_scenario() -> None:
+    app = create_app(
+        settings=Settings(),
+        repository=InMemorySessionRepository(),
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/sessions",
+        json={"scenario_id": "missing-scenario", "persona_id": "owner"},
+    )
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error"]["code"] == "not_found"
+    assert "Unknown scenario_id 'missing-scenario'." == payload["error"]["message"]
+
+
+def test_api_create_session_returns_controlled_404_for_unknown_persona() -> None:
+    app = create_app(
+        settings=Settings(),
+        repository=InMemorySessionRepository(),
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/sessions",
+        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "missing-persona"},
+    )
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error"]["code"] == "not_found"
+    assert "Unknown persona_id 'missing-persona'." == payload["error"]["message"]
+
+
+def test_api_finished_session_returns_conflict_for_message_and_resume() -> None:
+    app = create_app(
+        settings=Settings(),
+        repository=InMemorySessionRepository(),
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/sessions",
+        json={},
+    )
+    session_id = create_response.json()["session"]["session_id"]
+
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+    assert finish_response.status_code == 200
+
+    message_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Can we continue?"},
+    )
+    assert message_response.status_code == 409
+    assert message_response.json()["error"]["code"] == "conflict"
+
+    resume_response = client.post(f"/api/sessions/{session_id}/resume")
+    assert resume_response.status_code == 409
+    assert resume_response.json()["error"]["code"] == "conflict"
+
+
+def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit() -> None:
+    repository = InMemorySessionRepository()
+    app = create_app(
+        settings=Settings(recent_turn_limit=2),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/sessions",
+        json={},
+    )
+    session_id = create_response.json()["session"]["session_id"]
+
+    for message in [
+        "How do you track conversion losses now?",
+        "What does your funnel look like by stage?",
+        "Where do deals drop most often?",
+    ]:
+        response = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"manager_message": message},
+        )
+        assert response.status_code == 200
+
+    saved_session = repository.get(session_id)
+    assert saved_session is not None
+    assert len(saved_session.recent_turns) == 2
+    assert len(saved_session.turns) == 3
+
+    detail_response = client.get(f"/api/sessions/{session_id}")
+    assert detail_response.status_code == 200
+    assert len(detail_response.json()["turns"]) == 3
+
+
+def test_api_report_reveals_hidden_profile_only_after_finish() -> None:
+    repository = InMemorySessionRepository()
+    app = create_app(
+        settings=Settings(llm_backend="fake"),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    create_response = client.post("/api/sessions", json={})
+    session_id = create_response.json()["session"]["session_id"]
+    detail_before = client.get(f"/api/sessions/{session_id}")
+    assert "Hidden role:" not in detail_before.text
+
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+    assert finish_response.status_code == 200
+    assert "Hidden role:" in finish_response.json()["report"]
