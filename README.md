@@ -114,6 +114,32 @@ Prompt ownership:
 pytest
 ```
 
+## Frontend GUI
+
+Minimal React/Vite web UI lives in `frontend/`.
+
+Backend:
+
+```bash
+python -m uvicorn app.api.main:app --reload
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+The Vite dev server proxies `/api` requests to `http://localhost:8000`, so the frontend uses relative API calls such as `/api/sessions`.
+
 Start local Redis for integration-style repository checks:
 
 ```bash

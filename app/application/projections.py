@@ -19,6 +19,7 @@ def build_session_public_dto(session: TrainingSessionState) -> SessionPublicDTO:
         ),
         client_state_public={
             "tone": session.client_state.tone,
+            "trust": session.client_state.trust,
             "visible_objections": session.client_state.open_objections,
             "known_pains": session.client_state.discovered_pains,
             "buying_signals": session.client_state.buying_signals,
