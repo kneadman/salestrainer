@@ -129,3 +129,32 @@ def test_cli_unknown_slash_command_does_not_go_to_llm(monkeypatch) -> None:
 
     joined = "\n".join(outputs)
     assert "Unknown command. Use /help." in joined
+
+
+def test_cli_passes_persona_random_seed_to_persona_generator(monkeypatch) -> None:
+    inputs = deque(["/exit"])
+    outputs: list[str] = []
+    captured_seeds: list[int | None] = []
+
+    class RecordingPersonaGenerator:
+        def __init__(self, seed=None) -> None:
+            captured_seeds.append(seed)
+
+    def fake_input(prompt: str) -> str:
+        outputs.append(prompt)
+        if not inputs:
+            raise EOFError
+        return inputs.popleft()
+
+    def fake_output(message: str) -> None:
+        outputs.append(message)
+
+    monkeypatch.setattr(
+        "app.cli.main.get_settings",
+        lambda: Settings(llm_backend="fake", persona_random_seed=123),
+    )
+    monkeypatch.setattr("app.cli.main.PersonaGenerator", RecordingPersonaGenerator)
+
+    run_cli(input_fn=fake_input, output_fn=fake_output)
+
+    assert captured_seeds == [123]

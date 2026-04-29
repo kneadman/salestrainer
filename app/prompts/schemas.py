@@ -16,6 +16,11 @@ def load_client_simulator_prompt() -> str:
 
 
 def build_strict_json_schema(model_class: type[BaseModel]) -> dict[str, Any]:
+    """Build the validation JSON schema directly from the Pydantic model.
+
+    "Strict" here relies on model-level constraints such as ``extra="forbid"``.
+    This helper does not add any provider-specific schema adapter semantics.
+    """
     return model_class.model_json_schema(mode="validation")
 
 

@@ -300,6 +300,11 @@ def test_llm_turn_response_schema_contains_key_fields() -> None:
     assert "internal_notes" in properties
 
 
+def test_llm_turn_response_schema_forbids_additional_properties_at_top_level() -> None:
+    schema = llm_turn_response_schema()
+    assert schema["additionalProperties"] is False
+
+
 def test_build_strict_json_schema_reflects_model_shape() -> None:
     class DerivedResponse(BaseModel):
         model_config = ConfigDict(extra="forbid")

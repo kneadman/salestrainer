@@ -125,6 +125,27 @@ def test_turn_service_discovers_role_and_pain_from_questions() -> None:
     assert updated_session.client_state.discovered_pains
 
 
+def test_fake_llm_role_answer_is_readable_russian() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    turn_service = TurnService(repository, FakeLLMClient(), recent_turn_limit=6)
+    session = session_service.start_session()
+
+    result = turn_service.process_message(str(session.session_id), "Кто вы и за что отвечаете?")
+
+    normalized_answer = result.client_answer.lower()
+    expected_words = [
+        "собственник",
+        "директор",
+        "отвечаю",
+        "решения",
+        "учёт",
+        "продаж",
+    ]
+
+    assert any(word in normalized_answer for word in expected_words)
+
+
 def test_turn_service_evaluator_penalizes_early_pressure() -> None:
     repository = InMemorySessionRepository()
     session_service = TrainingSessionService(repository)

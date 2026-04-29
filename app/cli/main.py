@@ -14,6 +14,7 @@ from app.cli.renderer import (
     render_state,
 )
 from app.domain.errors import SalesTrainerError
+from app.domain.persona_generation import PersonaGenerator
 from app.infrastructure.config import get_settings
 from app.infrastructure.llm_client import build_llm_client
 from app.infrastructure.logging import setup_logging
@@ -64,6 +65,7 @@ def run_cli(
     repository = build_repository(settings)
     session_service = TrainingSessionService(
         repository,
+        persona_generator=PersonaGenerator(settings.persona_random_seed),
         default_scenario_id=settings.default_training_scenario_id,
     )
     turn_service = TurnService(
