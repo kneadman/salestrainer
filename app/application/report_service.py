@@ -18,11 +18,12 @@ class ReportService:
         session = self._repository.get(session_id)
         if session is None:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")
+        expected_version = session.state_version
         if session.status != "finished":
             session.status = "finished"
-            session.state_version += 1
+            session.state_version = expected_version + 1
             session.updated_at = datetime.now(tz=UTC)
-            self._repository.save(session)
+            self._repository.save(session, expected_version=expected_version)
             logger.info(
                 "session_finished session_id=%s turns=%s final_interest=%s final_stage=%s",
                 session.session_id,

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 ToneLiteral = Literal["cold", "skeptical", "neutral", "interested", "warm", "ready_next_step"]
@@ -57,6 +57,8 @@ class Turn(BaseModel):
 
 
 class StatePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     tone: ToneLiteral | None = None
     trust_delta: int = Field(default=0, ge=-15, le=15)
     irritation_delta: int = Field(default=0, ge=-15, le=15)
@@ -69,6 +71,8 @@ class StatePatch(BaseModel):
 
 
 class LLMTurnResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     answer: str = Field(min_length=1, max_length=1000)
     interest_delta: int = Field(ge=-15, le=15)
     state_patch: StatePatch
@@ -96,6 +100,7 @@ class TrainingSessionState(BaseModel):
     stage: str
     client_state: ClientState
     summary: str
+    turns: list[Turn] = Field(default_factory=list)
     recent_turns: list[Turn] = Field(default_factory=list)
     turn_count: int = 0
     state_version: int = 1
@@ -111,4 +116,3 @@ class LLMTurnInput(BaseModel):
     conversation_summary: str
     recent_turns: list[dict[str, str]] = Field(default_factory=list)
     manager_message: str = Field(min_length=1)
-

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from json import JSONDecodeError
+import re
 from typing import Any, Callable, Protocol
 
 from pydantic import ValidationError
@@ -82,19 +83,68 @@ def _response_to_payload(response: Any) -> dict[str, Any] | str:
 
 
 def _extract_json_object(raw_text: str) -> str:
-    start = raw_text.find("{")
-    if start < 0:
-        raise JSONDecodeError("No JSON object found", raw_text, 0)
+    for candidate in _json_candidates(raw_text):
+        try:
+            json.loads(candidate)
+            return candidate
+        except JSONDecodeError:
+            continue
+    raise JSONDecodeError("No valid JSON object found", raw_text, 0)
+
+
+def _json_candidates(raw_text: str) -> list[str]:
+    candidates: list[str] = []
+    stripped = raw_text.strip()
+    if stripped:
+        candidates.append(stripped)
+    for fenced in re.findall(r"```(?:json)?\s*(.*?)```", raw_text, flags=re.IGNORECASE | re.DOTALL):
+        fenced_text = fenced.strip()
+        if fenced_text:
+            candidates.append(fenced_text)
+    extracted = _find_json_object_substring(raw_text)
+    if extracted:
+        candidates.append(extracted)
+    for fenced in re.findall(r"```(?:json)?\s*(.*?)```", raw_text, flags=re.IGNORECASE | re.DOTALL):
+        extracted_fenced = _find_json_object_substring(fenced)
+        if extracted_fenced:
+            candidates.append(extracted_fenced)
+    return candidates
+
+
+def _find_json_object_substring(raw_text: str) -> str | None:
+    start: int | None = None
     depth = 0
-    for index in range(start, len(raw_text)):
-        char = raw_text[index]
+    in_string = False
+    escape = False
+
+    for index, char in enumerate(raw_text):
+        if start is None:
+            if char == "{":
+                start = index
+                depth = 1
+                in_string = False
+                escape = False
+            continue
+
+        if escape:
+            escape = False
+            continue
+        if char == "\\" and in_string:
+            escape = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
         if char == "{":
             depth += 1
-        elif char == "}":
+            continue
+        if char == "}":
             depth -= 1
             if depth == 0:
-                return raw_text[start : index + 1]
-    raise JSONDecodeError("Unterminated JSON object", raw_text, start)
+                return raw_text[start : index + 1].strip()
+    return None
 
 
 def parse_llm_turn_response(raw_payload: dict[str, Any] | str) -> LLMTurnResponse:
@@ -127,7 +177,10 @@ def parse_llm_turn_response(raw_payload: dict[str, Any] | str) -> LLMTurnRespons
     try:
         decoded = json.loads(raw_payload)
     except JSONDecodeError:
-        return LLMTurnResponse.model_validate_json(_extract_json_object(raw_payload))
+        try:
+            return LLMTurnResponse.model_validate_json(_extract_json_object(raw_payload))
+        except JSONDecodeError as error:
+            raise LLMClientError("Provider response does not contain valid JSON.") from error
     return parse_llm_turn_response(decoded)
 
 

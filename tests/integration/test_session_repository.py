@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.application.session_service import TrainingSessionService
-from app.domain.errors import RepositoryUnavailableError
+from app.domain.errors import RepositoryUnavailableError, StateVersionConflictError
 from app.infrastructure.config import Settings
 from app.infrastructure.redis_client import build_repository, create_redis_client, redis_is_available
 from app.infrastructure.session_repository import InMemorySessionRepository, RedisSessionRepository
@@ -49,3 +49,21 @@ def test_build_repository_raises_when_redis_is_unavailable_and_fallback_is_disab
 
     with pytest.raises(RepositoryUnavailableError, match="in-memory fallback is disabled"):
         build_repository(Settings(app_env="prod", allow_in_memory_repository=False))
+
+
+def test_in_memory_repository_rejects_stale_version_conflict() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    session = session_service.start_session("sales_audit_cold_outreach", "owner")
+
+    stale_copy = repository.get(str(session.session_id))
+    fresh_copy = repository.get(str(session.session_id))
+    assert stale_copy is not None
+    assert fresh_copy is not None
+
+    fresh_copy.state_version += 1
+    repository.save(fresh_copy, expected_version=1)
+
+    stale_copy.state_version += 1
+    with pytest.raises(StateVersionConflictError, match="updated concurrently"):
+        repository.save(stale_copy, expected_version=1)

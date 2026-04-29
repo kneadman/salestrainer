@@ -59,4 +59,4 @@ def test_training_session_state_contains_required_fields() -> None:
         updated_at=datetime.now(tz=UTC),
     )
     assert session.turn_count == 0
-
+    assert session.turns == []

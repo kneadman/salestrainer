@@ -190,3 +190,39 @@ def test_api_finished_session_returns_conflict_for_message_and_resume() -> None:
     resume_response = client.post(f"/api/sessions/{session_id}/resume")
     assert resume_response.status_code == 409
     assert resume_response.json()["error"]["code"] == "conflict"
+
+
+def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit() -> None:
+    repository = InMemorySessionRepository()
+    app = create_app(
+        settings=Settings(recent_turn_limit=2),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/sessions",
+        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "owner"},
+    )
+    session_id = create_response.json()["session"]["session_id"]
+
+    for message in [
+        "How do you track conversion losses now?",
+        "What does your funnel look like by stage?",
+        "Where do deals drop most often?",
+    ]:
+        response = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"manager_message": message},
+        )
+        assert response.status_code == 200
+
+    saved_session = repository.get(session_id)
+    assert saved_session is not None
+    assert len(saved_session.recent_turns) == 2
+    assert len(saved_session.turns) == 3
+
+    detail_response = client.get(f"/api/sessions/{session_id}")
+    assert detail_response.status_code == 200
+    assert len(detail_response.json()["turns"]) == 3

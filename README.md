@@ -73,6 +73,12 @@ LLM logging:
 - Full request payload logging is disabled by default and can be enabled with `DEBUG_LLM_PAYLOAD=true`
 - API keys are never logged in full
 
+Prompt ownership:
+
+- `app/prompts/client_simulator.md` is a local reference prompt used for documentation and prompt iteration
+- The `yandex_compatible` runtime path currently uses the configured Yandex AI Studio agent via `YANDEX_AGENT_ID`
+- If you update local prompt text, it does not automatically change the remote runtime agent behavior
+
 ## Run tests
 
 ```bash
@@ -89,6 +95,7 @@ docker compose up -d
 
 - Real Yandex/OpenAI API is not connected to the working flow
 - Yandex adapter now follows the AI Studio `OpenAI(...).responses.create(...)` contract and is covered by mocked request/response tests, but is still not verified here against a live cloud account
+- The local `client_simulator.md` file is not injected into Yandex runtime requests; the remote agent remains the runtime prompt source for that backend
 - CLI still uses a simple terminal flow
 - Reports are rule-based, not judge-model based
 - Session resume across process restarts requires Redis; in-memory mode is process-local and does not survive restarts

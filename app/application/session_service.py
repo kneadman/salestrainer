@@ -45,6 +45,7 @@ class TrainingSessionService:
             stage=scenario.default_stage,
             client_state=build_initial_client_state(persona, scenario.default_starting_interest),
             summary=f"Training started for scenario '{scenario.name}' with persona '{persona.display_name}'.",
+            turns=[],
             recent_turns=[],
             turn_count=0,
             state_version=1,

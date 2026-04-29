@@ -124,6 +124,9 @@ def run_cli(
             output_fn(render_scenarios())
             continue
         if current_session_id is None:
+            if command.startswith("/"):
+                output_fn("Unknown command. Use /help.")
+                continue
             output_fn("No active session. Use /start or /resume <session_id>.")
             continue
         if command == "/state":
@@ -143,6 +146,9 @@ def run_cli(
             except SalesTrainerError as error:
                 output_fn(f"Error: {error}")
                 logger.warning("cli_finish_error error=%s", error)
+            continue
+        if command.startswith("/"):
+            output_fn("Unknown command. Use /help.")
             continue
         try:
             result = turn_service.process_message(current_session_id, raw)

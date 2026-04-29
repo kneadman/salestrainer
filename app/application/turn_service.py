@@ -52,6 +52,7 @@ class TurnService:
 
     def process_message(self, session_id: str, manager_message: str) -> TurnResult:
         session = self._require_active_session(session_id)
+        expected_version = session.state_version
         interest_before = session.interest_score
         stage_before = session.stage
         llm_input = LLMTurnInput(
@@ -94,21 +95,23 @@ class TurnService:
             stage_after=resolved_stage,
             created_at=now,
         )
+        full_turns = [*session.turns, turn]
         recent_turns = [*session.recent_turns, turn][-self._recent_turn_limit :]
         overflow_turns = [*session.recent_turns, turn][:-self._recent_turn_limit]
         session.interest_score = interest_after
         session.stage = resolved_stage
         session.client_state = updated_client_state
+        session.turns = full_turns
         session.recent_turns = recent_turns
         session.turn_count += 1
-        session.state_version += 1
+        session.state_version = expected_version + 1
         session.updated_at = now
         session.summary = self._update_summary(
             session,
             latest_internal_notes=llm_response.internal_notes,
             overflow_turns=overflow_turns,
         )
-        self._repository.save(session)
+        self._repository.save(session, expected_version=expected_version)
         logger.info(
             "turn_processed session_id=%s turn_index=%s interest_before=%s interest_after=%s stage_before=%s stage_after=%s",
             session.session_id,

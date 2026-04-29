@@ -13,6 +13,10 @@ class SessionNotActiveError(SalesTrainerError):
     """Raised when an operation requires an active session."""
 
 
+class StateVersionConflictError(SalesTrainerError):
+    """Raised when a stale session update would overwrite newer state."""
+
+
 class UnknownScenarioError(SalesTrainerError):
     """Raised when a scenario_id is unknown."""
 

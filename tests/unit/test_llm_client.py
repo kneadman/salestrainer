@@ -4,6 +4,7 @@ import json
 import logging
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
 from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import LLMTurnInput
@@ -11,11 +12,13 @@ from app.domain.personas import get_persona
 from app.domain.scenarios import get_scenario
 from app.infrastructure.llm_client import (
     FakeLLMClient,
+    LLMClientError,
     YandexCompatibleLLMClient,
     build_llm_client,
     parse_llm_turn_response,
 )
 from app.infrastructure.config import Settings
+from app.prompts.schemas import build_strict_json_schema, llm_turn_response_schema
 
 
 class FakeResponse:
@@ -233,3 +236,68 @@ def test_yandex_compatible_client_info_logs_do_not_include_full_payload(caplog) 
     assert any("payload_size" in message for message in info_messages)
     assert all("How do you track conversion losses now?" not in message for message in info_messages)
     assert all("super-secret-token" not in message for message in info_messages)
+
+
+def test_parse_llm_turn_response_accepts_json_in_markdown_fence() -> None:
+    raw = """```json
+    {
+      "answer": "Fence response",
+      "interest_delta": 2,
+      "state_patch": {
+        "tone": "neutral",
+        "trust_delta": 1,
+        "irritation_delta": 0,
+        "urgency_delta": 0,
+        "add_open_objections": [],
+        "remove_open_objections": [],
+        "add_known_pains": [],
+        "add_buying_signals": [],
+        "add_red_flags": []
+      },
+      "stage": "need_discovery",
+      "internal_notes": "ok"
+    }
+    ```"""
+    parsed = parse_llm_turn_response(raw)
+    assert parsed.answer == "Fence response"
+
+
+def test_parse_llm_turn_response_accepts_wrapped_json_with_braces_inside_strings() -> None:
+    raw = (
+        "Provider text before JSON.\n"
+        '{"answer":"Value mentions {CRM} safely.","interest_delta":1,'
+        '"state_patch":{"tone":"neutral","trust_delta":1,"irritation_delta":0,"urgency_delta":0,'
+        '"add_open_objections":[],"remove_open_objections":[],"add_known_pains":[],"add_buying_signals":[],"add_red_flags":[]},'
+        '"stage":"need_discovery","internal_notes":"wrapped"}\n'
+        "Provider text after JSON."
+    )
+    parsed = parse_llm_turn_response(raw)
+    assert parsed.answer == "Value mentions {CRM} safely."
+
+
+def test_parse_llm_turn_response_rejects_invalid_json_with_controlled_error() -> None:
+    with pytest.raises(LLMClientError, match="does not contain valid JSON"):
+        parse_llm_turn_response("no structured payload here")
+
+
+def test_llm_turn_response_schema_contains_key_fields() -> None:
+    schema = llm_turn_response_schema()
+    properties = schema["properties"]
+
+    assert "answer" in properties
+    assert "interest_delta" in properties
+    assert "state_patch" in properties
+    assert "stage" in properties
+    assert "internal_notes" in properties
+
+
+def test_build_strict_json_schema_reflects_model_shape() -> None:
+    class DerivedResponse(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        answer: str
+        new_field: int
+
+    schema = build_strict_json_schema(DerivedResponse)
+    assert "new_field" in schema["properties"]
+    assert "new_field" in schema["required"]

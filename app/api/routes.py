@@ -24,6 +24,7 @@ from app.domain.errors import (
     SalesTrainerError,
     SessionNotActiveError,
     SessionNotFoundError,
+    StateVersionConflictError,
     UnknownPersonaError,
     UnknownScenarioError,
 )
@@ -43,7 +44,7 @@ ERROR_RESPONSES = {
 def raise_api_error(error: SalesTrainerError) -> None:
     if isinstance(error, (SessionNotFoundError, UnknownScenarioError, UnknownPersonaError)):
         raise not_found(str(error)) from error
-    if isinstance(error, SessionNotActiveError):
+    if isinstance(error, (SessionNotActiveError, StateVersionConflictError)):
         raise conflict(str(error)) from error
     raise error
 

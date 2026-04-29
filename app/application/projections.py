@@ -41,5 +41,5 @@ def build_turn_public_dto(session: TrainingSessionState) -> list[TurnPublicDTO]:
             stage_after=turn.stage_after,
             created_at=turn.created_at,
         )
-        for turn in session.recent_turns
+        for turn in session.turns
     ]

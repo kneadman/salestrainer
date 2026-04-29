@@ -1,6 +1,7 @@
 from app.application.session_service import TrainingSessionService
 from app.application.summary_compressor import FakeSummaryCompressor
 from app.application.turn_service import TurnService
+from app.domain.errors import StateVersionConflictError
 from app.domain.models import LLMTurnResponse, StatePatch
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
@@ -21,6 +22,7 @@ def test_turn_service_updates_session_and_recent_turns() -> None:
     assert updated_session is not None
     assert updated_session.turn_count == 1
     assert updated_session.state_version == 2
+    assert len(updated_session.turns) == 1
     assert len(updated_session.recent_turns) == 1
     assert updated_session.recent_turns[0].client_answer == result.client_answer
     assert updated_session.interest_score == result.interest_after
@@ -102,5 +104,31 @@ def test_turn_service_compresses_overflow_turns_into_summary() -> None:
 
     updated_session = repository.get(str(session.session_id))
     assert updated_session is not None
+    assert len(updated_session.turns) == 3
     assert len(updated_session.recent_turns) == 2
     assert "T1:" in updated_session.summary
+
+
+def test_turn_service_uses_state_version_and_rejects_stale_save() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    session = session_service.start_session("sales_audit_cold_outreach", "owner")
+
+    stale_session = repository.get(str(session.session_id))
+    fresh_session = repository.get(str(session.session_id))
+    assert stale_session is not None
+    assert fresh_session is not None
+
+    fresh_session.summary = "fresh update"
+    fresh_session.state_version += 1
+    repository.save(fresh_session, expected_version=1)
+
+    stale_session.summary = "stale update"
+    stale_session.state_version += 1
+
+    try:
+        repository.save(stale_session, expected_version=1)
+    except StateVersionConflictError:
+        pass
+    else:
+        raise AssertionError("Expected stale save to fail with StateVersionConflictError.")
