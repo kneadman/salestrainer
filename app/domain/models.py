@@ -12,10 +12,15 @@ SessionStatus = Literal["active", "finished", "expired"]
 AuthorityLevel = Literal["final_decider", "influencer", "gatekeeper", "evaluator"]
 BehaviorModel = Literal[
     "skeptical_but_rational",
-    "busy_and_short",
-    "price_sensitive",
-    "process_oriented",
     "dominant_and_direct",
+    "price_sensitive",
+    "analytical_and_cautious",
+    "distrustful_due_to_bad_experience",
+    "busy_and_short",
+    "friendly_but_defensive",
+    "formal_and_distant",
+    "interested_but_overloaded",
+    "process_oriented",
     "friendly_but_distrustful",
 ]
 
@@ -23,11 +28,31 @@ BehaviorModel = Literal[
 class PersonaProfile(BaseModel):
     id: str
     display_name: str = "Unknown B2B contact"
-    role: Literal["owner", "purchase_manager", "sales_director", "cfo", "chief_accountant"]
+    role: Literal[
+        "owner",
+        "founder",
+        "ceo",
+        "general_director",
+        "managing_partner",
+        "commercial_director",
+        "cfo",
+        "chief_accountant",
+        "operations_director",
+        "sales_director",
+        "purchase_manager",
+    ]
     industry: str
     company_size: str
     authority_level: AuthorityLevel
     behavior_model: BehaviorModel
+    product_line: Literal["accounting_outsourcing", "outsourced_cfo"] | str = "accounting_outsourcing"
+    target_action: str = ""
+    current_accounting_model: str = "unknown"
+    legal_form: str = "unknown"
+    tax_system: str = "unknown"
+    accounting_software: str = "unknown"
+    accounting_software_mode: str = "unknown"
+    primary_docs_owner: str = "unknown"
     cares_about: list[str] = Field(default_factory=list)
     typical_objections: list[str] = Field(default_factory=list)
     current_business_context: str = ""
@@ -35,6 +60,9 @@ class PersonaProfile(BaseModel):
     buying_motivation: list[str] = Field(default_factory=list)
     decision_criteria: list[str] = Field(default_factory=list)
     hidden_constraints: list[str] = Field(default_factory=list)
+    business_facts: list[str] = Field(default_factory=list)
+    proof_sensitivity: list[str] = Field(default_factory=list)
+    call_scoring_criteria: list[str] = Field(default_factory=list)
     communication_style: str = ""
     initial_openness: int = Field(default=25, ge=0, le=100)
     starting_interest: int = Field(default=25, ge=0, le=100)

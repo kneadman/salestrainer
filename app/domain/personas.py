@@ -13,6 +13,8 @@ PERSONAS: dict[str, PersonaProfile] = {
         company_size="30-100",
         authority_level="final_decider",
         behavior_model="skeptical_but_rational",
+        product_line="outsourced_cfo",
+        target_action="book_financial_diagnostic",
         cares_about=["money", "risk", "control", "payback", "time"],
         typical_objections=[
             "We already have things under control.",
@@ -38,8 +40,10 @@ PERSONAS: dict[str, PersonaProfile] = {
         role="purchase_manager",
         industry="b2b_services",
         company_size="100-500",
-        authority_level="gatekeeper",
+        authority_level="final_decider",
         behavior_model="process_oriented",
+        product_line="accounting_outsourcing",
+        target_action="book_express_audit",
         cares_about=["price", "terms", "vendor comparison", "risk reduction"],
         typical_objections=[
             "Send a proposal.",
@@ -65,8 +69,10 @@ PERSONAS: dict[str, PersonaProfile] = {
         role="sales_director",
         industry="b2b_services",
         company_size="30-100",
-        authority_level="influencer",
+        authority_level="final_decider",
         behavior_model="dominant_and_direct",
+        product_line="outsourced_cfo",
+        target_action="book_financial_diagnostic",
         cares_about=["revenue plan", "conversion", "manager workload", "crm", "lead quality"],
         typical_objections=[
             "The issue is not the managers, it is the leads.",
