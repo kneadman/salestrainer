@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import random
+from typing import Any
+
+from app.domain.models import PersonaProfile
+
+
+ROLE_TEMPLATES: dict[str, dict[str, Any]] = {
+    "owner": {
+        "display_name": "Unknown B2B contact",
+        "industry": "b2b_services",
+        "company_size": "30-100",
+        "authority_level": "final_decider",
+        "behavior_model": "skeptical_but_rational",
+        "cares_about": ["деньги", "контроль", "окупаемость", "риски"],
+        "typical_objections": ["Пока не вижу, зачем это нужно.", "Сначала покажите, где у нас потери."],
+        "current_business_context": "Собственник держит много вопросов на себе и не уверен в прозрачности процессов.",
+        "latent_pains": ["Нет прозрачности по потерям в продажах.", "Команда работает без единого стандарта."],
+        "buying_motivation": ["Понять, где теряются деньги.", "Вернуть управляемость процессу."],
+        "decision_criteria": ["Понятный эффект", "Быстрая диагностика", "Минимум лишней нагрузки"],
+        "hidden_constraints": ["Нельзя отвлекать команду надолго."],
+        "communication_style": "Коротко, по делу, без лишних обещаний.",
+        "initial_openness": 20,
+        "starting_interest": 25,
+        "price_sensitivity": 60,
+        "urgency": 30,
+        "trust_baseline": 20,
+    },
+    "sales_director": {
+        "display_name": "Unknown B2B contact",
+        "industry": "b2b_services",
+        "company_size": "30-100",
+        "authority_level": "influencer",
+        "behavior_model": "dominant_and_direct",
+        "cares_about": ["план продаж", "конверсия", "нагрузка менеджеров", "качество лидов"],
+        "typical_objections": ["Проблема не в менеджерах, а во входящем потоке.", "Не хочу мешать команде лишней бюрократией."],
+        "current_business_context": "Руководитель продаж тушит пожары и не успевает системно разбирать причины просадок.",
+        "latent_pains": ["Непонятно, где провал воронки.", "Менеджеры по-разному ведут сделки."],
+        "buying_motivation": ["Поднять конверсию без найма.", "Увидеть узкие места по этапам."],
+        "decision_criteria": ["Практичность", "Измеримость", "Участие команды по минимуму"],
+        "hidden_constraints": ["Нужна поддержка собственника для внедрения."],
+        "communication_style": "Жестко, быстро, с проверкой на компетентность.",
+        "initial_openness": 25,
+        "starting_interest": 28,
+        "price_sensitivity": 45,
+        "urgency": 45,
+        "trust_baseline": 25,
+    },
+    "cfo": {
+        "display_name": "Unknown B2B contact",
+        "industry": "distribution",
+        "company_size": "100-500",
+        "authority_level": "evaluator",
+        "behavior_model": "price_sensitive",
+        "cares_about": ["финансовая дисциплина", "маржинальность", "прогнозируемость", "цифры"],
+        "typical_objections": ["Нужны конкретные цифры эффекта.", "Сейчас бюджет под контролем."],
+        "current_business_context": "Финдиректору важно убрать непрозрачные расходы и повысить предсказуемость решений.",
+        "latent_pains": ["Нет ясной картины по влиянию процессов на прибыль.", "Сложно обосновать изменения руководству."],
+        "buying_motivation": ["Снизить потери.", "Привязать изменения к цифрам."],
+        "decision_criteria": ["Экономический эффект", "Прозрачность", "Низкий риск"],
+        "hidden_constraints": ["Нужен понятный расчет окупаемости."],
+        "communication_style": "Рационально, осторожно, с фокусом на цифрах.",
+        "initial_openness": 18,
+        "starting_interest": 22,
+        "price_sensitivity": 70,
+        "urgency": 25,
+        "trust_baseline": 18,
+    },
+    "chief_accountant": {
+        "display_name": "Unknown B2B contact",
+        "industry": "professional_services",
+        "company_size": "30-100",
+        "authority_level": "influencer",
+        "behavior_model": "process_oriented",
+        "cares_about": ["точность", "сроки", "снижение ручной работы", "соблюдение регламентов"],
+        "typical_objections": ["У нас уже есть регламент.", "Любые изменения должны быть безопасными."],
+        "current_business_context": "Главбух перегружен ручными проверками и боится допустить ошибку при изменениях.",
+        "latent_pains": ["Много ручного контроля.", "Знания держатся на нескольких людях."],
+        "buying_motivation": ["Снизить ручную нагрузку.", "Стабилизировать процесс без ошибок."],
+        "decision_criteria": ["Надежность", "Понятный процесс внедрения", "Безопасность"],
+        "hidden_constraints": ["Нельзя рисковать отчетностью."],
+        "communication_style": "Осторожно, предметно, с деталями по процессу.",
+        "initial_openness": 22,
+        "starting_interest": 24,
+        "price_sensitivity": 55,
+        "urgency": 35,
+        "trust_baseline": 22,
+    },
+    "purchase_manager": {
+        "display_name": "Unknown B2B contact",
+        "industry": "manufacturing",
+        "company_size": "100-500",
+        "authority_level": "gatekeeper",
+        "behavior_model": "busy_and_short",
+        "cares_about": ["условия", "сравнение поставщиков", "риск", "процедура"],
+        "typical_objections": ["Пришлите предложение.", "Сейчас не рассматриваем новых подрядчиков."],
+        "current_business_context": "Закупщик фильтрует входящие инициативы и не хочет тратить время без явной релевантности.",
+        "latent_pains": ["Текущие подрядчики работают без прозрачных SLA.", "Слишком долго согласуются изменения."],
+        "buying_motivation": ["Снизить операционный риск.", "Понять, есть ли смысл передавать инициативу дальше."],
+        "decision_criteria": ["Соответствие процессу", "Риск", "Цена"],
+        "hidden_constraints": ["Без понятного кейса дальше не пустит."],
+        "communication_style": "Коротко, настороженно, через фильтр полезности.",
+        "initial_openness": 15,
+        "starting_interest": 20,
+        "price_sensitivity": 65,
+        "urgency": 20,
+        "trust_baseline": 15,
+    },
+}
+
+
+class PersonaGenerator:
+    def __init__(self, seed: int | None = None) -> None:
+        self._random = random.Random(seed)
+
+    def generate(self) -> PersonaProfile:
+        role = self._random.choice(list(ROLE_TEMPLATES.keys()))
+        template = ROLE_TEMPLATES[role]
+        return PersonaProfile(
+            id=f"generated_{role}",
+            role=role,  # type: ignore[arg-type]
+            industry=template["industry"],
+            company_size=template["company_size"],
+            authority_level=template["authority_level"],
+            behavior_model=template["behavior_model"],
+            display_name=template["display_name"],
+            cares_about=list(template["cares_about"]),
+            typical_objections=list(template["typical_objections"]),
+            current_business_context=template["current_business_context"],
+            latent_pains=list(template["latent_pains"]),
+            buying_motivation=list(template["buying_motivation"]),
+            decision_criteria=list(template["decision_criteria"]),
+            hidden_constraints=list(template["hidden_constraints"]),
+            communication_style=template["communication_style"],
+            initial_openness=template["initial_openness"],
+            starting_interest=template["starting_interest"],
+            price_sensitivity=template["price_sensitivity"],
+            urgency=template["urgency"],
+            trust_baseline=template["trust_baseline"],
+        )

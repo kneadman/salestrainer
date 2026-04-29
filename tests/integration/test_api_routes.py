@@ -32,12 +32,14 @@ def test_api_session_flow() -> None:
 
     create_response = client.post(
         "/api/sessions",
-        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "owner"},
+        json={},
     )
     assert create_response.status_code == 201
     session_payload = create_response.json()["session"]
     session_id = session_payload["session_id"]
     assert session_payload["status"] == "active"
+    assert session_payload["persona_name"] == "Unknown B2B contact"
+    assert "public_brief" in session_payload
 
     resume_response = client.post(f"/api/sessions/{session_id}/resume")
     assert resume_response.status_code == 200
@@ -101,7 +103,7 @@ def test_api_returns_openapi_friendly_validation_error_shape() -> None:
 
     response = client.post(
         "/api/sessions",
-        json={"scenario_id": "sales_audit_cold_outreach"},
+        json={"persona_id": 123},
     )
     assert response.status_code == 422
     payload = response.json()
@@ -173,7 +175,7 @@ def test_api_finished_session_returns_conflict_for_message_and_resume() -> None:
 
     create_response = client.post(
         "/api/sessions",
-        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "owner"},
+        json={},
     )
     session_id = create_response.json()["session"]["session_id"]
 
@@ -203,7 +205,7 @@ def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit()
 
     create_response = client.post(
         "/api/sessions",
-        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "owner"},
+        json={},
     )
     session_id = create_response.json()["session"]["session_id"]
 
@@ -226,3 +228,22 @@ def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit()
     detail_response = client.get(f"/api/sessions/{session_id}")
     assert detail_response.status_code == 200
     assert len(detail_response.json()["turns"]) == 3
+
+
+def test_api_report_reveals_hidden_profile_only_after_finish() -> None:
+    repository = InMemorySessionRepository()
+    app = create_app(
+        settings=Settings(llm_backend="fake"),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    create_response = client.post("/api/sessions", json={})
+    session_id = create_response.json()["session"]["session_id"]
+    detail_before = client.get(f"/api/sessions/{session_id}")
+    assert "Hidden role:" not in detail_before.text
+
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+    assert finish_response.status_code == 200
+    assert "Hidden role:" in finish_response.json()["report"]

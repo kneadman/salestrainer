@@ -10,8 +10,6 @@ def test_cli_smoke_flow(monkeypatch) -> None:
     inputs = deque(
         [
             "/start",
-            "1",
-            "1",
             "/scenarios",
             "We start with a diagnostic of conversion losses. How do you track drop-off now?",
             "/state",
@@ -39,9 +37,11 @@ def test_cli_smoke_flow(monkeypatch) -> None:
     assert "Use /start to create a session or /resume <session_id> to continue one." in joined
     assert "Available scenarios:" in joined
     assert "Session created." in joined
+    assert "Situation:" in joined
     assert "Client:" in joined
     assert "Recent turns:" in joined
     assert "Final interest:" in joined
+    assert "Persona:" not in joined
 
 
 def test_cli_help_outputs_commands(monkeypatch) -> None:
@@ -67,7 +67,7 @@ def test_cli_help_outputs_commands(monkeypatch) -> None:
 
 
 def test_cli_finish_handles_missing_session_without_traceback(monkeypatch) -> None:
-    inputs = deque(["/start", "1", "1", "/finish", "/exit"])
+    inputs = deque(["/start", "/finish", "/exit"])
     outputs: list[str] = []
 
     def fake_input(prompt: str) -> str:
@@ -107,7 +107,7 @@ def test_cli_finish_handles_missing_session_without_traceback(monkeypatch) -> No
 
 
 def test_cli_unknown_slash_command_does_not_go_to_llm(monkeypatch) -> None:
-    inputs = deque(["/start", "1", "1", "/unknown", "/exit"])
+    inputs = deque(["/start", "/unknown", "/exit"])
     outputs: list[str] = []
 
     class FailingLLMClient:

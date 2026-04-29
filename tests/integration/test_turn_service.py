@@ -27,6 +27,7 @@ def test_turn_service_updates_session_and_recent_turns() -> None:
     assert updated_session.recent_turns[0].client_answer == result.client_answer
     assert updated_session.interest_score == result.interest_after
     assert updated_session.summary
+    assert updated_session.turn_evaluations
 
 
 class AggressiveSuccessLLMClient:
@@ -107,6 +108,34 @@ def test_turn_service_compresses_overflow_turns_into_summary() -> None:
     assert len(updated_session.turns) == 3
     assert len(updated_session.recent_turns) == 2
     assert "T1:" in updated_session.summary
+
+
+def test_turn_service_discovers_role_and_pain_from_questions() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    turn_service = TurnService(repository, FakeLLMClient(), recent_turn_limit=6)
+    session = session_service.start_session()
+
+    turn_service.process_message(str(session.session_id), "Кто вы и за что отвечаете?")
+    turn_service.process_message(str(session.session_id), "Что у вас сейчас болит в процессе?")
+
+    updated_session = repository.get(str(session.session_id))
+    assert updated_session is not None
+    assert updated_session.client_state.discovered_role is not None
+    assert updated_session.client_state.discovered_pains
+
+
+def test_turn_service_evaluator_penalizes_early_pressure() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    turn_service = TurnService(repository, FakeLLMClient(), recent_turn_limit=6)
+    session = session_service.start_session()
+
+    turn_service.process_message(str(session.session_id), "Давайте сразу купите, это срочно и только сегодня.")
+
+    updated_session = repository.get(str(session.session_id))
+    assert updated_session is not None
+    assert updated_session.turn_evaluations[-1].pressure_score < 5
 
 
 def test_turn_service_uses_state_version_and_rejects_stale_save() -> None:

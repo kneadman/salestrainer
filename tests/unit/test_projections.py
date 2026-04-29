@@ -17,7 +17,9 @@ def test_public_projection_hides_internal_persona_structure_and_exposes_public_s
     public_session = build_session_public_dto(updated)
     public_turns = build_turn_public_dto(updated)
 
-    assert public_session.persona_name == "Owner"
+    assert public_session.persona_name == "Unknown B2B contact"
+    assert public_session.public_brief
     assert "visible_objections" in public_session.client_state_public
+    assert updated.persona.role not in public_session.model_dump_json()
     assert len(public_turns) == 1
     assert public_turns[0].client_answer

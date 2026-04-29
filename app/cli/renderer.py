@@ -3,7 +3,6 @@ from __future__ import annotations
 from app.cli.commands import COMMANDS
 from app.domain.interest import interest_band
 from app.domain.models import TrainingSessionState
-from app.domain.personas import list_personas
 from app.domain.scenarios import list_scenarios
 
 
@@ -20,29 +19,26 @@ def render_scenarios() -> str:
     return "\n".join(lines)
 
 
-def render_personas() -> str:
-    lines = ["Available personas:"]
-    for index, persona in enumerate(list_personas(), start=1):
-        lines.append(f"  {index}. {persona.display_name} [{persona.id}]")
-    return "\n".join(lines)
-
-
 def render_state(session: TrainingSessionState) -> str:
     state = session.client_state
     objections = ", ".join(state.open_objections) or "none"
-    pains = ", ".join(state.known_pains) or "none"
+    pains = ", ".join(state.discovered_pains) or "none"
     signals = ", ".join(state.buying_signals) or "none"
+    criteria = ", ".join(state.discovered_decision_criteria) or "unknown"
     return (
         f"Session: {session.session_id}\n"
         f"Scenario: {session.scenario_id}\n"
         f"Status: {session.status}\n"
-        f"Persona: {session.persona.display_name}\n"
+        f"Situation: {session.public_brief}\n"
         f"Interest: {session.interest_score}/100 ({interest_band(session.interest_score)})\n"
         f"Stage: {session.stage}\n"
         f"Tone: {state.tone}\n"
         f"Trust/Irritation/Urgency: {state.trust}/{state.irritation}/{state.urgency}\n"
         f"Open objections: {objections}\n"
+        f"Discovered role: {state.discovered_role or 'unknown'}\n"
+        f"Discovered authority: {state.discovered_authority_level or 'unknown'}\n"
         f"Known pains: {pains}\n"
+        f"Decision criteria: {criteria}\n"
         f"Buying signals: {signals}\n"
         f"Turns: {session.turn_count}\n"
         f"Summary: {session.summary}"

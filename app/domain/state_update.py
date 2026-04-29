@@ -24,5 +24,13 @@ def apply_state_patch(client_state: ClientState, patch: StatePatch) -> ClientSta
     _append_unique(updated.known_pains, patch.add_known_pains)
     _append_unique(updated.buying_signals, patch.add_buying_signals)
     _append_unique(updated.red_flags, patch.add_red_flags)
+    if patch.set_discovered_role is not None:
+        updated.discovered_role = patch.set_discovered_role
+    if patch.set_discovered_authority_level is not None:
+        updated.discovered_authority_level = patch.set_discovered_authority_level
+    _append_unique(updated.discovered_pains, patch.add_discovered_pains)
+    _append_unique(updated.known_pains, patch.add_discovered_pains)
+    _append_unique(updated.discovered_decision_criteria, patch.add_discovered_decision_criteria)
+    _append_unique(updated.discovered_constraints, patch.add_discovered_constraints)
+    _append_unique(updated.discovered_current_process, patch.add_discovered_current_process)
     return updated
-

@@ -29,6 +29,8 @@ def test_resolve_next_stage_blocks_finished_success_when_interest_is_too_low() -
 def test_resolve_next_stage_allows_next_step_when_thresholds_are_met() -> None:
     state = make_state()
     state.buying_signals.append("Asked for next step")
+    state.discovered_role = "owner"
+    state.discovered_pains.append("Conversion is leaking between stages.")
     assert resolve_next_stage(
         "trust_building",
         "next_step_negotiation",

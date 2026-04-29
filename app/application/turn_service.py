@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.application.evaluator import evaluate_turn
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
 from app.domain.errors import SessionNotActiveError, SessionNotFoundError
 from app.domain.interest import apply_interest_delta, interest_band
@@ -58,12 +59,20 @@ class TurnService:
         llm_input = LLMTurnInput(
             task="simulate_next_client_reply",
             scenario=get_scenario(session.scenario_id),
-            persona=session.persona,
+            hidden_profile=session.persona,
             current_state={
                 "interest_score": session.interest_score,
                 "interest_band": interest_band(session.interest_score),
                 "stage": session.stage,
                 "client_state": session.client_state.model_dump(mode="json"),
+            },
+            discovered_facts={
+                "role": session.client_state.discovered_role,
+                "authority_level": session.client_state.discovered_authority_level,
+                "pains": session.client_state.discovered_pains,
+                "decision_criteria": session.client_state.discovered_decision_criteria,
+                "constraints": session.client_state.discovered_constraints,
+                "current_process": session.client_state.discovered_current_process,
             },
             conversation_summary=session.summary,
             recent_turns=[
@@ -98,10 +107,17 @@ class TurnService:
         full_turns = [*session.turns, turn]
         recent_turns = [*session.recent_turns, turn][-self._recent_turn_limit :]
         overflow_turns = [*session.recent_turns, turn][:-self._recent_turn_limit]
+        evaluation = evaluate_turn(
+            turn_index=turn.index,
+            manager_message=manager_message,
+            client_state=updated_client_state,
+            hidden_profile=session.persona,
+        )
         session.interest_score = interest_after
         session.stage = resolved_stage
         session.client_state = updated_client_state
         session.turns = full_turns
+        session.turn_evaluations = [*session.turn_evaluations, evaluation]
         session.recent_turns = recent_turns
         session.turn_count += 1
         session.state_version = expected_version + 1

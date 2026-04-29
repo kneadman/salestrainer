@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     yandex_agent_id: str = ""
     yandex_base_url: str = "https://ai.api.cloud.yandex.net/v1"
     recent_turn_limit: int = Field(default=6, ge=1, le=20)
+    persona_random_seed: int | None = None
+    default_training_scenario_id: str = "generic_b2b_first_contact"
 
     @property
     def is_local_env(self) -> bool:

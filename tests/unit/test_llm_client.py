@@ -33,7 +33,7 @@ def sample_payload() -> LLMTurnInput:
     return LLMTurnInput(
         task="simulate_next_client_reply",
         scenario=get_scenario("sales_audit_cold_outreach"),
-        persona=get_persona("owner"),
+        hidden_profile=get_persona("owner"),
         current_state={
             "interest_score": 25,
             "interest_band": "skeptical",
@@ -48,8 +48,15 @@ def sample_payload() -> LLMTurnInput:
                 "known_pains": [],
                 "buying_signals": [],
                 "red_flags": [],
+                "discovered_role": None,
+                "discovered_authority_level": None,
+                "discovered_pains": [],
+                "discovered_decision_criteria": [],
+                "discovered_constraints": [],
+                "discovered_current_process": [],
             },
         },
+        discovered_facts={},
         conversation_summary="Training started.",
         recent_turns=[],
         manager_message="How do you track conversion losses now?",
@@ -150,8 +157,10 @@ def test_yandex_compatible_client_builds_expected_request_and_retries_then_succe
     assert input_payload["task"] == "simulate_next_client_reply"
     assert input_payload["manager_message"] == "How do you track conversion losses now?"
     assert input_payload["scenario"]["id"] == "sales_audit_cold_outreach"
-    assert input_payload["persona"]["id"] == "owner"
+    assert input_payload["hidden_profile"]["id"] == "owner"
+    assert "latent_pains" in input_payload["hidden_profile"]
     assert input_payload["current_state"]["stage"] == "first_contact"
+    assert input_payload["discovered_facts"] == {}
     assert input_payload["recent_turns"] == []
     retry_input_payload = json.loads(calls[1]["input"])
     assert "Previous answer was invalid" in retry_input_payload["retry_instruction"]

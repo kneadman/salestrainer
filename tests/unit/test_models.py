@@ -53,6 +53,7 @@ def test_training_session_state_contains_required_fields() -> None:
         ),
         summary="started",
         recent_turns=[],
+        public_brief="brief",
         turn_count=0,
         state_version=1,
         created_at=datetime.now(tz=UTC),

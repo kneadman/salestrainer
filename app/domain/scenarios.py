@@ -5,6 +5,16 @@ from app.domain.models import Scenario
 
 
 SCENARIOS: dict[str, Scenario] = {
+    "generic_b2b_first_contact": Scenario(
+        id="generic_b2b_first_contact",
+        name="Первичный B2B-контакт с неизвестным клиентом",
+        offer="Диагностика и улучшение бизнес-процессов продаж, финансов и учета",
+        target_audience="B2B-компании",
+        default_starting_interest=25,
+        default_stage="first_contact",
+        success_condition="Менеджер выясняет контекст клиента и договаривается о следующем шаге.",
+        failure_condition="Диалог уходит в ранний питчинг без понимания роли, боли и критериев клиента.",
+    ),
     "sales_audit_cold_outreach": Scenario(
         id="sales_audit_cold_outreach",
         name="Cold outreach for sales audit",

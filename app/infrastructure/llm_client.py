@@ -188,13 +188,20 @@ class FakeLLMClient:
     def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
         message = payload.manager_message.strip()
         message_lower = message.lower()
+        profile = payload.hidden_profile
+        discovered = payload.discovered_facts
         current_interest = int(payload.current_state["interest_score"])
-        delta = self._score_message(message_lower)
+        delta = self._score_message(message_lower, profile)
         next_interest = max(0, min(100, current_interest + delta))
         band = interest_band(next_interest)
-        stage = self._choose_stage(message_lower, current_stage=str(payload.current_state["stage"]), next_interest=next_interest)
+        stage = self._choose_stage(
+            message_lower,
+            current_stage=str(payload.current_state["stage"]),
+            next_interest=next_interest,
+            discovered=discovered,
+        )
         answer = self._build_answer(band, stage, payload)
-        patch = self._build_patch(message_lower, band)
+        patch = self._build_patch(message_lower, band, profile, discovered)
         notes = self._build_notes(delta, band, message)
         return LLMTurnResponse(
             answer=answer,
@@ -204,63 +211,144 @@ class FakeLLMClient:
             internal_notes=notes,
         )
 
-    def _score_message(self, message_lower: str) -> int:
+    def _score_message(self, message_lower: str, profile) -> int:
         score = 0
         if len(message_lower) < 12:
             score -= 4
         if "?" in message_lower:
             score += 4
-        if any(token in message_lower for token in ["audit", "diagnostic", "conversion", "funnel", "loss", "problem"]):
+        if any(
+            token in message_lower
+            for token in [
+                "кто вы",
+                "ваша роль",
+                "за что отвечаете",
+                "как сейчас устроено",
+                "какая проблема",
+                "что болит",
+                "болит",
+                "проблем",
+                "воронка",
+                "продажи",
+                "бухгалтерия",
+                "финансы",
+                "заявки",
+                "лиды",
+                "потери",
+                "контроль",
+                "diagnostic",
+                "conversion",
+                "funnel",
+                "loss",
+                "problem",
+            ]
+        ):
             score += 3
-        if any(token in message_lower for token in ["you must", "buy", "urgent offer", "only today"]):
+        if any(token in message_lower for token in ["you must", "buy", "urgent offer", "only today", "купите", "срочно", "только сегодня"]):
             score -= 6
-        if any(token in message_lower for token in ["price", "cost", "roi", "result"]):
+        if any(token in message_lower for token in ["price", "cost", "roi", "result", "стоимость", "цена", "окупаемость", "результат"]):
             score += 2
+        if any(token in message_lower for token in profile.industry.lower().split("_")):
+            score += 1
         return max(-15, min(15, score))
 
-    def _choose_stage(self, message_lower: str, current_stage: str, next_interest: int) -> str:
-        if next_interest >= 75 and "?" in message_lower:
+    def _choose_stage(self, message_lower: str, current_stage: str, next_interest: int, discovered: dict[str, Any]) -> str:
+        if any(token in message_lower for token in ["кто вы", "ваша роль", "за что отвечаете"]):
+            return "role_discovery"
+        if next_interest >= 75 and "?" in message_lower and discovered.get("role") and discovered.get("pains"):
             return "next_step_negotiation"
-        if any(token in message_lower for token in ["why", "how", "problem", "loss"]):
+        if any(token in message_lower for token in ["why", "how", "problem", "loss", "как", "почему", "что болит", "болит", "какая проблема", "проблем"]):
             return "need_discovery"
-        if any(token in message_lower for token in ["example", "result", "roi", "diagnostic"]):
+        if any(token in message_lower for token in ["example", "result", "roi", "diagnostic", "результат", "окупаемость", "эффект"]):
             return "value_clarification"
         return current_stage
 
     def _build_answer(self, band: str, stage: str, payload: LLMTurnInput) -> str:
-        offer = payload.scenario.offer
+        profile = payload.hidden_profile
+        discovered = payload.discovered_facts
+        if any(token in payload.manager_message.lower() for token in ["кто вы", "ваша роль", "за что отвечаете"]):
+            return self._role_answer(profile, discovered)
+        if any(token in payload.manager_message.lower() for token in ["как сейчас устроено", "что происходит", "как работает", "воронка", "процесс"]):
+            return profile.current_business_context[:180]
+        if any(token in payload.manager_message.lower() for token in ["какая проблема", "что болит", "болит", "где потери", "что мешает", "проблем"]):
+            return profile.latent_pains[0]
+        if any(token in payload.manager_message.lower() for token in ["кто принимает решение", "кто согласует", "есть ли полномочия"]):
+            return self._authority_answer(profile)
+        if any(token in payload.manager_message.lower() for token in ["цена", "стоимость", "окупаемость", "результат"]):
+            return "Сначала хочу понять, в чем конкретно для нас будет ценность."
         if band == "cold":
-            return "I am not convinced this is relevant. Be specific."
+            return "Пока звучит слишком общо. Уточните, что именно вы хотите понять."
         if band == "skeptical":
-            return f"What exactly do you review in {offer.lower()}, and why do you think it applies to us?"
+            return "Сформулируйте короче и привяжите к нашей ситуации."
         if band == "neutral":
-            return "Understood. How long does that take, and what do we get at the end?"
+            return "Допустим. Какие данные вам обычно нужны, чтобы понять ситуацию?"
         if band == "warm":
-            return f"That sounds closer to useful. What inputs do you need from us for the next step in {stage}?"
-        return "This is getting clearer. What would the next step look like, and who should be involved from our side?"
+            return "Уже ближе к делу. Если быстро поймете контекст, что предложите как следующий шаг?"
+        return "Ок. Тогда покажите, как вы обычно переводите это в конкретный следующий шаг."
 
-    def _build_patch(self, message_lower: str, band: str) -> StatePatch:
+    def _role_answer(self, profile, discovered: dict[str, Any]) -> str:
+        if discovered.get("role") == profile.role:
+            return "Я уже сказал, за это направление отвечаю я."
+        return {
+            "owner": "Я собственник, отвечаю за результат бизнеса в целом.",
+            "sales_director": "Я отвечаю за продажи и выполнение плана.",
+            "cfo": "Я веду финансовый контур и смотрю на экономику решений.",
+            "chief_accountant": "Я отвечаю за учет и корректность процессов.",
+            "purchase_manager": "Я отвечаю за закупочный процесс и первичный отбор подрядчиков.",
+        }[profile.role]
+
+    def _authority_answer(self, profile) -> str:
+        return {
+            "final_decider": "Финальное решение могу принять сам, если вижу смысл.",
+            "influencer": "Я влияю на решение, но финально нужен еще другой участник.",
+            "gatekeeper": "Сначала мне нужно понять релевантность, потом могу передать дальше.",
+            "evaluator": "Я оцениваю экономику и риски, финальное решение не только за мной.",
+        }[profile.authority_level]
+
+    def _build_patch(self, message_lower: str, band: str, profile, discovered: dict[str, Any]) -> StatePatch:
         add_open_objections: list[str] = []
         remove_open_objections: list[str] = []
         known_pains: list[str] = []
         buying_signals: list[str] = []
         red_flags: list[str] = []
+        discovered_pains: list[str] = []
+        decision_criteria: list[str] = []
+        constraints: list[str] = []
+        current_process: list[str] = []
         trust_delta = 0
         irritation_delta = 0
         urgency_delta = 0
         tone = None
+        discovered_role = None
+        discovered_authority_level = None
 
         if "?" in message_lower:
             trust_delta += 3
             irritation_delta -= 1
             known_pains.append("Manager asked a diagnostic question instead of generic pitching.")
-        if any(token in message_lower for token in ["conversion", "loss", "funnel", "diagnostic"]):
+        if any(token in message_lower for token in ["conversion", "loss", "funnel", "diagnostic", "воронка", "потери", "как сейчас устроено"]):
             trust_delta += 2
             urgency_delta += 1
             remove_open_objections.append("I do not see why this is necessary.")
-        if any(token in message_lower for token in ["buy", "must", "only today"]):
+        if any(token in message_lower for token in ["buy", "must", "only today", "купите", "срочно", "только сегодня"]):
             irritation_delta += 4
             red_flags.append("Manager became pushy.")
+        if any(token in message_lower for token in ["кто вы", "ваша роль", "за что отвечаете"]):
+            discovered_role = profile.role
+            trust_delta += 2
+        if any(token in message_lower for token in ["кто принимает решение", "кто согласует", "есть ли полномочия"]):
+            discovered_authority_level = profile.authority_level
+            trust_delta += 1
+        if any(token in message_lower for token in ["какая проблема", "что болит", "болит", "где потери", "что мешает", "проблем"]):
+            discovered_pains.extend(profile.latent_pains[:1])
+            known_pains.extend(profile.latent_pains[:1])
+            trust_delta += 2
+        if any(token in message_lower for token in ["как сейчас устроено", "процесс", "воронка"]):
+            current_process.append(profile.current_business_context)
+        if any(token in message_lower for token in ["по каким критериям", "что важно", "как выбираете"]):
+            decision_criteria.extend(profile.decision_criteria[:2])
+        if any(token in message_lower for token in ["что мешает", "какие ограничения", "риски"]):
+            constraints.extend(profile.hidden_constraints[:1])
 
         if band in {"neutral", "warm", "hot"}:
             buying_signals.append("Client asked about scope, time, or next step.")
@@ -287,6 +375,12 @@ class FakeLLMClient:
             add_known_pains=known_pains,
             add_buying_signals=buying_signals,
             add_red_flags=red_flags,
+            set_discovered_role=discovered_role,
+            set_discovered_authority_level=discovered_authority_level,
+            add_discovered_pains=discovered_pains,
+            add_discovered_decision_criteria=decision_criteria,
+            add_discovered_constraints=constraints,
+            add_discovered_current_process=current_process,
         )
 
     def _build_notes(self, delta: int, band: str, message: str) -> str:
@@ -380,8 +474,9 @@ class YandexCompatibleLLMClient:
         snapshot = {
             "task": payload.task,
             "scenario": payload.scenario.model_dump(mode="json"),
-            "persona": payload.persona.model_dump(mode="json"),
+            "hidden_profile": payload.hidden_profile.model_dump(mode="json"),
             "current_state": payload.current_state,
+            "discovered_facts": payload.discovered_facts,
             "conversation_summary": payload.conversation_summary,
             "recent_turns": payload.recent_turns,
             "manager_message": payload.manager_message,
