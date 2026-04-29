@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 
+import pytest
+
+from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import LLMTurnInput
 from app.domain.personas import get_persona
 from app.domain.scenarios import get_scenario
@@ -175,3 +179,57 @@ def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None
     )
     client = build_llm_client(settings)
     assert isinstance(client, FakeLLMClient)
+
+
+def test_build_llm_client_raises_when_provider_config_is_incomplete_and_fallback_is_disabled() -> None:
+    settings = Settings(
+        app_env="prod",
+        llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=False,
+        yandex_api_key="",
+        yandex_folder_id="folder-id",
+        yandex_agent_id="agent-id",
+    )
+
+    with pytest.raises(LLMProviderConfigurationError, match="Incomplete Yandex LLM configuration"):
+        build_llm_client(settings)
+
+
+def test_yandex_compatible_client_info_logs_do_not_include_full_payload(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="app.infrastructure.llm_client")
+    client = YandexCompatibleLLMClient(
+        base_url="https://ai.api.cloud.yandex.net/v1",
+        api_key="super-secret-token",
+        folder_id="folder-id",
+        agent_id="agent-id",
+        transport=lambda *_: FakeResponse(
+            {
+                "output_text": json.dumps(
+                    {
+                        "answer": "Understood. How long does that take?",
+                        "interest_delta": 4,
+                        "state_patch": {
+                            "tone": "neutral",
+                            "trust_delta": 2,
+                            "irritation_delta": -1,
+                            "urgency_delta": 1,
+                            "add_open_objections": [],
+                            "remove_open_objections": [],
+                            "add_known_pains": [],
+                            "add_buying_signals": [],
+                            "add_red_flags": [],
+                        },
+                        "stage": "need_discovery",
+                        "internal_notes": "Retry returned valid JSON.",
+                    }
+                )
+            }
+        ),
+    )
+
+    client.generate_client_turn(sample_payload())
+
+    info_messages = [record.getMessage() for record in caplog.records if record.levelno == logging.INFO]
+    assert any("payload_size" in message for message in info_messages)
+    assert all("How do you track conversion losses now?" not in message for message in info_messages)
+    assert all("super-secret-token" not in message for message in info_messages)

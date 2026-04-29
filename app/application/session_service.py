@@ -5,6 +5,7 @@ import logging
 from uuid import uuid4
 
 from app.domain.interest import interest_band
+from app.domain.errors import SessionNotActiveError, SessionNotFoundError
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
 from app.domain.personas import get_persona
 from app.domain.scenarios import get_scenario
@@ -65,8 +66,8 @@ class TrainingSessionService:
     def resume_session(self, session_id: str) -> TrainingSessionState:
         session = self._repository.get(session_id)
         if session is None:
-            raise ValueError(f"Session '{session_id}' not found.")
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
         if session.status != "active":
-            raise ValueError(f"Session '{session_id}' is not active.")
+            raise SessionNotActiveError(f"Session '{session_id}' is not active.")
         logger.info("session_resumed session_id=%s", session.session_id)
         return session

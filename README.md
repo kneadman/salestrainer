@@ -7,7 +7,7 @@ CLI MVP for an interactive sales training simulator. A manager writes messages, 
 - CLI chat only
 - Fake LLM is the default working flow
 - Session state stored in app-managed repository
-- Redis docker setup included, with in-memory fallback when Redis is unavailable
+- Redis docker setup included
 - Domain validation via Pydantic v2
 
 ## Install
@@ -61,6 +61,18 @@ set YANDEX_AGENT_ID=fvtpps65vhjr2j1qul0a
 python -m app.cli.main
 ```
 
+Fallback policy:
+
+- `APP_ENV=local` allows fallback to `FakeLLMClient` and `InMemorySessionRepository` even if the explicit allow-flags are `false`
+- `APP_ENV=staging` or `APP_ENV=prod` should usually run with `ALLOW_FAKE_LLM_FALLBACK=false` and `ALLOW_IN_MEMORY_REPOSITORY=false`
+- In those environments, incomplete Yandex config or unavailable Redis now fail explicitly during startup instead of silently degrading
+
+LLM logging:
+
+- INFO logs contain only sanitized metadata
+- Full request payload logging is disabled by default and can be enabled with `DEBUG_LLM_PAYLOAD=true`
+- API keys are never logged in full
+
 ## Run tests
 
 ```bash
@@ -79,7 +91,7 @@ docker compose up -d
 - Yandex adapter now follows the AI Studio `OpenAI(...).responses.create(...)` contract and is covered by mocked request/response tests, but is still not verified here against a live cloud account
 - CLI still uses a simple terminal flow
 - Reports are rule-based, not judge-model based
-- Session resume across process restarts requires Redis; in-memory mode is process-local
+- Session resume across process restarts requires Redis; in-memory mode is process-local and does not survive restarts
 
 ## Next step roadmap
 

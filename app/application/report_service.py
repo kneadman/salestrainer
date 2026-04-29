@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 
+from app.domain.errors import SessionNotFoundError
 from app.domain.interest import interest_band
 from app.infrastructure.session_repository import SessionRepository
 
@@ -16,7 +17,7 @@ class ReportService:
     def finish_session(self, session_id: str) -> str:
         session = self._repository.get(session_id)
         if session is None:
-            raise ValueError(f"Session '{session_id}' not found.")
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
         if session.status != "finished":
             session.status = "finished"
             session.state_version += 1
@@ -34,7 +35,7 @@ class ReportService:
     def generate_report(self, session_id: str) -> str:
         session = self._repository.get(session_id)
         if session is None:
-            raise ValueError(f"Session '{session_id}' not found.")
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
         objections = ", ".join(session.client_state.open_objections) or "none"
         signals = ", ".join(session.client_state.buying_signals) or "none"
         return (

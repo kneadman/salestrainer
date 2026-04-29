@@ -14,13 +14,20 @@ class Settings(BaseSettings):
     app_env: str = "local"
     log_level: str = "INFO"
     debug_cli: bool = False
+    debug_llm_payload: bool = False
     llm_backend: str = "fake"
+    allow_fake_llm_fallback: bool = True
+    allow_in_memory_repository: bool = True
     llm_request_timeout_seconds: int = Field(default=30, ge=1, le=120)
     yandex_api_key: str = ""
     yandex_folder_id: str = ""
     yandex_agent_id: str = ""
     yandex_base_url: str = "https://ai.api.cloud.yandex.net/v1"
     recent_turn_limit: int = Field(default=6, ge=1, le=20)
+
+    @property
+    def is_local_env(self) -> bool:
+        return self.app_env.lower().strip() == "local"
 
 
 @lru_cache(maxsize=1)

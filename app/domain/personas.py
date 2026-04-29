@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.domain.errors import UnknownPersonaError
 from app.domain.models import PersonaProfile
 
 
@@ -63,5 +64,4 @@ def get_persona(persona_id: str) -> PersonaProfile:
     try:
         return PERSONAS[persona_id]
     except KeyError as error:
-        raise ValueError(f"Unknown persona_id '{persona_id}'.") from error
-
+        raise UnknownPersonaError(f"Unknown persona_id '{persona_id}'.") from error

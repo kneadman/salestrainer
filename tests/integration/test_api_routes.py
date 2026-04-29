@@ -123,3 +123,70 @@ def test_api_preserves_incoming_request_id() -> None:
     response = client.get("/api/health", headers={"X-Request-ID": "req-123"})
     assert response.status_code == 200
     assert response.headers["X-Request-ID"] == "req-123"
+
+
+def test_api_create_session_returns_controlled_404_for_unknown_scenario() -> None:
+    app = create_app(
+        settings=Settings(),
+        repository=InMemorySessionRepository(),
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/sessions",
+        json={"scenario_id": "missing-scenario", "persona_id": "owner"},
+    )
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error"]["code"] == "not_found"
+    assert "Unknown scenario_id 'missing-scenario'." == payload["error"]["message"]
+
+
+def test_api_create_session_returns_controlled_404_for_unknown_persona() -> None:
+    app = create_app(
+        settings=Settings(),
+        repository=InMemorySessionRepository(),
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/sessions",
+        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "missing-persona"},
+    )
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error"]["code"] == "not_found"
+    assert "Unknown persona_id 'missing-persona'." == payload["error"]["message"]
+
+
+def test_api_finished_session_returns_conflict_for_message_and_resume() -> None:
+    app = create_app(
+        settings=Settings(),
+        repository=InMemorySessionRepository(),
+        llm_client=FakeLLMClient(),
+    )
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/sessions",
+        json={"scenario_id": "sales_audit_cold_outreach", "persona_id": "owner"},
+    )
+    session_id = create_response.json()["session"]["session_id"]
+
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+    assert finish_response.status_code == 200
+
+    message_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Can we continue?"},
+    )
+    assert message_response.status_code == 409
+    assert message_response.json()["error"]["code"] == "conflict"
+
+    resume_response = client.post(f"/api/sessions/{session_id}/resume")
+    assert resume_response.status_code == 409
+    assert resume_response.json()["error"]["code"] == "conflict"

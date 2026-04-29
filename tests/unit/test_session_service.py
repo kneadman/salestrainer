@@ -1,6 +1,7 @@
 import pytest
 
 from app.application.session_service import TrainingSessionService
+from app.domain.errors import SessionNotFoundError
 from app.infrastructure.session_repository import InMemorySessionRepository
 
 
@@ -19,5 +20,5 @@ def test_resume_session_rejects_missing_session() -> None:
     repository = InMemorySessionRepository()
     service = TrainingSessionService(repository)
 
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(SessionNotFoundError, match="not found"):
         service.resume_session("missing-session-id")

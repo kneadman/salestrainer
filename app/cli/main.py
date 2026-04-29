@@ -14,6 +14,7 @@ from app.cli.renderer import (
     render_scenarios,
     render_state,
 )
+from app.domain.errors import SalesTrainerError
 from app.domain.personas import list_personas
 from app.domain.scenarios import list_scenarios
 from app.infrastructure.config import get_settings
@@ -115,7 +116,7 @@ def run_cli(
         if command == "/resume":
             try:
                 current_session_id = resume_flow(session_service, input_fn, output_fn, argument or None)
-            except ValueError as error:
+            except SalesTrainerError as error:
                 output_fn(f"Error: {error}")
                 logger.warning("cli_resume_error error=%s", error)
             continue
@@ -136,12 +137,16 @@ def run_cli(
                 output_fn(render_history(session))
             continue
         if command == "/finish":
-            output_fn(report_service.finish_session(current_session_id))
-            current_session_id = None
+            try:
+                output_fn(report_service.finish_session(current_session_id))
+                current_session_id = None
+            except SalesTrainerError as error:
+                output_fn(f"Error: {error}")
+                logger.warning("cli_finish_error error=%s", error)
             continue
         try:
             result = turn_service.process_message(current_session_id, raw)
-        except ValueError as error:
+        except SalesTrainerError as error:
             output_fn(f"Error: {error}")
             logger.warning("cli_turn_error error=%s", error)
             continue

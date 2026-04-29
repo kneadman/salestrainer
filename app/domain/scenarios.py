@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.domain.errors import UnknownScenarioError
 from app.domain.models import Scenario
 
 
@@ -35,5 +36,4 @@ def get_scenario(scenario_id: str) -> Scenario:
     try:
         return SCENARIOS[scenario_id]
     except KeyError as error:
-        raise ValueError(f"Unknown scenario_id '{scenario_id}'.") from error
-
+        raise UnknownScenarioError(f"Unknown scenario_id '{scenario_id}'.") from error

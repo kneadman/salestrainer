@@ -20,6 +20,13 @@ from app.application.projections import build_session_public_dto, build_turn_pub
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
+from app.domain.errors import (
+    SalesTrainerError,
+    SessionNotActiveError,
+    SessionNotFoundError,
+    UnknownPersonaError,
+    UnknownScenarioError,
+)
 from app.domain.personas import list_personas
 from app.domain.scenarios import list_scenarios
 
@@ -31,6 +38,14 @@ ERROR_RESPONSES = {
     409: {"model": ErrorResponse},
     422: {"model": ErrorResponse},
 }
+
+
+def raise_api_error(error: SalesTrainerError) -> None:
+    if isinstance(error, (SessionNotFoundError, UnknownScenarioError, UnknownPersonaError)):
+        raise not_found(str(error)) from error
+    if isinstance(error, SessionNotActiveError):
+        raise conflict(str(error)) from error
+    raise error
 
 
 @router.get("/health")
@@ -75,10 +90,13 @@ def create_session(
     request: SessionCreateRequest,
     session_service: TrainingSessionService = Depends(get_session_service),
 ) -> SessionStateResponse:
-    session = session_service.start_session(
-        scenario_id=request.scenario_id,
-        persona_id=request.persona_id,
-    )
+    try:
+        session = session_service.start_session(
+            scenario_id=request.scenario_id,
+            persona_id=request.persona_id,
+        )
+    except SalesTrainerError as error:
+        raise_api_error(error)
     return SessionStateResponse(session=build_session_public_dto(session))
 
 
@@ -103,8 +121,8 @@ def resume_session(
 ) -> SessionStateResponse:
     try:
         session = session_service.resume_session(session_id)
-    except ValueError as error:
-        raise not_found(str(error)) from error
+    except SalesTrainerError as error:
+        raise_api_error(error)
     return SessionStateResponse(session=build_session_public_dto(session))
 
 
@@ -117,8 +135,8 @@ def post_manager_message(
 ) -> TurnResponse:
     try:
         turn_result = turn_service.process_message(session_id, request.manager_message)
-    except ValueError as error:
-        raise not_found(str(error)) from error
+    except SalesTrainerError as error:
+        raise_api_error(error)
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after turn.")
@@ -143,8 +161,8 @@ def finish_session(
 ) -> FinishSessionResponse:
     try:
         report_text = report_service.finish_session(session_id)
-    except ValueError as error:
-        raise not_found(str(error)) from error
+    except SalesTrainerError as error:
+        raise_api_error(error)
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after finish.")

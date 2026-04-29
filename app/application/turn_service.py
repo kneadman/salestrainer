@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
+from app.domain.errors import SessionNotActiveError, SessionNotFoundError
 from app.domain.interest import apply_interest_delta, interest_band
 from app.domain.models import LLMTurnInput, TrainingSessionState, Turn
 from app.domain.scenarios import get_scenario
@@ -136,9 +137,9 @@ class TurnService:
     def _require_active_session(self, session_id: str) -> TrainingSessionState:
         session = self._repository.get(session_id)
         if session is None:
-            raise ValueError(f"Session '{session_id}' not found.")
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
         if session.status != "active":
-            raise ValueError(f"Session '{session_id}' is not active.")
+            raise SessionNotActiveError(f"Session '{session_id}' is not active.")
         return session
 
     def _build_summary(self, session: TrainingSessionState, internal_notes: str) -> str:

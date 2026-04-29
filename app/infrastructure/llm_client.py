@@ -7,6 +7,7 @@ from typing import Any, Callable, Protocol
 
 from pydantic import ValidationError
 
+from app.domain.errors import LLMProviderConfigurationError
 from app.domain.interest import interest_band
 from app.domain.models import LLMTurnInput, LLMTurnResponse, StatePatch
 from app.infrastructure.config import Settings
@@ -27,7 +28,43 @@ class LLMClientError(RuntimeError):
 def _sanitize_api_key(api_key: str) -> str:
     if not api_key:
         return ""
-    return f"{api_key[:6]}..."
+    if len(api_key) <= 6:
+        return "***"
+    return f"{api_key[:4]}...{api_key[-2:]}"
+
+
+def _payload_size(value: Any) -> int:
+    try:
+        return len(json.dumps(value, ensure_ascii=False))
+    except (TypeError, ValueError):
+        return len(str(value))
+
+
+def _safe_request_metadata(
+    *,
+    provider: str,
+    endpoint_url: str,
+    api_key: str,
+    project_id: str,
+    prompt_id: str,
+    attempt: int,
+    request_payload: dict[str, Any],
+) -> dict[str, Any]:
+    input_payload = request_payload.get("input", "")
+    return {
+        "provider": provider,
+        "attempt": attempt,
+        "endpoint_url": endpoint_url,
+        "api_key": _sanitize_api_key(api_key),
+        "project_id": project_id,
+        "prompt_id": prompt_id,
+        "payload_size": _payload_size(request_payload),
+        "input_size": _payload_size(input_payload),
+    }
+
+
+def _should_allow_fake_fallback(settings: Settings) -> bool:
+    return settings.allow_fake_llm_fallback or settings.is_local_env
 
 
 def _response_to_payload(response: Any) -> dict[str, Any] | str:
@@ -219,6 +256,7 @@ class YandexCompatibleLLMClient:
         max_retries: int = 1,
         fallback_client: LLMClient | None = None,
         transport: Transport | None = None,
+        debug_payload_logging: bool = False,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -228,6 +266,7 @@ class YandexCompatibleLLMClient:
         self._max_retries = max_retries
         self._fallback_client = fallback_client
         self._transport = transport or self._default_transport
+        self._debug_payload_logging = debug_payload_logging
 
     def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
         last_error: Exception | None = None
@@ -239,14 +278,18 @@ class YandexCompatibleLLMClient:
                     "No markdown. No commentary."
                 )
             request_payload = self._build_request_payload(payload, retry_instruction)
-            logger.info(
-                "yandex_llm_request attempt=%s url=%s api_key=%s project=%s payload=%s",
-                attempt + 1,
-                self.endpoint_url,
-                _sanitize_api_key(self._api_key),
-                self._folder_id,
-                request_payload,
+            metadata = _safe_request_metadata(
+                provider="yandex_compatible",
+                endpoint_url=self.endpoint_url,
+                api_key=self._api_key,
+                project_id=self._folder_id,
+                prompt_id=self._agent_id,
+                attempt=attempt + 1,
+                request_payload=request_payload,
             )
+            logger.info("yandex_llm_request %s", metadata)
+            if self._debug_payload_logging:
+                logger.debug("yandex_llm_request_payload %s", request_payload)
             try:
                 raw_response = _response_to_payload(self._transport(request_payload))
                 return parse_llm_turn_response(raw_response)
@@ -334,8 +377,12 @@ def build_llm_client(settings: Settings) -> LLMClient:
         return FakeLLMClient()
     if backend == "yandex_compatible":
         if not all([settings.yandex_api_key, settings.yandex_folder_id, settings.yandex_agent_id]):
-            logger.warning("llm_backend_incomplete_config backend=%s fallback=fake", backend)
-            return FakeLLMClient()
+            if _should_allow_fake_fallback(settings):
+                logger.warning("llm_backend_incomplete_config backend=%s fallback=fake", backend)
+                return FakeLLMClient()
+            raise LLMProviderConfigurationError(
+                "Incomplete Yandex LLM configuration and fake fallback is disabled."
+            )
         return YandexCompatibleLLMClient(
             base_url=settings.yandex_base_url,
             api_key=settings.yandex_api_key,
@@ -343,7 +390,12 @@ def build_llm_client(settings: Settings) -> LLMClient:
             agent_id=settings.yandex_agent_id,
             timeout_seconds=settings.llm_request_timeout_seconds,
             max_retries=1,
-            fallback_client=FakeLLMClient(),
+            fallback_client=FakeLLMClient() if _should_allow_fake_fallback(settings) else None,
+            debug_payload_logging=settings.debug_llm_payload,
         )
-    logger.warning("llm_backend_unknown backend=%s fallback=fake", settings.llm_backend)
-    return FakeLLMClient()
+    if _should_allow_fake_fallback(settings):
+        logger.warning("llm_backend_unknown backend=%s fallback=fake", settings.llm_backend)
+        return FakeLLMClient()
+    raise LLMProviderConfigurationError(
+        f"Unknown llm_backend '{settings.llm_backend}' and fake fallback is disabled."
+    )

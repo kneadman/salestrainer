@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
+
 from app.application.summary_compressor import FakeSummaryCompressor
+from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, Turn
 from app.infrastructure.config import Settings
 from app.infrastructure.summary_compressor import (
@@ -135,3 +139,40 @@ def test_yandex_summary_compressor_falls_back_to_fake_compressor() -> None:
 def test_build_summary_compressor_defaults_to_fake_without_yandex_backend() -> None:
     compressor = build_summary_compressor(Settings(llm_backend="fake"))
     assert isinstance(compressor, FakeSummaryCompressor)
+
+
+def test_build_summary_compressor_raises_when_config_is_incomplete_and_fallback_is_disabled() -> None:
+    settings = Settings(
+        app_env="prod",
+        llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=False,
+        yandex_api_key="",
+        yandex_folder_id="folder-id",
+        yandex_agent_id="agent-id",
+    )
+
+    with pytest.raises(LLMProviderConfigurationError, match="Incomplete summary compressor configuration"):
+        build_summary_compressor(settings)
+
+
+def test_summary_compressor_info_logs_do_not_include_full_payload(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="app.infrastructure.summary_compressor")
+    compressor = YandexSummaryCompressor(
+        base_url="https://ai.api.cloud.yandex.net/v1",
+        api_key="super-secret-token",
+        folder_id="folder-id",
+        agent_id="agent-id",
+        transport=lambda *_: FakeResponse({"output_text": "Compressed summary from LLM."}),
+    )
+
+    compressor.compress(
+        existing_summary="Existing summary with internal data.",
+        overflow_turns=[make_turn()],
+        session=make_session(),
+        latest_internal_notes="Client is slightly warmer.",
+    )
+
+    info_messages = [record.getMessage() for record in caplog.records if record.levelno == logging.INFO]
+    assert any("payload_size" in message for message in info_messages)
+    assert all("Existing summary with internal data." not in message for message in info_messages)
+    assert all("super-secret-token" not in message for message in info_messages)
