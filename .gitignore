@@ -21,6 +21,10 @@ build/
 dist/
 *.egg-info/
 .eggs/
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+frontend/tsconfig.tsbuildinfo
 
 .idea/
 .vscode/

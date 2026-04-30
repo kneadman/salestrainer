@@ -134,16 +134,37 @@ def test_fake_llm_role_answer_is_readable_russian() -> None:
     result = turn_service.process_message(str(session.session_id), "Кто вы и за что отвечаете?")
 
     normalized_answer = result.client_answer.lower()
-    expected_words = [
+    expected_role_words = [
         "собственник",
+        "основатель",
+        "ceo",
         "директор",
-        "отвечаю",
-        "решения",
-        "учёт",
+        "партнёр",
+        "бухгалтер",
         "продаж",
     ]
 
-    assert any(word in normalized_answer for word in expected_words)
+    assert "я " in normalized_answer
+    assert "отвечаю" in normalized_answer
+    assert any(word in normalized_answer for word in expected_role_words)
+
+
+def test_turn_service_discovers_current_process_and_accounting_facts_from_russian_question() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    turn_service = TurnService(repository, FakeLLMClient(), recent_turn_limit=6)
+    session = session_service.start_session()
+
+    turn_service.process_message(
+        str(session.session_id),
+        "Как у вас сейчас устроен процесс и как ведется бухгалтерия?",
+    )
+
+    updated_session = repository.get(str(session.session_id))
+    assert updated_session is not None
+    assert updated_session.client_state.discovered_current_process
+    combined = " ".join(updated_session.client_state.discovered_current_process).lower()
+    assert "уч" in combined or "бухгалтер" in combined
 
 
 def test_turn_service_evaluator_penalizes_early_pressure() -> None:

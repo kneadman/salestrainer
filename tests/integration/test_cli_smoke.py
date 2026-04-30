@@ -40,7 +40,7 @@ def test_cli_smoke_flow(monkeypatch) -> None:
     assert "Situation:" in joined
     assert "Client:" in joined
     assert "Recent turns:" in joined
-    assert "Final interest:" in joined
+    assert "Итог тренировки" in joined
     assert "Persona:" not in joined
 
 
