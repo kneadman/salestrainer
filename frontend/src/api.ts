@@ -1,4 +1,5 @@
 import type {
+  AuthMeResponse,
   ErrorResponse,
   FinishSessionResponse,
   SessionDetailResponse,
@@ -12,11 +13,13 @@ const BACKEND_UNAVAILABLE_MESSAGE =
 
 export class ApiError extends Error {
   code?: string;
+  status?: number;
 
-  constructor(message: string, code?: string) {
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.name = "ApiError";
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -25,11 +28,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   try {
     response = await fetch(path, {
+      ...init,
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...(init?.headers ?? {}),
       },
-      ...init,
     });
   } catch {
     throw new ApiError(BACKEND_UNAVAILABLE_MESSAGE);
@@ -43,10 +47,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const errorPayload = payload as ErrorResponse | null;
     const message =
       errorPayload?.error?.message || `Ошибка запроса: ${response.status} ${response.statusText}`.trim();
-    throw new ApiError(message, errorPayload?.error?.code);
+    throw new ApiError(message, errorPayload?.error?.code, response.status);
   }
 
   return payload as T;
+}
+
+export function login(email: string, password: string): Promise<AuthMeResponse> {
+  return request<AuthMeResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function logout(): Promise<void> {
+  return request<void>("/auth/logout", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function getMe(): Promise<AuthMeResponse> {
+  return request<AuthMeResponse>("/auth/me");
 }
 
 export function createSession(): Promise<SessionStateResponse> {
