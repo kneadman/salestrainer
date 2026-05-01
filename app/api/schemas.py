@@ -56,6 +56,35 @@ class SessionCreateRequest(BaseModel):
     persona_id: str | None = None
 
 
+class LandingLeadRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=320)
+    phone: str | None = Field(default=None, max_length=80)
+    company: str | None = Field(default=None, max_length=200)
+    role: str | None = Field(default=None, max_length=200)
+    sales_team_size: str | None = Field(default=None, max_length=80)
+    comment: str | None = Field(default=None, max_length=2000)
+    marketing_consent: str | None = None
+    query_params: dict[str, str] = Field(default_factory=dict)
+
+
+class QuizLeadRequest(BaseModel):
+    team_size: str | None = Field(default=None, max_length=80)
+    onboarding_time: str | None = Field(default=None, max_length=120)
+    weak_points: list[str] = Field(default_factory=list)
+    materials: str | None = Field(default=None, max_length=200)
+    format: str | None = Field(default=None, max_length=200)
+    name: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=320)
+    phone: str | None = Field(default=None, max_length=80)
+    company: str | None = Field(default=None, max_length=200)
+    query_params: dict[str, str] = Field(default_factory=dict)
+
+
+class LandingSubmitResponse(BaseModel):
+    status: str
+
+
 class TurnRequest(BaseModel):
     manager_message: str = Field(min_length=1, max_length=2000)
 

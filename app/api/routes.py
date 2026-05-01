@@ -8,7 +8,10 @@ from app.access.service import AccessService
 from app.api.schemas import (
     ErrorResponse,
     FinishSessionResponse,
+    LandingLeadRequest,
+    LandingSubmitResponse,
     PersonaOptionDTO,
+    QuizLeadRequest,
     ScenarioOptionDTO,
     SessionCreateRequest,
     SessionDetailResponse,
@@ -59,6 +62,18 @@ def raise_api_error(error: SalesTrainerError) -> None:
 @router.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.post("/leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
+def submit_landing_lead(request: LandingLeadRequest) -> LandingSubmitResponse:
+    # TODO: Persist leads or send them to CRM once the integration target is chosen.
+    return LandingSubmitResponse(status="accepted")
+
+
+@router.post("/quiz-leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
+def submit_quiz_lead(request: QuizLeadRequest) -> LandingSubmitResponse:
+    # TODO: Persist quiz answers or send them to CRM once the integration target is chosen.
+    return LandingSubmitResponse(status="accepted")
 
 
 @router.get("/scenarios", response_model=list[ScenarioOptionDTO], responses=ERROR_RESPONSES)
