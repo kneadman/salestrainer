@@ -71,3 +71,30 @@ class IdentityRepository:
     def get_user_by_id(self, user_id: UUID) -> User | None:
         statement = select(User).where(User.id == user_id)
         return self._session.scalar(statement)
+
+    def update_user_password(
+        self,
+        *,
+        user_id: UUID,
+        password_hash: str,
+        must_change_password: bool = True,
+    ) -> User | None:
+        user = self.get_user_by_id(user_id)
+        if user is None:
+            return None
+
+        user.password_hash = password_hash
+        user.must_change_password = must_change_password
+        self._session.commit()
+        self._session.refresh(user)
+        return user
+
+    def disable_user(self, *, user_id: UUID) -> User | None:
+        user = self.get_user_by_id(user_id)
+        if user is None:
+            return None
+
+        user.is_active = False
+        self._session.commit()
+        self._session.refresh(user)
+        return user

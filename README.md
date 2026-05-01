@@ -75,6 +75,53 @@ set DEFAULT_TRAINING_SCENARIO_ID=generic_b2b_first_contact
 python -m app.cli.main
 ```
 
+## Admin CLI (internal)
+
+Internal admin CLI for manual management of clients, users, and training configs.
+
+Before running commands, ensure migrations are applied (`alembic upgrade head`) and `DATABASE_URL` points to the target PostgreSQL.
+
+Create client:
+
+```bash
+python -m app.admin.cli create-client --name "ООО Ромашка" --slug romashka
+```
+
+Create user (stores only password hash):
+
+```bash
+python -m app.admin.cli create-user --client romashka --email manager@romashka.ru --password "temporary-password"
+```
+
+Create client training config from persona policy JSON:
+
+```bash
+python -m app.admin.cli create-config \
+  --client romashka \
+  --name "Бухгалтерский аутсорсинг" \
+  --product-line accounting_outsourcing \
+  --scenario generic_b2b_first_contact \
+  --persona-policy-file configs/romashka-accounting.json
+```
+
+Assign config to user (`--default` makes it default for that user):
+
+```bash
+python -m app.admin.cli assign-config --email manager@romashka.ru --config "Бухгалтерский аутсорсинг" --default
+```
+
+Reset password (updates `password_hash` and sets `must_change_password=true`):
+
+```bash
+python -m app.admin.cli reset-password --email manager@romashka.ru --password "new-temporary-password"
+```
+
+Disable user (sets `is_active=false`):
+
+```bash
+python -m app.admin.cli disable-user --email manager@romashka.ru
+```
+
 Optional experimental provider path:
 
 ```bash

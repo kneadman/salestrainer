@@ -107,6 +107,18 @@ class AccessRepository:
             }
         )
 
+    def list_training_configs_for_client_by_name(
+        self,
+        *,
+        client_account_id: UUID,
+        name: str,
+    ) -> list[ClientTrainingConfig]:
+        statement = select(ClientTrainingConfig).where(
+            ClientTrainingConfig.client_account_id == client_account_id,
+            ClientTrainingConfig.name == name,
+        )
+        return list(self._session.scalars(statement))
+
     def create_training_session_ownership(
         self,
         *,
