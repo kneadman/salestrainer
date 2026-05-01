@@ -16,6 +16,8 @@ class Base(DeclarativeBase):
 
 def import_model_modules() -> None:
     """Import ORM model modules before metadata access when models are added."""
+    import app.access.models  # noqa: F401
+    import app.identity.models  # noqa: F401
 
 
 def create_db_engine(settings: Settings | None = None) -> Engine:

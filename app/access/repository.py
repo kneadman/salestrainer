@@ -1,0 +1,172 @@
+from __future__ import annotations
+
+from uuid import UUID
+
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from app.access.models import (
+    AuditLog,
+    ClientTrainingConfig,
+    RuntimeTrainingConfig,
+    TrainingSessionOwnership,
+    UserTrainingConfig,
+)
+
+
+class AccessRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def create_training_config(
+        self,
+        *,
+        client_account_id: UUID,
+        name: str,
+        default_scenario_id: str,
+        product_line: str,
+        persona_policy: dict[str, object] | None = None,
+        ui_config: dict[str, object] | None = None,
+        limits: dict[str, object] | None = None,
+        is_active: bool = True,
+        training_config_id: UUID | None = None,
+    ) -> ClientTrainingConfig:
+        training_config_kwargs = dict(
+            client_account_id=client_account_id,
+            name=name,
+            default_scenario_id=default_scenario_id,
+            product_line=product_line,
+            persona_policy=persona_policy or {},
+            ui_config=ui_config or {},
+            limits=limits or {},
+            is_active=is_active,
+        )
+        if training_config_id is not None:
+            training_config_kwargs["id"] = training_config_id
+        training_config = ClientTrainingConfig(**training_config_kwargs)
+        self._session.add(training_config)
+        self._session.commit()
+        self._session.refresh(training_config)
+        return training_config
+
+    def assign_training_config_to_user(
+        self,
+        *,
+        user_id: UUID,
+        training_config_id: UUID,
+        is_default: bool = False,
+    ) -> UserTrainingConfig:
+        if is_default:
+            self._session.execute(
+                update(UserTrainingConfig)
+                .where(UserTrainingConfig.user_id == user_id)
+                .values(is_default=False)
+            )
+
+        assignment = self._session.get(
+            UserTrainingConfig,
+            {"user_id": user_id, "training_config_id": training_config_id},
+        )
+        if assignment is None:
+            assignment = UserTrainingConfig(
+                user_id=user_id,
+                training_config_id=training_config_id,
+                is_default=is_default,
+            )
+            self._session.add(assignment)
+        else:
+            assignment.is_default = is_default
+
+        self._session.commit()
+        self._session.refresh(assignment)
+        return assignment
+
+    def get_default_training_config_for_user(self, user_id: UUID) -> RuntimeTrainingConfig | None:
+        statement = (
+            select(ClientTrainingConfig)
+            .join(UserTrainingConfig, UserTrainingConfig.training_config_id == ClientTrainingConfig.id)
+            .where(
+                UserTrainingConfig.user_id == user_id,
+                UserTrainingConfig.is_default.is_(True),
+            )
+        )
+        training_config = self._session.scalar(statement)
+        if training_config is None:
+            return None
+
+        return RuntimeTrainingConfig.model_validate(
+            {
+                "id": training_config.id,
+                "client_account_id": training_config.client_account_id,
+                "name": training_config.name,
+                "default_scenario_id": training_config.default_scenario_id,
+                "product_line": training_config.product_line,
+                "persona_policy": training_config.persona_policy,
+                "ui_config": training_config.ui_config,
+                "limits": training_config.limits,
+            }
+        )
+
+    def create_training_session_ownership(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        client_account_id: UUID,
+        training_config_id: UUID,
+    ) -> TrainingSessionOwnership:
+        ownership = TrainingSessionOwnership(
+            session_id=session_id,
+            user_id=user_id,
+            client_account_id=client_account_id,
+            training_config_id=training_config_id,
+        )
+        self._session.add(ownership)
+        self._session.commit()
+        self._session.refresh(ownership)
+        return ownership
+
+    def check_session_ownership(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        client_account_id: UUID | None = None,
+    ) -> bool:
+        statement = select(TrainingSessionOwnership).where(
+            TrainingSessionOwnership.session_id == session_id,
+            TrainingSessionOwnership.user_id == user_id,
+        )
+        if client_account_id is not None:
+            statement = statement.where(TrainingSessionOwnership.client_account_id == client_account_id)
+
+        return self._session.scalar(statement) is not None
+
+    def create_audit_log_record(
+        self,
+        *,
+        action: str,
+        entity_type: str,
+        actor_user_id: UUID | None = None,
+        entity_id: UUID | None = None,
+        payload: dict[str, object] | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        audit_log_id: UUID | None = None,
+    ) -> AuditLog:
+        audit_record_kwargs = dict(
+            actor_user_id=actor_user_id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            payload=payload or {},
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        if audit_log_id is not None:
+            audit_record_kwargs["id"] = audit_log_id
+        audit_record = AuditLog(**audit_record_kwargs)
+        self._session.add(audit_record)
+        self._session.commit()
+        self._session.refresh(audit_record)
+        return audit_record

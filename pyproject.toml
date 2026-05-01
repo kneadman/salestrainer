@@ -26,10 +26,12 @@ dependencies = [
 [tool.setuptools]
 packages = [
     "app",
+    "app.access",
     "app.api",
     "app.application",
     "app.cli",
     "app.domain",
+    "app.identity",
     "app.infrastructure",
     "app.prompts",
 ]
