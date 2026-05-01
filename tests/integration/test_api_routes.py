@@ -56,13 +56,18 @@ def _seed_authenticated_user(
     *,
     email: str = "manager@example.com",
     password: str = "password",
+    client_account_name: str = "Acme",
+    client_account_slug: str = "acme",
     default_scenario_id: str = "generic_b2b_first_contact",
     product_line: str = "accounting_outsourcing",
     persona_policy: dict[str, object] | None = None,
 ) -> tuple[object, object]:
     identity_repository = IdentityRepository(db_session)
     access_repository = AccessRepository(db_session)
-    client_account = identity_repository.create_client_account(name="Acme", slug="acme")
+    client_account = identity_repository.create_client_account(
+        name=client_account_name,
+        slug=client_account_slug,
+    )
     user = identity_repository.create_user(
         client_account_id=client_account.id,
         email=email,
@@ -87,6 +92,12 @@ def _seed_authenticated_user(
 def _login(client: TestClient, *, email: str = "manager@example.com", password: str = "password") -> None:
     response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200
+
+
+def _create_session_for_logged_in_user(client: TestClient) -> str:
+    response = client.post("/api/sessions", json={})
+    assert response.status_code == 201
+    return response.json()["session"]["session_id"]
 
 
 def test_api_session_flow() -> None:
@@ -159,6 +170,191 @@ def test_api_create_session_requires_auth() -> None:
     assert response.status_code == 401
 
 
+def test_anonymous_cannot_get_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    owner_client = _create_client(db_session, repository=repository)
+    _seed_authenticated_user(db_session)
+    _login(owner_client)
+    session_id = _create_session_for_logged_in_user(owner_client)
+
+    anonymous_client = _create_client(db_session, repository=repository)
+    response = anonymous_client.get(f"/api/sessions/{session_id}")
+
+    assert response.status_code == 401
+
+    db_session.close()
+
+
+def test_anonymous_cannot_send_message() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    owner_client = _create_client(db_session, repository=repository)
+    _login(owner_client)
+    session_id = _create_session_for_logged_in_user(owner_client)
+
+    anonymous_client = _create_client(db_session, repository=repository)
+    response = anonymous_client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Hello"},
+    )
+
+    assert response.status_code == 401
+
+    db_session.close()
+
+
+def test_anonymous_cannot_finish_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    owner_client = _create_client(db_session, repository=repository)
+    _login(owner_client)
+    session_id = _create_session_for_logged_in_user(owner_client)
+
+    anonymous_client = _create_client(db_session, repository=repository)
+    response = anonymous_client.post(f"/api/sessions/{session_id}/finish")
+
+    assert response.status_code == 401
+
+    db_session.close()
+
+
+def test_user_cannot_read_another_users_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    _seed_authenticated_user(
+        db_session,
+        email="other@example.com",
+        client_account_name="Beta",
+        client_account_slug="beta",
+    )
+    owner_client = _create_client(db_session, repository=repository)
+    _login(owner_client)
+    session_id = _create_session_for_logged_in_user(owner_client)
+
+    other_client = _create_client(db_session, repository=repository)
+    _login(other_client, email="other@example.com")
+    response = other_client.get(f"/api/sessions/{session_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+    db_session.close()
+
+
+def test_user_cannot_send_message_to_another_users_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    _seed_authenticated_user(
+        db_session,
+        email="other@example.com",
+        client_account_name="Beta",
+        client_account_slug="beta",
+    )
+    owner_client = _create_client(db_session, repository=repository)
+    _login(owner_client)
+    session_id = _create_session_for_logged_in_user(owner_client)
+
+    other_client = _create_client(db_session, repository=repository)
+    _login(other_client, email="other@example.com")
+    response = other_client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Can we continue?"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+    db_session.close()
+
+
+def test_user_cannot_finish_another_users_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    _seed_authenticated_user(
+        db_session,
+        email="other@example.com",
+        client_account_name="Beta",
+        client_account_slug="beta",
+    )
+    owner_client = _create_client(db_session, repository=repository)
+    _login(owner_client)
+    session_id = _create_session_for_logged_in_user(owner_client)
+
+    other_client = _create_client(db_session, repository=repository)
+    _login(other_client, email="other@example.com")
+    response = other_client.post(f"/api/sessions/{session_id}/finish")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+    db_session.close()
+
+
+def test_user_cannot_get_another_users_report() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    _seed_authenticated_user(
+        db_session,
+        email="other@example.com",
+        client_account_name="Beta",
+        client_account_slug="beta",
+    )
+    owner_client = _create_client(db_session, repository=repository)
+    _login(owner_client)
+    session_id = _create_session_for_logged_in_user(owner_client)
+    finish_response = owner_client.post(f"/api/sessions/{session_id}/finish")
+    assert finish_response.status_code == 200
+
+    other_client = _create_client(db_session, repository=repository)
+    _login(other_client, email="other@example.com")
+    response = other_client.get(f"/api/sessions/{session_id}/report")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+    db_session.close()
+
+
+def test_owner_user_can_access_own_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.get(f"/api/sessions/{session_id}")
+
+    assert response.status_code == 200
+    assert response.json()["session"]["session_id"] == session_id
+
+    db_session.close()
+
+
+def test_owner_user_can_send_message_to_own_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you handle this now?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["turn_index"] == 1
+
+
 def test_api_create_session_uses_users_default_training_config_and_creates_ownership() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
@@ -222,7 +418,10 @@ def test_api_create_session_ignores_request_persona_id_in_client_auth_mode() -> 
 
 
 def test_api_returns_404_for_missing_session() -> None:
-    client = _create_client()
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session)
+    _login(client)
 
     response = client.get("/api/sessions/missing-session")
     assert response.status_code == 404
@@ -235,6 +434,8 @@ def test_api_returns_404_for_missing_session() -> None:
             "details": [],
         }
     }
+
+    db_session.close()
 
 
 def test_api_returns_openapi_friendly_validation_error_shape() -> None:

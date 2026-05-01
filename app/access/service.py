@@ -29,3 +29,18 @@ class AccessService:
             client_account_id=client_account_id,
             training_config_id=training_config_id,
         )
+
+    def require_session_access(self, session_id: str | UUID, user_id: UUID) -> None:
+        normalized_session_id = session_id if isinstance(session_id, UUID) else self._parse_session_id(session_id)
+        if not self._repository.check_session_ownership(
+            session_id=normalized_session_id,
+            user_id=user_id,
+        ):
+            raise LookupError("Session not found.")
+
+    @staticmethod
+    def _parse_session_id(session_id: str) -> UUID:
+        try:
+            return UUID(str(session_id))
+        except (TypeError, ValueError) as error:
+            raise LookupError("Session not found.") from error
