@@ -8,6 +8,7 @@ CLI/API MVP for an interactive sales training simulator. A manager writes messag
 - Fake LLM is the default working flow
 - Session state stored in app-managed repository
 - Redis docker setup included
+- PostgreSQL infrastructure and Alembic are available for future persistent models
 - Domain validation via Pydantic v2
 - The client profile is generated at session start and remains hidden during the training
 
@@ -114,6 +115,27 @@ Prompt ownership:
 pytest
 ```
 
+## Local infrastructure
+
+Start Redis and PostgreSQL for local backend development:
+
+```bash
+docker compose up -d
+```
+
+Default local URLs:
+
+```text
+REDIS_URL=redis://localhost:6379/0
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer
+```
+
+Apply migrations:
+
+```bash
+alembic upgrade head
+```
+
 ## Frontend GUI
 
 Minimal React/Vite web UI lives in `frontend/`.
@@ -121,6 +143,7 @@ Minimal React/Vite web UI lives in `frontend/`.
 Backend:
 
 ```bash
+alembic upgrade head
 python -m uvicorn app.api.main:app --reload
 ```
 
@@ -140,7 +163,35 @@ http://localhost:5173
 
 The Vite dev server proxies `/api` requests to `http://localhost:8000`, so the frontend uses relative API calls such as `/api/sessions`.
 
-Start local Redis for integration-style repository checks:
+Current behavior note:
+
+- `/api/sessions` still uses the existing session repository flow
+- no authorization is required for the current frontend training flow
+- PostgreSQL is added only as infrastructure for future relational data
+
+## Run with Docker
+
+Production-like local stack:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+Notes:
+
+- `frontend` is built once and served by `nginx`
+- `nginx` proxies `/api` to the internal `backend` service
+- `backend` connects to Redis through `redis://redis:6379/0`
+- `backend` connects to PostgreSQL through `postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer`
+- only port `8080` is exposed to the host
+
+Start local Redis and PostgreSQL without rebuilding:
 
 ```bash
 docker compose up -d

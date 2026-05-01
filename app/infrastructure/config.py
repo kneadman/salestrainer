@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     redis_url: str = "redis://localhost:6379/0"
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer"
     session_ttl_seconds: int = 86400
     app_env: str = "local"
     log_level: str = "INFO"

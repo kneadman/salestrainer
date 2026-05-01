@@ -1,13 +1,51 @@
+name: sales-trainer
+
 services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sales_trainer_backend
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer
+    depends_on:
+      - redis
+      - postgres
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sales_trainer_frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
   redis:
     image: redis:7-alpine
     container_name: sales_trainer_redis
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: sales_trainer_postgres
+    environment:
+      POSTGRES_DB: sales_trainer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
 volumes:
   redis_data:
-
+  postgres_data:
