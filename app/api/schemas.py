@@ -57,28 +57,18 @@ class SessionCreateRequest(BaseModel):
 
 
 class LandingLeadRequest(BaseModel):
-    name: str | None = Field(default=None, max_length=200)
-    email: str | None = Field(default=None, max_length=320)
-    phone: str | None = Field(default=None, max_length=80)
-    company: str | None = Field(default=None, max_length=200)
-    role: str | None = Field(default=None, max_length=200)
-    sales_team_size: str | None = Field(default=None, max_length=80)
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=1, max_length=320)
+    phone: str = Field(min_length=1, max_length=80)
+    company: str = Field(min_length=1, max_length=200)
+    role: str = Field(min_length=1, max_length=200)
+    sales_team_size: str = Field(min_length=1, max_length=80)
+    consent_personal_data: bool
+    consent_marketing: bool = False
     comment: str | None = Field(default=None, max_length=2000)
-    marketing_consent: str | None = None
     query_params: dict[str, str] = Field(default_factory=dict)
-
-
-class QuizLeadRequest(BaseModel):
-    team_size: str | None = Field(default=None, max_length=80)
-    onboarding_time: str | None = Field(default=None, max_length=120)
-    weak_points: list[str] = Field(default_factory=list)
-    materials: str | None = Field(default=None, max_length=200)
-    format: str | None = Field(default=None, max_length=200)
-    name: str | None = Field(default=None, max_length=200)
-    email: str | None = Field(default=None, max_length=320)
-    phone: str | None = Field(default=None, max_length=80)
-    company: str | None = Field(default=None, max_length=200)
-    query_params: dict[str, str] = Field(default_factory=dict)
+    page: str | None = Field(default=None, max_length=80)
+    form_id: str | None = Field(default=None, max_length=120)
 
 
 class LandingSubmitResponse(BaseModel):

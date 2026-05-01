@@ -140,10 +140,3 @@ export function submitLead(payload: Record<string, unknown>): Promise<{ status: 
     body: JSON.stringify(payload),
   });
 }
-
-export function submitQuizLead(payload: Record<string, unknown>): Promise<{ status: string }> {
-  return request<{ status: string }>("/api/quiz-leads", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}

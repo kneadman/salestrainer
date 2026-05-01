@@ -11,7 +11,6 @@ from app.api.schemas import (
     LandingLeadRequest,
     LandingSubmitResponse,
     PersonaOptionDTO,
-    QuizLeadRequest,
     ScenarioOptionDTO,
     SessionCreateRequest,
     SessionDetailResponse,
@@ -66,13 +65,12 @@ def healthcheck() -> dict[str, str]:
 
 @router.post("/leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
 def submit_landing_lead(request: LandingLeadRequest) -> LandingSubmitResponse:
+    if request.consent_personal_data is not True:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="consent_personal_data must be true.",
+        )
     # TODO: Persist leads or send them to CRM once the integration target is chosen.
-    return LandingSubmitResponse(status="accepted")
-
-
-@router.post("/quiz-leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
-def submit_quiz_lead(request: QuizLeadRequest) -> LandingSubmitResponse:
-    # TODO: Persist quiz answers or send them to CRM once the integration target is chosen.
     return LandingSubmitResponse(status="accepted")
 
 
