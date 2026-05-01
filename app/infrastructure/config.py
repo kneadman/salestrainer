@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     recent_turn_limit: int = Field(default=6, ge=1, le=20)
     persona_random_seed: int | None = None
     default_training_scenario_id: str = "generic_b2b_first_contact"
+    auth_cookie_name: str = "salestrainer_session"
+    auth_session_ttl_seconds: int = 1209600
+    auth_cookie_secure: bool = True
+    auth_cookie_samesite: str = "lax"
 
     @property
     def is_local_env(self) -> bool:

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload
 
-from app.identity.models import ClientAccount, User
+from app.identity.models import ClientAccount, LoginSession, User
 
 
 class IdentityRepository:
@@ -65,11 +66,15 @@ class IdentityRepository:
         return user
 
     def get_user_by_email(self, email: str) -> User | None:
-        statement = select(User).where(User.email == email)
+        statement = (
+            select(User)
+            .options(joinedload(User.client_account))
+            .where(func.lower(User.email) == email.strip().lower())
+        )
         return self._session.scalar(statement)
 
     def get_user_by_id(self, user_id: UUID) -> User | None:
-        statement = select(User).where(User.id == user_id)
+        statement = select(User).options(joinedload(User.client_account)).where(User.id == user_id)
         return self._session.scalar(statement)
 
     def update_user_password(
@@ -88,6 +93,57 @@ class IdentityRepository:
         self._session.commit()
         self._session.refresh(user)
         return user
+
+    def create_login_session(
+        self,
+        *,
+        user_id: UUID,
+        token_hash: str,
+        expires_at: datetime,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+        login_session_id: UUID | None = None,
+    ) -> LoginSession:
+        login_session_kwargs = dict(
+            user_id=user_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+        if login_session_id is not None:
+            login_session_kwargs["id"] = login_session_id
+        login_session = LoginSession(**login_session_kwargs)
+        user = self.get_user_by_id(user_id)
+        if user is not None:
+            user.last_login_at = datetime.now(UTC)
+        self._session.add(login_session)
+        self._session.commit()
+        self._session.refresh(login_session)
+        return login_session
+
+    def get_login_session_by_token_hash(self, token_hash: str) -> LoginSession | None:
+        statement = (
+            select(LoginSession)
+            .options(joinedload(LoginSession.user).joinedload(User.client_account))
+            .where(LoginSession.token_hash == token_hash)
+        )
+        return self._session.scalar(statement)
+
+    def revoke_login_session(
+        self,
+        *,
+        login_session_id: UUID,
+        revoked_at: datetime,
+    ) -> LoginSession | None:
+        login_session = self._session.get(LoginSession, login_session_id)
+        if login_session is None:
+            return None
+
+        login_session.revoked_at = revoked_at
+        self._session.commit()
+        self._session.refresh(login_session)
+        return login_session
 
     def disable_user(self, *, user_id: UUID) -> User | None:
         user = self.get_user_by_id(user_id)
