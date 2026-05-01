@@ -36,6 +36,7 @@ packages = [
     "app.identity",
     "app.infrastructure",
     "app.prompts",
+    "app.web",
 ]
 
 [tool.pytest.ini_options]

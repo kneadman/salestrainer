@@ -20,6 +20,7 @@ from app.infrastructure.redis_client import build_repository
 from app.infrastructure.session_repository import SessionRepository
 from app.infrastructure.summary_compressor import build_summary_compressor
 from app.identity.routes import router as auth_router
+from app.web.static import mount_frontend
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
@@ -120,6 +121,7 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)
     app.include_router(router)
+    mount_frontend(app)
     return app
 
 

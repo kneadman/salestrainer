@@ -210,6 +210,22 @@ http://localhost:5173
 
 The Vite dev server proxies `/api` requests to `http://localhost:8000`, so the frontend uses relative API calls such as `/api/sessions`.
 
+Production serving through FastAPI:
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+python -m uvicorn app.api.main:app
+```
+
+Open:
+
+```text
+http://localhost:8000/login
+```
+
 Current behavior note:
 
 - `/api/sessions` still uses the existing session repository flow
