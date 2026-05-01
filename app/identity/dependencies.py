@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -58,5 +60,24 @@ def get_current_session(
 
 def require_current_user(
     current_session: CurrentSession = Depends(get_current_session),
+) -> CurrentSession:
+    return current_session
+
+
+def require_role(*roles: str) -> Callable[[CurrentSession], CurrentSession]:
+    allowed_roles = set(roles)
+
+    def dependency(
+        current_session: CurrentSession = Depends(require_current_user),
+    ) -> CurrentSession:
+        if current_session.user.role not in allowed_roles:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
+        return current_session
+
+    return dependency
+
+
+def require_internal_admin(
+    current_session: CurrentSession = Depends(require_role("internal_admin")),
 ) -> CurrentSession:
     return current_session

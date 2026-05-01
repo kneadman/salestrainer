@@ -56,11 +56,13 @@ def _seed_authenticated_user(
     *,
     email: str = "manager@example.com",
     password: str = "password",
+    role: str = "client_user",
     client_account_name: str = "Acme",
     client_account_slug: str = "acme",
     default_scenario_id: str = "generic_b2b_first_contact",
     product_line: str = "accounting_outsourcing",
     persona_policy: dict[str, object] | None = None,
+    ui_config: dict[str, object] | None = None,
 ) -> tuple[object, object]:
     identity_repository = IdentityRepository(db_session)
     access_repository = AccessRepository(db_session)
@@ -72,6 +74,7 @@ def _seed_authenticated_user(
         client_account_id=client_account.id,
         email=email,
         password_hash=hash_password(password),
+        role=role,
         must_change_password=False,
     )
     training_config = access_repository.create_training_config(
@@ -80,6 +83,7 @@ def _seed_authenticated_user(
         default_scenario_id=default_scenario_id,
         product_line=product_line,
         persona_policy=persona_policy or {},
+        ui_config=ui_config or {},
     )
     access_repository.assign_training_config_to_user(
         user_id=user.id,
@@ -103,7 +107,7 @@ def _create_session_for_logged_in_user(client: TestClient) -> str:
 def test_api_session_flow() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
-    _seed_authenticated_user(db_session)
+    _seed_authenticated_user(db_session, role="internal_admin")
     client = _create_client(db_session, repository=repository)
     _login(client)
 
@@ -388,7 +392,78 @@ def test_api_create_session_uses_users_default_training_config_and_creates_owner
     db_session.close()
 
 
-def test_api_create_session_ignores_request_persona_id_in_client_auth_mode() -> None:
+def test_api_personas_forbidden_for_client_user() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session)
+    _login(client)
+
+    response = client.get("/api/personas")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+    db_session.close()
+
+
+def test_api_personas_allowed_for_internal_admin() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session, role="internal_admin")
+    client = _create_client(db_session)
+    _login(client)
+
+    response = client.get("/api/personas")
+
+    assert response.status_code == 200
+    assert len(response.json()) >= 1
+
+    db_session.close()
+
+
+def test_api_scenarios_for_client_user_returns_default_scenario_when_allowed_scenarios_not_set() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(
+        db_session,
+        default_scenario_id="sales_audit_cold_outreach",
+    )
+    client = _create_client(db_session)
+    _login(client)
+
+    response = client.get("/api/scenarios")
+
+    assert response.status_code == 200
+    assert [scenario["scenario_id"] for scenario in response.json()] == ["sales_audit_cold_outreach"]
+
+    db_session.close()
+
+
+def test_api_scenarios_for_client_user_returns_allowed_scenarios() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(
+        db_session,
+        default_scenario_id="sales_audit_cold_outreach",
+        ui_config={
+            "allowed_scenarios": [
+                "sales_audit_cold_outreach",
+                "accounting_outsource_cold_outreach",
+            ]
+        },
+    )
+    client = _create_client(db_session)
+    _login(client)
+
+    response = client.get("/api/scenarios")
+
+    assert response.status_code == 200
+    assert [scenario["scenario_id"] for scenario in response.json()] == [
+        "sales_audit_cold_outreach",
+        "accounting_outsource_cold_outreach",
+    ]
+
+    db_session.close()
+
+
+def test_api_create_session_rejects_request_persona_id_in_client_auth_mode() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
     _seed_authenticated_user(
@@ -407,14 +482,39 @@ def test_api_create_session_ignores_request_persona_id_in_client_auth_mode() -> 
         json={"persona_id": "purchase_manager"},
     )
 
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert response.json()["error"]["message"] == "persona_id is not allowed for client_user sessions."
+
+    db_session.close()
+
+
+def test_api_create_session_allows_request_persona_id_for_internal_admin() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(
+        db_session,
+        role="internal_admin",
+        product_line="accounting_outsourcing",
+        persona_policy={
+            "allowed_roles": ["owner"],
+            "target_action": "book_express_audit",
+        },
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post(
+        "/api/sessions",
+        json={"scenario_id": "accounting_outsource_cold_outreach", "persona_id": "purchase_manager"},
+    )
+
     assert response.status_code == 201
     session_id = response.json()["session"]["session_id"]
     saved_session = repository.get(session_id)
     assert saved_session is not None
-    assert saved_session.persona.role == "owner"
-    assert saved_session.persona.id.startswith("generated_")
-
-    db_session.close()
+    assert saved_session.persona.id == "purchase_manager"
+    assert saved_session.scenario_id == "accounting_outsource_cold_outreach"
 
 
 def test_api_returns_404_for_missing_session() -> None:

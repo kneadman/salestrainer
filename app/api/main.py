@@ -43,6 +43,7 @@ def _error_response(
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     code = {
+        403: "forbidden",
         404: "not_found",
         409: "conflict",
         422: "validation_error",
