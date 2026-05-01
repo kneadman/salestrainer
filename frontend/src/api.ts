@@ -9,7 +9,11 @@ import type {
 } from "./types";
 
 const BACKEND_UNAVAILABLE_MESSAGE =
-  "Backend недоступен. Проверьте, что FastAPI запущен на localhost:8000.";
+  "Backend is unavailable. Check that FastAPI is running on localhost:8000.";
+const CSRF_HEADER = "X-CSRF-Token";
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+let csrfToken: string | null = null;
 
 export class ApiError extends Error {
   code?: string;
@@ -23,17 +27,45 @@ export class ApiError extends Error {
   }
 }
 
+async function ensureCsrfToken(): Promise<string> {
+  if (csrfToken) {
+    return csrfToken;
+  }
+
+  const response = await fetch("/auth/csrf", {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new ApiError(`CSRF request failed: ${response.status} ${response.statusText}`.trim());
+  }
+  const payload = (await response.json()) as { csrf_token: string };
+  csrfToken = payload.csrf_token;
+  return csrfToken;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const initHeaders = new Headers(init?.headers);
+  initHeaders.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  if (MUTATING_METHODS.has(method) && path !== "/auth/login") {
+    headers[CSRF_HEADER] = await ensureCsrfToken();
+  }
 
   try {
     response = await fetch(path, {
       ...init,
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
+      headers,
     });
   } catch {
     throw new ApiError(BACKEND_UNAVAILABLE_MESSAGE);
@@ -46,7 +78,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const errorPayload = payload as ErrorResponse | null;
     const message =
-      errorPayload?.error?.message || `Ошибка запроса: ${response.status} ${response.statusText}`.trim();
+      errorPayload?.error?.message || `Request failed: ${response.status} ${response.statusText}`.trim();
     throw new ApiError(message, errorPayload?.error?.code, response.status);
   }
 
@@ -54,17 +86,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function login(email: string, password: string): Promise<AuthMeResponse> {
+  csrfToken = null;
   return request<AuthMeResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
-export function logout(): Promise<void> {
-  return request<void>("/auth/logout", {
+export async function logout(): Promise<void> {
+  await request<void>("/auth/logout", {
     method: "POST",
     body: JSON.stringify({}),
   });
+  csrfToken = null;
 }
 
 export function getMe(): Promise<AuthMeResponse> {

@@ -31,9 +31,9 @@ def _create_session() -> Session:
     return session_factory()
 
 
-def _create_client(session: Session) -> TestClient:
+def _create_client(session: Session, *, settings: Settings | None = None) -> TestClient:
     app = create_app(
-        settings=Settings(auth_cookie_secure=False),
+        settings=settings or Settings(auth_cookie_secure=False),
         repository=InMemorySessionRepository(),
         llm_client=FakeLLMClient(),
     )
@@ -60,6 +60,14 @@ def _create_user(
         password_hash=hash_password(password),
         is_active=is_active,
     )
+
+
+def _set_csrf_header(client: TestClient) -> str:
+    response = client.get("/auth/csrf")
+    assert response.status_code == 200
+    token = response.json()["csrf_token"]
+    client.headers.update({"X-CSRF-Token": token})
+    return token
 
 
 def test_login_success_sets_cookie() -> None:
@@ -160,6 +168,7 @@ def test_logout_revokes_session() -> None:
     _create_user(session)
     client = _create_client(session)
     client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    _set_csrf_header(client)
 
     response = client.post("/auth/logout")
 
@@ -176,12 +185,41 @@ def test_revoked_session_cannot_be_used_for_auth_me() -> None:
     client = _create_client(session)
     client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
     token = client.cookies["salestrainer_session"]
+    _set_csrf_header(client)
     client.post("/auth/logout")
     client.cookies.set("salestrainer_session", token)
 
     response = client.get("/auth/me")
 
     assert response.status_code == 401
+    session.close()
+
+
+def test_logout_without_csrf_is_rejected() -> None:
+    session = _create_session()
+    _create_user(session)
+    client = _create_client(session)
+    login_response = client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    assert login_response.status_code == 200
+
+    response = client.post("/auth/logout")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["message"] == "Missing or invalid CSRF token."
+    session.close()
+
+
+def test_logout_with_csrf_is_accepted() -> None:
+    session = _create_session()
+    _create_user(session)
+    client = _create_client(session)
+    login_response = client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    assert login_response.status_code == 200
+    _set_csrf_header(client)
+
+    response = client.post("/auth/logout")
+
+    assert response.status_code == 204
     session.close()
 
 
@@ -204,4 +242,46 @@ def test_expired_session_cannot_be_used_for_auth_me() -> None:
     response = client.get("/auth/me")
 
     assert response.status_code == 401
+    session.close()
+
+
+def test_login_rate_limit_returns_429_after_threshold() -> None:
+    session = _create_session()
+    _create_user(session)
+    client = _create_client(
+        session,
+        settings=Settings(
+            auth_cookie_secure=False,
+            login_rate_limit_attempts=2,
+            login_rate_limit_window_seconds=60,
+        ),
+    )
+
+    for _ in range(2):
+        response = client.post(
+            "/auth/login",
+            json={"email": "manager@example.com", "password": "wrong"},
+        )
+        assert response.status_code == 401
+
+    limited_response = client.post(
+        "/auth/login",
+        json={"email": "manager@example.com", "password": "wrong"},
+    )
+
+    assert limited_response.status_code == 429
+    session.close()
+
+
+def test_security_headers_are_present() -> None:
+    session = _create_session()
+    client = _create_client(session)
+
+    response = client.get("/auth/csrf")
+
+    assert response.status_code == 200
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["Cache-Control"] == "no-store"
     session.close()

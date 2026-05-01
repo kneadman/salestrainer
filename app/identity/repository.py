@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.identity.models import ClientAccount, LoginSession, User
@@ -144,6 +144,13 @@ class IdentityRepository:
         self._session.commit()
         self._session.refresh(login_session)
         return login_session
+
+    def delete_expired_login_sessions(self, *, expired_before: datetime) -> int:
+        result = self._session.execute(
+            delete(LoginSession).where(LoginSession.expires_at <= expired_before)
+        )
+        self._session.commit()
+        return int(result.rowcount or 0)
 
     def disable_user(self, *, user_id: UUID) -> User | None:
         user = self.get_user_by_id(user_id)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError
@@ -102,6 +103,12 @@ def _create_config(
         product_line=product_line,
         persona_policy=persona_policy,
     )
+    access_repository.create_audit_log_record(
+        action="config_created",
+        entity_type="client_training_config",
+        entity_id=config.id,
+        payload={"client_slug": client.slug, "name": config.name},
+    )
     return f"created config '{config.name}' client='{client.slug}' id={config.id}"
 
 
@@ -131,15 +138,67 @@ def _assign_config(
         training_config_id=matching_configs[0].id,
         is_default=is_default,
     )
+    access_repository.create_audit_log_record(
+        action="config_assigned",
+        entity_type="client_training_config",
+        actor_user_id=user.id,
+        entity_id=matching_configs[0].id,
+        payload={"email": user.email, "default": assignment.is_default},
+    )
     return (
         f"assigned config '{matching_configs[0].name}' to '{user.email}'"
         f" default={str(assignment.is_default).lower()}"
     )
 
 
+def _update_config(
+    *,
+    identity_repository: IdentityRepository,
+    access_repository: AccessRepository,
+    client_slug: str,
+    config_name: str,
+    new_name: str | None = None,
+    product_line: str | None = None,
+    scenario_id: str | None = None,
+    persona_policy_file: str | None = None,
+) -> str:
+    client = identity_repository.get_client_account_by_slug(client_slug)
+    if client is None:
+        raise AdminCLIError(f"client not found: {client_slug}")
+
+    matching_configs = access_repository.list_training_configs_for_client_by_name(
+        client_account_id=client.id,
+        name=config_name,
+    )
+    if not matching_configs:
+        raise AdminCLIError(f"config not found: {config_name}")
+    if len(matching_configs) > 1:
+        raise AdminCLIError(f"multiple configs found with name '{config_name}' for client '{client_slug}'")
+
+    persona_policy = _load_persona_policy(persona_policy_file) if persona_policy_file else None
+    config = access_repository.update_training_config(
+        training_config_id=matching_configs[0].id,
+        name=new_name,
+        default_scenario_id=scenario_id,
+        product_line=product_line,
+        persona_policy=persona_policy,
+    )
+    if config is None:
+        raise AdminCLIError(f"config not found: {config_name}")
+
+    access_repository.create_audit_log_record(
+        action="config_updated",
+        entity_type="client_training_config",
+        entity_id=config.id,
+        payload={"client_slug": client.slug, "name": config.name},
+    )
+    return f"updated config '{config.name}' client='{client.slug}' id={config.id}"
+
+
 def _reset_password(
     *,
     identity_repository: IdentityRepository,
+    access_repository: AccessRepository | None = None,
     email: str,
     password: str,
 ) -> str:
@@ -155,12 +214,20 @@ def _reset_password(
     )
     if updated_user is None:
         raise AdminCLIError(f"user not found: {email}")
+    if access_repository is not None:
+        access_repository.create_audit_log_record(
+            action="password_reset",
+            entity_type="user",
+            entity_id=updated_user.id,
+            payload={"email": updated_user.email},
+        )
     return f"password reset for '{updated_user.email}'"
 
 
 def _disable_user(
     *,
     identity_repository: IdentityRepository,
+    access_repository: AccessRepository | None = None,
     email: str,
 ) -> str:
     user = identity_repository.get_user_by_email(email)
@@ -170,7 +237,19 @@ def _disable_user(
     updated_user = identity_repository.disable_user(user_id=user.id)
     if updated_user is None:
         raise AdminCLIError(f"user not found: {email}")
+    if access_repository is not None:
+        access_repository.create_audit_log_record(
+            action="user_disabled",
+            entity_type="user",
+            entity_id=updated_user.id,
+            payload={"email": updated_user.email},
+        )
     return f"user disabled: '{updated_user.email}'"
+
+
+def _cleanup_expired_sessions(*, identity_repository: IdentityRepository) -> str:
+    deleted_count = identity_repository.delete_expired_login_sessions(expired_before=datetime.now(UTC))
+    return f"cleaned up expired login sessions: {deleted_count}"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -201,12 +280,22 @@ def _build_parser() -> argparse.ArgumentParser:
     assign_config_parser.add_argument("--config", required=True)
     assign_config_parser.add_argument("--default", action="store_true")
 
+    update_config_parser = subparsers.add_parser("update-config")
+    update_config_parser.add_argument("--client", required=True)
+    update_config_parser.add_argument("--config", required=True)
+    update_config_parser.add_argument("--name")
+    update_config_parser.add_argument("--product-line")
+    update_config_parser.add_argument("--scenario")
+    update_config_parser.add_argument("--persona-policy-file")
+
     reset_password_parser = subparsers.add_parser("reset-password")
     reset_password_parser.add_argument("--email", required=True)
     reset_password_parser.add_argument("--password", required=True)
 
     disable_user_parser = subparsers.add_parser("disable-user")
     disable_user_parser.add_argument("--email", required=True)
+
+    subparsers.add_parser("cleanup-expired-sessions")
 
     return parser
 
@@ -254,17 +343,32 @@ def run_cli(argv: list[str] | None = None) -> int:
                     config_name=args.config,
                     is_default=args.default,
                 )
+            elif args.command == "update-config":
+                message = _update_config(
+                    identity_repository=identity_repository,
+                    access_repository=access_repository,
+                    client_slug=args.client,
+                    config_name=args.config,
+                    new_name=args.name,
+                    product_line=args.product_line,
+                    scenario_id=args.scenario,
+                    persona_policy_file=args.persona_policy_file,
+                )
             elif args.command == "reset-password":
                 message = _reset_password(
                     identity_repository=identity_repository,
+                    access_repository=access_repository,
                     email=args.email,
                     password=args.password,
                 )
-            else:
+            elif args.command == "disable-user":
                 message = _disable_user(
                     identity_repository=identity_repository,
+                    access_repository=access_repository,
                     email=args.email,
                 )
+            else:
+                message = _cleanup_expired_sessions(identity_repository=identity_repository)
         except IntegrityError as error:
             session.rollback()
             print(f"Error: database constraint violation: {error.__class__.__name__}", file=sys.stderr)

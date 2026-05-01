@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     auth_session_ttl_seconds: int = 1209600
     auth_cookie_secure: bool = True
     auth_cookie_samesite: str = "lax"
+    csrf_cookie_name: str = "salestrainer_csrf"
+    csrf_token_ttl_seconds: int = 3600
+    login_rate_limit_attempts: int = Field(default=5, ge=0)
+    login_rate_limit_window_seconds: int = Field(default=300, ge=1)
 
     @property
     def is_local_env(self) -> bool:

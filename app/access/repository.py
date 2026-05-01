@@ -120,6 +120,32 @@ class AccessRepository:
         )
         return list(self._session.scalars(statement))
 
+    def update_training_config(
+        self,
+        *,
+        training_config_id: UUID,
+        name: str | None = None,
+        default_scenario_id: str | None = None,
+        product_line: str | None = None,
+        persona_policy: dict[str, object] | None = None,
+    ) -> ClientTrainingConfig | None:
+        training_config = self._session.get(ClientTrainingConfig, training_config_id)
+        if training_config is None:
+            return None
+
+        if name is not None:
+            training_config.name = name
+        if default_scenario_id is not None:
+            training_config.default_scenario_id = default_scenario_id
+        if product_line is not None:
+            training_config.product_line = product_line
+        if persona_policy is not None:
+            training_config.persona_policy = persona_policy
+
+        self._session.commit()
+        self._session.refresh(training_config)
+        return training_config
+
     def create_training_session_ownership(
         self,
         *,

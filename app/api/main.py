@@ -19,10 +19,14 @@ from app.infrastructure.logging import setup_logging
 from app.infrastructure.redis_client import build_repository
 from app.infrastructure.session_repository import SessionRepository
 from app.infrastructure.summary_compressor import build_summary_compressor
+from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
+from app.identity.rate_limit import build_login_rate_limiter
 from app.identity.routes import router as auth_router
 from app.web.static import mount_frontend
 
 REQUEST_ID_HEADER = "X-Request-ID"
+CSRF_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+CSRF_EXEMPT_PATHS = {"/auth/login", "/auth/csrf", "/api/health"}
 
 
 def _error_response(
@@ -104,6 +108,38 @@ def create_app(
     app = FastAPI(title="Sales Trainer MVP API", version="0.1.0")
 
     @app.middleware("http")
+    async def security_headers_middleware(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if request.url.path.startswith("/auth/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.middleware("http")
+    async def csrf_middleware(request: Request, call_next):
+        if _requires_csrf(request):
+            settings = request.app.state.settings
+            if not csrf_tokens_match(
+                request.cookies.get(settings.csrf_cookie_name),
+                request.headers.get(CSRF_HEADER_NAME),
+            ):
+                request_id = (
+                    getattr(request.state, "request_id", None)
+                    or request.headers.get(REQUEST_ID_HEADER)
+                    or str(uuid.uuid4())
+                )
+                request.state.request_id = request_id
+                return _error_response(
+                    request_id=request_id,
+                    status_code=403,
+                    code="forbidden",
+                    message="Missing or invalid CSRF token.",
+                )
+        return await call_next(request)
+
+    @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
         request_id = request.headers.get(REQUEST_ID_HEADER) or str(uuid.uuid4())
         request.state.request_id = request_id
@@ -117,12 +153,25 @@ def create_app(
         report_service=report_service,
     )
     app.state.settings = resolved_settings
+    app.state.login_rate_limiter = build_login_rate_limiter(resolved_settings)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)
     app.include_router(router)
     mount_frontend(app)
     return app
+
+
+def _requires_csrf(request: Request) -> bool:
+    path = request.url.path
+    if request.method.upper() not in CSRF_PROTECTED_METHODS:
+        return False
+    if path in CSRF_EXEMPT_PATHS:
+        return False
+    settings = request.app.state.settings
+    if not request.cookies.get(settings.auth_cookie_name):
+        return False
+    return path.startswith("/auth/") or path.startswith("/api/")
 
 
 app = create_app()

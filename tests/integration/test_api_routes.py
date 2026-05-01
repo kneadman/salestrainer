@@ -96,6 +96,9 @@ def _seed_authenticated_user(
 def _login(client: TestClient, *, email: str = "manager@example.com", password: str = "password") -> None:
     response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200
+    csrf_response = client.get("/auth/csrf")
+    assert csrf_response.status_code == 200
+    client.headers.update({"X-CSRF-Token": csrf_response.json()["csrf_token"]})
 
 
 def _create_session_for_logged_in_user(client: TestClient) -> str:
@@ -172,6 +175,20 @@ def test_api_create_session_requires_auth() -> None:
     response = client.post("/api/sessions", json={})
 
     assert response.status_code == 401
+
+
+def test_api_mutating_endpoint_rejects_authenticated_request_without_csrf() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session)
+    response = client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    assert response.status_code == 200
+
+    response = client.post("/api/sessions", json={})
+
+    assert response.status_code == 403
+    assert response.json()["error"]["message"] == "Missing or invalid CSRF token."
+    db_session.close()
 
 
 def test_anonymous_cannot_get_session() -> None:
