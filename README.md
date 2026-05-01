@@ -8,7 +8,7 @@ CLI/API MVP for an interactive sales training simulator. A manager writes messag
 - Fake LLM is the default working flow
 - Session state stored in app-managed repository
 - Redis docker setup included
-- PostgreSQL infrastructure and Alembic are available for future persistent models
+- PostgreSQL stores identity and client access data; Alembic manages relational migrations
 - Domain validation via Pydantic v2
 - The client profile is generated at session start and remains hidden during the training
 
@@ -167,7 +167,7 @@ pytest
 Start Redis and PostgreSQL for local backend development:
 
 ```bash
-docker compose up -d
+docker compose up -d redis postgres
 ```
 
 Default local URLs:
@@ -208,7 +208,7 @@ Open:
 http://localhost:5173
 ```
 
-The Vite dev server proxies `/api` requests to `http://localhost:8000`, so the frontend uses relative API calls such as `/api/sessions`.
+The Vite dev server proxies API requests to `http://localhost:8000`, so the frontend uses relative calls such as `/auth/login`, `/auth/csrf`, and `/api/sessions`.
 
 Production serving through FastAPI:
 
@@ -226,11 +226,15 @@ Open:
 http://localhost:8000/login
 ```
 
-Current behavior note:
+Current client access flow:
 
-- `/api/sessions` still uses the existing session repository flow
-- no authorization is required for the current frontend training flow
-- PostgreSQL is added only as infrastructure for future relational data
+- `/auth/login`, `/auth/logout`, `/auth/me`, and `/auth/csrf` implement the browser login flow
+- auth uses an HttpOnly session cookie; CSRF tokens are sent with mutating requests through `X-CSRF-Token`
+- `/api/sessions` requires an authenticated user
+- `POST /api/sessions` creates a training session from the current user's default training config
+- `training_session_ownership` is used to check access to session endpoints
+- PostgreSQL stores identity and access data
+- Redis stores runtime training sessions
 
 ## Run with Docker
 
@@ -249,16 +253,25 @@ http://localhost:8080
 Notes:
 
 - `frontend` is built once and served by `nginx`
-- `nginx` proxies `/api` to the internal `backend` service
+- `migrate` runs `alembic upgrade head` before `backend` starts
+- `nginx` proxies `/api/*` and `/auth/*` to the internal `backend:8000` service
 - `backend` connects to Redis through `redis://redis:6379/0`
 - `backend` connects to PostgreSQL through `postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer`
 - only port `8080` is exposed to the host
 
-Start local Redis and PostgreSQL without rebuilding:
+Smoke checks through nginx:
 
 ```bash
-docker compose up -d
+curl -i http://localhost:8080/auth/me
+curl -i http://localhost:8080/auth/csrf
+curl -i http://localhost:8080/api/health
 ```
+
+Expected results:
+
+- `/auth/me` returns a `401` JSON response, not React `index.html`
+- `/auth/csrf` returns `200` JSON with `csrf_token`
+- `/api/health` returns `200 {"status":"ok"}`
 
 ## API session creation
 

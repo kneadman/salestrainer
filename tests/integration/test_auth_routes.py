@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -33,7 +34,7 @@ def _create_session() -> Session:
 
 def _create_client(session: Session, *, settings: Settings | None = None) -> TestClient:
     app = create_app(
-        settings=settings or Settings(auth_cookie_secure=False),
+        settings=settings or Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
         repository=InMemorySessionRepository(),
         llm_client=FakeLLMClient(),
     )
@@ -247,11 +248,13 @@ def test_expired_session_cannot_be_used_for_auth_me() -> None:
 
 def test_login_rate_limit_returns_429_after_threshold() -> None:
     session = _create_session()
-    _create_user(session)
+    email = f"rate-{uuid4()}@example.com"
+    _create_user(session, email=email)
     client = _create_client(
         session,
         settings=Settings(
             auth_cookie_secure=False,
+            redis_url="redis://localhost:0/0",
             login_rate_limit_attempts=2,
             login_rate_limit_window_seconds=60,
         ),
@@ -260,13 +263,13 @@ def test_login_rate_limit_returns_429_after_threshold() -> None:
     for _ in range(2):
         response = client.post(
             "/auth/login",
-            json={"email": "manager@example.com", "password": "wrong"},
+            json={"email": email, "password": "wrong"},
         )
         assert response.status_code == 401
 
     limited_response = client.post(
         "/auth/login",
-        json={"email": "manager@example.com", "password": "wrong"},
+        json={"email": email, "password": "wrong"},
     )
 
     assert limited_response.status_code == 429

@@ -37,7 +37,7 @@ def _create_client(
     repository: InMemorySessionRepository | None = None,
 ) -> TestClient:
     app = create_app(
-        settings=Settings(auth_cookie_secure=False),
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
         repository=repository or InMemorySessionRepository(),
         llm_client=FakeLLMClient(),
     )
@@ -634,7 +634,7 @@ def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit()
     repository = InMemorySessionRepository()
     _seed_authenticated_user(db_session)
     app = create_app(
-        settings=Settings(auth_cookie_secure=False, recent_turn_limit=2),
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, recent_turn_limit=2),
         repository=repository,
         llm_client=FakeLLMClient(),
     )
