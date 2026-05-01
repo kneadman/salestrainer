@@ -73,6 +73,23 @@ export type SessionReportResponse = {
   report: string;
 };
 
+export type ClientAccount = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  role: string;
+  client_account: ClientAccount;
+};
+
+export type AuthMeResponse = {
+  user: AuthUser;
+};
+
 export type ErrorBody = {
   code: string;
   message: string;

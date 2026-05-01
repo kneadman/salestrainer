@@ -73,15 +73,38 @@ class PersonaGenerator:
     def __init__(self, seed: int | None = None) -> None:
         self._random = random.Random(seed)
 
-    def generate(self, product_line: str | None = None) -> PersonaProfile:
-        resolved_product_line = product_line or self._random.choice(list(PRODUCT_SCENARIOS.keys()))
+    def generate(
+        self,
+        product_line: str | None = None,
+        persona_policy: dict[str, object] | None = None,
+        *,
+        policy: dict[str, object] | None = None,
+    ) -> PersonaProfile:
+        if persona_policy is not None and policy is not None:
+            raise ValueError("Use either 'persona_policy' or 'policy', not both.")
+
+        resolved_policy = persona_policy if persona_policy is not None else policy
+        allowed_product_lines = self._coerce_allowed_values(
+            resolved_policy,
+            key="allowed_product_lines",
+            available_values=PRODUCT_SCENARIOS.keys(),
+        )
+        resolved_product_line = self._resolve_product_line(product_line, allowed_product_lines)
         scenario_id, scenario_data = self._pick_scenario(resolved_product_line)
-        role = self._random.choice(ROLES)
+        allowed_roles = self._coerce_allowed_values(
+            resolved_policy,
+            key="allowed_roles",
+            available_values=ROLES,
+        )
+        role = self._random.choice(allowed_roles or ROLES)
         behavior_model = self._pick_behavior_model(scenario_id)
         company_size = self._random.choice(COMPANY_SIZES)
         communication_style = self._random.choice(COMMUNICATION_STYLES)
         proof_sensitivity = list(scenario_data["proof_sensitivity"])
-        target_action = self._random.choice(PRODUCT_LINE_TARGET_ACTIONS[resolved_product_line])
+        target_action = self._resolve_target_action(
+            resolved_product_line=resolved_product_line,
+            persona_policy=resolved_policy,
+        )
         current_accounting_model = self._pick_current_accounting_model(resolved_product_line)
         legal_form = self._pick_legal_form(resolved_product_line)
         tax_system = self._pick_tax_system(resolved_product_line)
@@ -131,6 +154,52 @@ class PersonaGenerator:
             urgency=self._pick_urgency(scenario_id),
             trust_baseline=self._pick_trust_baseline(scenario_id, behavior_model),
         )
+
+    def _resolve_product_line(
+        self,
+        product_line: str | None,
+        allowed_product_lines: list[str],
+    ) -> str:
+        if product_line is not None:
+            if allowed_product_lines and product_line not in allowed_product_lines:
+                raise ValueError(f"Product line '{product_line}' is not allowed by persona policy.")
+            return product_line
+        if allowed_product_lines:
+            return self._random.choice(allowed_product_lines)
+        return self._random.choice(list(PRODUCT_SCENARIOS.keys()))
+
+    def _resolve_target_action(
+        self,
+        *,
+        resolved_product_line: str,
+        persona_policy: dict[str, object] | None,
+    ) -> str:
+        if persona_policy is not None:
+            target_action = persona_policy.get("target_action")
+            if isinstance(target_action, str) and target_action:
+                return target_action
+        return self._random.choice(PRODUCT_LINE_TARGET_ACTIONS[resolved_product_line])
+
+    def _coerce_allowed_values(
+        self,
+        persona_policy: dict[str, object] | None,
+        *,
+        key: str,
+        available_values,
+    ) -> list[str]:
+        if persona_policy is None:
+            return []
+        raw_value = persona_policy.get(key)
+        if raw_value is None:
+            return []
+        if not isinstance(raw_value, list):
+            raise ValueError(f"Persona policy '{key}' must be a list.")
+
+        available = {str(value) for value in available_values}
+        resolved = [value for value in raw_value if isinstance(value, str) and value in available]
+        if not resolved:
+            raise ValueError(f"Persona policy '{key}' does not contain supported values.")
+        return resolved
 
     def _pick_scenario(self, product_line: str) -> tuple[str, dict[str, object]]:
         scenarios = PRODUCT_SCENARIOS[product_line]

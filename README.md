@@ -8,6 +8,7 @@ CLI/API MVP for an interactive sales training simulator. A manager writes messag
 - Fake LLM is the default working flow
 - Session state stored in app-managed repository
 - Redis docker setup included
+- PostgreSQL stores identity and client access data; Alembic manages relational migrations
 - Domain validation via Pydantic v2
 - The client profile is generated at session start and remains hidden during the training
 
@@ -74,6 +75,53 @@ set DEFAULT_TRAINING_SCENARIO_ID=generic_b2b_first_contact
 python -m app.cli.main
 ```
 
+## Admin CLI (internal)
+
+Internal admin CLI for manual management of clients, users, and training configs.
+
+Before running commands, ensure migrations are applied (`alembic upgrade head`) and `DATABASE_URL` points to the target PostgreSQL.
+
+Create client:
+
+```bash
+python -m app.admin.cli create-client --name "ООО Ромашка" --slug romashka
+```
+
+Create user (stores only password hash):
+
+```bash
+python -m app.admin.cli create-user --client romashka --email manager@romashka.ru --password "temporary-password"
+```
+
+Create client training config from persona policy JSON:
+
+```bash
+python -m app.admin.cli create-config \
+  --client romashka \
+  --name "Бухгалтерский аутсорсинг" \
+  --product-line accounting_outsourcing \
+  --scenario generic_b2b_first_contact \
+  --persona-policy-file configs/romashka-accounting.json
+```
+
+Assign config to user (`--default` makes it default for that user):
+
+```bash
+python -m app.admin.cli assign-config --email manager@romashka.ru --config "Бухгалтерский аутсорсинг" --default
+```
+
+Reset password (updates `password_hash` and sets `must_change_password=true`):
+
+```bash
+python -m app.admin.cli reset-password --email manager@romashka.ru --password "new-temporary-password"
+```
+
+Disable user (sets `is_active=false`):
+
+```bash
+python -m app.admin.cli disable-user --email manager@romashka.ru
+```
+
 Optional experimental provider path:
 
 ```bash
@@ -114,6 +162,27 @@ Prompt ownership:
 pytest
 ```
 
+## Local infrastructure
+
+Start Redis and PostgreSQL for local backend development:
+
+```bash
+docker compose up -d redis postgres
+```
+
+Default local URLs:
+
+```text
+REDIS_URL=redis://localhost:6379/0
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer
+```
+
+Apply migrations:
+
+```bash
+alembic upgrade head
+```
+
 ## Frontend GUI
 
 Minimal React/Vite web UI lives in `frontend/`.
@@ -121,6 +190,7 @@ Minimal React/Vite web UI lives in `frontend/`.
 Backend:
 
 ```bash
+alembic upgrade head
 python -m uvicorn app.api.main:app --reload
 ```
 
@@ -138,13 +208,70 @@ Open:
 http://localhost:5173
 ```
 
-The Vite dev server proxies `/api` requests to `http://localhost:8000`, so the frontend uses relative API calls such as `/api/sessions`.
+The Vite dev server proxies API requests to `http://localhost:8000`, so the frontend uses relative calls such as `/auth/login`, `/auth/csrf`, and `/api/sessions`.
 
-Start local Redis for integration-style repository checks:
+Production serving through FastAPI:
 
 ```bash
-docker compose up -d
+cd frontend
+npm install
+npm run build
+cd ..
+python -m uvicorn app.api.main:app
 ```
+
+Open:
+
+```text
+http://localhost:8000/login
+```
+
+Current client access flow:
+
+- `/auth/login`, `/auth/logout`, `/auth/me`, and `/auth/csrf` implement the browser login flow
+- auth uses an HttpOnly session cookie; CSRF tokens are sent with mutating requests through `X-CSRF-Token`
+- `/api/sessions` requires an authenticated user
+- `POST /api/sessions` creates a training session from the current user's default training config
+- `training_session_ownership` is used to check access to session endpoints
+- PostgreSQL stores identity and access data
+- Redis stores runtime training sessions
+
+## Run with Docker
+
+Production-like local stack:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+Notes:
+
+- `frontend` is built once and served by `nginx`
+- `migrate` runs `alembic upgrade head` before `backend` starts
+- `nginx` proxies `/api/*` and `/auth/*` to the internal `backend:8000` service
+- `backend` connects to Redis through `redis://redis:6379/0`
+- `backend` connects to PostgreSQL through `postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer`
+- only port `8080` is exposed to the host
+
+Smoke checks through nginx:
+
+```bash
+curl -i http://localhost:8080/auth/me
+curl -i http://localhost:8080/auth/csrf
+curl -i http://localhost:8080/api/health
+```
+
+Expected results:
+
+- `/auth/me` returns a `401` JSON response, not React `index.html`
+- `/auth/csrf` returns `200` JSON with `csrf_token`
+- `/api/health` returns `200 {"status":"ok"}`
 
 ## API session creation
 
