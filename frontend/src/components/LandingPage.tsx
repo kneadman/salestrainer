@@ -22,11 +22,11 @@ const problemCards = [
   "Скрипт есть, но стандарт разговора у всех разный",
 ];
 
-const trainerCards = [
-  ["Диалог с ЛПР", "Менеджер ведёт разговор с ролью, характером и ограничениями, а не отвечает на тест."],
-  ["Сценарии под вашу воронку", "Берём этап, продукт, тип клиента и частые возражения. Один сценарий можно запустить на старте."],
-  ["Оценка по критериям", "После диалога видно, где была квалификация, аргументация, работа с сомнением и следующий шаг."],
-  ["Карта готовности менеджера", "Руководитель видит не только факт тренировки, а повторяющиеся места провала."],
+const trainerFlow = [
+  ["Сценарий", "Берём этап воронки, роль ЛПР, контекст продукта и частые сопротивления."],
+  ["Диалог", "Менеджер проходит разговор: уточняет, отвечает, держит логику и следующий шаг."],
+  ["Оценка", "Система фиксирует, где разговор собран, а где менеджер ушёл в шаблон."],
+  ["Разбор", "Руководитель получает материал для обратной связи и повторной тренировки."],
 ] as const;
 
 const bentoCards = [
@@ -56,11 +56,19 @@ const useCases = [
 ] as const;
 
 const securityCards = [
-  "Данные клиента отделены конфигом",
-  "Доступ через личный кабинет",
-  "Сценарии настраиваются вручную",
-  "Результат зависит от внедрения и дисциплины",
-  "Юридические документы и согласия в формах",
+  ["Конфиг под клиента", "Сценарии и критерии оценки отделены от других клиентов."],
+  ["Доступ через личный кабинет", "Пользователи входят через /login, доступ связан с клиентским конфигом."],
+  ["Ручная настройка сценариев", "Первый пилот собирается под продукт, воронку и типовые роли."],
+  ["Оценка без обещаний чуда", "Смотрим на структуру диалога, а не обещаем гарантированный рост продаж."],
+  ["Согласия в формах", "Заявка требует согласие на обработку персональных данных."],
+] as const;
+
+const demoDiscussionItems = [
+  "какой сценарий взять первым",
+  "какие роли ЛПР нужны",
+  "какие критерии оценки важны",
+  "как подключать менеджеров",
+  "какие данные не нужны на старте",
 ];
 
 const pilotSteps = [
@@ -256,10 +264,13 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container landing-hero__grid">
             <div className="landing-hero__copy fade-up">
               <p className="landing-eyebrow">AI-тренажёр отдела продаж</p>
-              <h1>Менеджер может знать скрипт — и всё равно потеряться в разговоре</h1>
+              <h1>
+                Менеджер может знать скрипт.
+                <span>Но разговор всё равно развалится.</span>
+              </h1>
               <p className="landing-hero__lead">
-                AI-тренажёр создаёт безопасную среду для сложных диалогов: с ЛПР, возражениями, контекстом продукта и
-                оценкой по структуре разговора. Руководитель видит готовность менеджера до выхода к реальному клиенту.
+                AI-тренажёр показывает это до контакта с реальным клиентом: менеджер проходит сложный диалог с ЛПР,
+                получает оценку по структуре разговора, а руководитель видит, где нужна доработка.
               </p>
               <div className="landing-hero__actions">
                 <button type="button" className="landing-button landing-button--large" onClick={() => scrollToBlock("lead", "hero_demo_click")}>
@@ -273,47 +284,55 @@ export function LandingPage({ authenticated }: LandingPageProps) {
                 </button>
               </div>
               <p className="landing-microcopy">
-                Без обещаний магического роста. Покажем, как тренажёр встраивается в ваш онбординг, аттестацию и регулярную практику.
+                Без обещаний магического роста. Покажем, как тренажёр встраивается в онбординг, аттестацию и регулярную практику.
               </p>
             </div>
 
             <div className="hero-dashboard fade-up" aria-label="Макет интерфейса тренажёра">
-              <div className="scenario-card">
-                <span>Сценарий</span>
-                <strong>Входящая встреча после заявки</strong>
-                <p>Персона: собственник, осторожный, считает деньги</p>
-              </div>
-              <div className="chat-card">
-                <div className="chat-line chat-line--client">Мне важно понять, чем это отличается от обычного обучения.</div>
-                <div className="chat-line chat-line--manager">Расскажу через ваш процесс: как сейчас проверяете готовность менеджера?</div>
-                <div className="chat-line chat-line--client">Слушаем звонки, но часто уже после ошибки.</div>
-              </div>
-              <div className="scorecard">
-                <div className="scorecard__top">
-                  <span>Готовность</span>
-                  <strong>72/100</strong>
+              <div className="dashboard-shell">
+                <div className="dashboard-topbar">
+                  <span>Тренировка · входящая встреча</span>
+                  <strong>ЛПР: собственник</strong>
                 </div>
-                <ScoreBar label="Квалификация" value={78} />
-                <ScoreBar label="Возражения" value={64} />
-                <ScoreBar label="Следующий шаг" value={58} />
+                <div className="dashboard-main">
+                  <div className="chat-card">
+                    <div className="chat-line chat-line--client">Мне важно понять, чем это отличается от обычного обучения.</div>
+                    <div className="chat-line chat-line--manager">Расскажу через ваш процесс: как сейчас проверяете готовность менеджера?</div>
+                    <div className="system-note">Система: менеджер выяснил текущий процесс, но пока не уточнил критерии выбора.</div>
+                  </div>
+                  <div className="scorecard">
+                    <div className="scorecard__top">
+                      <span>Общий балл</span>
+                      <strong>72/100</strong>
+                    </div>
+                    <ScoreBar label="Квалификация" value={78} />
+                    <ScoreBar label="Возражения" value={64} />
+                    <ScoreBar label="Следующий шаг" value={58} />
+                  </div>
+                </div>
               </div>
               <div className="manager-hint">
                 <strong>Подсказка руководителю</strong>
-                <p>Сильная зона: выяснил текущий процесс. Просадка: не уточнил критерии выбора. Следующий шаг: зафиксирован частично.</p>
+                <p>Разберите, как менеджер фиксирует критерии выбора и следующий шаг после сомнения клиента.</p>
               </div>
             </div>
           </div>
         </section>
 
         <section className="landing-section diagnostic-section fade-up" id="how-it-works">
-          <div className="landing-container">
-            <div className="section-heading">
+          <div className="landing-container problem-split">
+            <div className="section-heading problem-split__copy">
               <span className="section-kicker">Диагностика</span>
               <h2>Проблема появляется не в тесте. Она появляется в диалоге.</h2>
+              <p>
+                На тесте менеджер может отвечать правильно. В разговоре ему нужно удержать контекст, услышать клиента,
+                задать следующий вопрос и договориться о шаге.
+              </p>
             </div>
-            <div className="problem-grid">
-              {problemCards.map((text) => (
+            <div className="problem-list-v2">
+              {problemCards.map((text, index) => (
                 <article className="problem-card" key={text}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
                   <p>{text}</p>
                 </article>
               ))}
@@ -327,9 +346,10 @@ export function LandingPage({ authenticated }: LandingPageProps) {
               <span className="section-kicker">Что делает тренажёр</span>
               <h2>Он заставляет не читать про продажи, а проходить разговор</h2>
             </div>
-            <div className="trainer-grid">
-              {trainerCards.map(([title, text]) => (
-                <article className="trainer-card" key={title}>
+            <div className="product-flow">
+              {trainerFlow.map(([title, text], index) => (
+                <article className="flow-step" key={title}>
+                  <span>{index + 1}</span>
                   <h3>{title}</h3>
                   <p>{text}</p>
                 </article>
@@ -339,8 +359,8 @@ export function LandingPage({ authenticated }: LandingPageProps) {
         </section>
 
         <section className="landing-section dashboard-section fade-up">
-          <div className="landing-container landing-two-col">
-            <div>
+          <div className="landing-container dashboard-anchor">
+            <div className="dashboard-anchor__copy">
               <span className="section-kicker">Что видит руководитель</span>
               <h2>После тренировки остаётся разбор, а не ощущение</h2>
               <p>
@@ -380,7 +400,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Возможности</span>
-              <h2>Не набор карточек, а рабочий контур тренировки</h2>
+              <h2>Из чего собирается тренировочная среда</h2>
             </div>
             <div className="bento-grid">
               {bentoCards.map(([title, text, tone]) => (
@@ -397,7 +417,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Для кого</span>
-              <h2>Разные роли смотрят на тренажёр с разных задач</h2>
+              <h2>Один тренажёр закрывает разные управленческие вопросы</h2>
             </div>
             <div className="roles-grid">
               {audienceCards.map(([title, text]) => (
@@ -414,7 +434,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Сценарии использования</span>
-              <h2>Начать можно с узкого места, которое уже видно в команде</h2>
+              <h2>Сценарий можно собрать под конкретную просадку в воронке</h2>
             </div>
             <div className="usecase-grid">
               {useCases.map(([title, text]) => (
@@ -431,12 +451,18 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Безопасность и операционная зрелость</span>
-              <h2>Лендинг не обещает чудо. Продукт должен встраиваться в процесс.</h2>
+              <h2>Безопасная тренировка до разговора с клиентом</h2>
+              <p>
+                Тренажёр не подменяет руководителя и не обещает финансовый результат сам по себе. Он добавляет
+                практический слой: менеджер проходит сценарий, система фиксирует ошибки, руководитель получает материал
+                для разбора.
+              </p>
             </div>
             <div className="maturity-grid">
-              {securityCards.map((text) => (
-                <article className="maturity-card" key={text}>
+              {securityCards.map(([title, text]) => (
+                <article className="maturity-card" key={title}>
                   <span />
+                  <h3>{title}</h3>
                   <p>{text}</p>
                 </article>
               ))}
@@ -468,7 +494,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Форматы запуска</span>
-              <h2>Без цен на лендинге: сначала нужно понять сценарий</h2>
+              <h2>Формат запуска зависит от задачи и глубины настройки</h2>
             </div>
             <div className="launch-grid">
               {launchFormats.map(([title, text]) => (
@@ -485,11 +511,22 @@ export function LandingPage({ authenticated }: LandingPageProps) {
         </section>
 
         <section className="landing-section lead-section fade-up" id="lead">
-          <div className="landing-container landing-two-col">
-            <div>
+          <div className="landing-container lead-conversion">
+            <div className="lead-conversion__copy">
               <span className="section-kicker">Заявка</span>
-              <h2>Обсудим демонстрацию или пилот</h2>
-              <p>Опишите команду и текущую задачу. Мы вернёмся с вопросами по сценарию, материалам и формату запуска.</p>
+              <h2>Покажем, как это может выглядеть на вашем сценарии</h2>
+              <p>
+                Оставьте контакты и короткий контекст. Для первой демонстрации достаточно понять продукт, команду и один
+                сложный участок в продажах.
+              </p>
+              <div className="demo-topics">
+                <strong>Что обсудим на демо</strong>
+                <ul>
+                  {demoDiscussionItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
             <form className="landing-form" onFocusCapture={handleLeadFormFocus} onSubmit={handleLeadSubmit}>
               <div className="landing-form__grid">
