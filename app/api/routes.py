@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 
 from app.api.dependencies import get_report_service, get_session_service, get_turn_service
 from app.api.errors import conflict, not_found
+from app.access.service import AccessService
 from app.api.schemas import (
     ErrorResponse,
     FinishSessionResponse,
@@ -30,6 +31,8 @@ from app.domain.errors import (
 )
 from app.domain.personas import list_personas
 from app.domain.scenarios import list_scenarios
+from app.identity.dependencies import get_access_service, require_current_user
+from app.identity.service import CurrentSession
 
 router = APIRouter(prefix="/api")
 
@@ -90,14 +93,25 @@ def get_personas() -> list[PersonaOptionDTO]:
 def create_session(
     request: SessionCreateRequest,
     session_service: TrainingSessionService = Depends(get_session_service),
+    access_service: AccessService = Depends(get_access_service),
+    current_session: CurrentSession = Depends(require_current_user),
 ) -> SessionStateResponse:
     try:
+        training_config = access_service.get_default_training_config_for_user(current_session.user.id)
         session = session_service.start_session(
             scenario_id=request.scenario_id,
-            persona_id=request.persona_id,
+            training_config=training_config,
+        )
+        access_service.bind_session_to_user(
+            session.session_id,
+            current_session.user.id,
+            training_config.client_account_id,
+            training_config.id,
         )
     except SalesTrainerError as error:
         raise_api_error(error)
+    except LookupError as error:
+        raise not_found(str(error)) from error
     return SessionStateResponse(session=build_session_public_dto(session))
 
 

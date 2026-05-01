@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import logging
 from uuid import uuid4
 
+from app.access.models import RuntimeTrainingConfig
 from app.domain.persona_generation import PersonaGenerator
 from app.domain.interest import interest_band
 from app.domain.errors import SessionNotActiveError, SessionNotFoundError
@@ -51,9 +52,20 @@ class TrainingSessionService:
         self,
         scenario_id: str | None = None,
         persona_id: str | None = None,
+        training_config: RuntimeTrainingConfig | None = None,
     ) -> TrainingSessionState:
-        scenario = get_scenario(scenario_id or self._default_scenario_id)
-        persona = get_persona(persona_id) if persona_id else self._persona_generator.generate()
+        resolved_scenario_id = scenario_id or self._default_scenario_id
+        if training_config is not None:
+            resolved_scenario_id = scenario_id or training_config.default_scenario_id
+
+        scenario = get_scenario(resolved_scenario_id)
+        if training_config is not None:
+            persona = self._persona_generator.generate(
+                product_line=training_config.product_line,
+                persona_policy=training_config.persona_policy,
+            )
+        else:
+            persona = get_persona(persona_id) if persona_id else self._persona_generator.generate()
         starting_interest = persona.starting_interest or scenario.default_starting_interest
         now = datetime.now(tz=UTC)
         session = TrainingSessionState(

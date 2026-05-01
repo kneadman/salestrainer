@@ -94,3 +94,26 @@ def test_authority_level_does_not_depend_on_role() -> None:
         assert persona.authority_level == "final_decider"
 
     assert len(seen_roles) > 1
+
+
+def test_persona_generator_respects_allowed_roles_and_target_action_policy() -> None:
+    persona = PersonaGenerator(seed=8).generate(
+        "outsourced_cfo",
+        persona_policy={
+            "allowed_roles": ["owner"],
+            "target_action": "collect_financial_reports",
+        },
+    )
+
+    assert persona.product_line == "outsourced_cfo"
+    assert persona.role == "owner"
+    assert persona.target_action == "collect_financial_reports"
+    assert persona.authority_level == "final_decider"
+
+
+def test_persona_generator_respects_allowed_product_lines_policy() -> None:
+    persona = PersonaGenerator(seed=10).generate(
+        persona_policy={"allowed_product_lines": ["accounting_outsourcing"]},
+    )
+
+    assert persona.product_line == "accounting_outsourcing"
