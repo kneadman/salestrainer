@@ -30,7 +30,7 @@ const trainerFlow = [
 ] as const;
 
 const bentoCards = [
-  ["Персональный конфиг клиента", "Сценарии, критерии оценки и роли ЛПР собираются вокруг вашего продукта и процесса.", "wide"],
+  ["Настройка под компанию", "Сценарии, критерии оценки и роли ЛПР собираются вокруг вашего продукта и процесса.", "wide"],
   ["ЛПР в каждом сценарии", "Собственник, директор, закупщик или пользователь ведут разговор по-разному.", ""],
   ["История попыток", "Видно, как менеджер проходит один и тот же сценарий после разбора.", ""],
   ["Оценка диалога", "Разбор по структуре разговора, а не только итоговый балл.", "accent"],
@@ -40,10 +40,10 @@ const bentoCards = [
 ] as const;
 
 const audienceCards = [
-  ["Собственник", "Хочет, чтобы обучение не держалось на памяти одного сильного РОПа."],
-  ["РОП", "Хочет видеть не просто факт тренировки, а место, где менеджер теряет разговор."],
-  ["HR / L&D", "Хочет сделать онбординг проверяемым, а не формальным."],
-  ["Менеджер", "Получает место, где можно ошибиться до разговора с настоящим клиентом."],
+  ["Собственник", "Понять, где команда теряет качество разговора без ручного прослушивания каждого диалога.", "Видит повторяемую картину: роли, сценарии, оценки и зоны для управленческого разбора."],
+  ["РОП", "Понять, какой именно навык проседает: квалификация, работа с сомнением или следующий шаг.", "Получает материал для точечной обратной связи, а не только общий балл тренировки."],
+  ["HR / L&D", "Понять, можно ли сделать онбординг проверяемым, а не формальным.", "Получает единый формат практики для новичков и опытных менеджеров."],
+  ["Менеджер", "Понять, как выдержать сложный разговор до контакта с настоящим клиентом.", "Получает безопасную тренировку и конкретные подсказки по структуре диалога."],
 ] as const;
 
 const useCases = [
@@ -56,10 +56,10 @@ const useCases = [
 ] as const;
 
 const securityCards = [
-  ["Конфиг под клиента", "Сценарии и критерии оценки отделены от других клиентов."],
-  ["Доступ через личный кабинет", "Пользователи входят через /login, доступ связан с клиентским конфигом."],
+  ["Настройки компании", "Сценарии и критерии оценки отделены от других клиентов."],
+  ["Доступ через личный кабинет", "Пользователь видит только сценарии и тренировки, связанные с настройками его компании."],
   ["Ручная настройка сценариев", "Первый пилот собирается под продукт, воронку и типовые роли."],
-  ["Оценка без обещаний чуда", "Смотрим на структуру диалога, а не обещаем гарантированный рост продаж."],
+  ["Оценка по структуре разговора", "Смотрим на структуру диалога, а не обещаем гарантированный рост продаж."],
   ["Согласия в формах", "Заявка требует согласие на обработку персональных данных."],
 ] as const;
 
@@ -69,6 +69,13 @@ const demoDiscussionItems = [
   "какие критерии оценки важны",
   "как подключать менеджеров",
   "какие данные не нужны на старте",
+];
+
+const demoNotNeededItems = [
+  "интеграция с CRM",
+  "выгрузка всех звонков",
+  "полный набор скриптов",
+  "готовая методология обучения",
 ];
 
 const pilotSteps = [
@@ -90,8 +97,8 @@ const faqItems = [
   ["Можно ли настроить сценарии под наш продукт?", "Да. Для пилота обычно фиксируются продукт, этап воронки, роли ЛПР, типовые сомнения и критерии оценки."],
   ["Можно ли использовать для новичков?", "Да. Новичок получает безопасное место для ошибок до разговора с настоящим клиентом."],
   ["Подходит ли для опытных менеджеров?", "Да, если нужно отработать сложные ситуации: новый продукт, другой сегмент, просадку по этапу или нестандартные возражения."],
-  ["Есть ли личный кабинет?", "Да. Все CTA личного кабинета ведут на существующую страницу входа /login."],
-  ["Можно ли гарантировать рост продаж?", "Нет. Мы не обещаем магический рост. Итог зависит от внедрения, регулярности практики, качества сценариев и работы руководителя."],
+  ["Есть ли личный кабинет?", "Да. Команда работает в защищённом личном кабинете с доступом к своим сценариям и тренировкам."],
+  ["Можно ли гарантировать рост продаж?", "Нет. Мы не обещаем гарантированный рост. Итог зависит от внедрения, регулярности практики, качества сценариев и работы руководителя."],
   ["Что нужно для старта?", "Для стартового сценария нужны вводные по продукту, этапу воронки, типовым клиентам, возражениям и желаемому стандарту разговора."],
 ] as const;
 
@@ -252,7 +259,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
             <button type="button" onClick={handleMobileDemoClick}>
               Получить демонстрацию
             </button>
-            <button type="button" onClick={handleLoginClick}>
+            <button type="button" className="mobile-menu__login" onClick={handleLoginClick}>
               Личный кабинет
             </button>
           </div>
@@ -265,12 +272,12 @@ export function LandingPage({ authenticated }: LandingPageProps) {
             <div className="landing-hero__copy fade-up">
               <p className="landing-eyebrow">AI-тренажёр отдела продаж</p>
               <h1>
-                Менеджер может знать скрипт.
-                <span>Но разговор всё равно развалится.</span>
+                Менеджер знает скрипт.
+                <span>Сложный клиент проверяет другое.</span>
               </h1>
               <p className="landing-hero__lead">
-                AI-тренажёр показывает это до контакта с реальным клиентом: менеджер проходит сложный диалог с ЛПР,
-                получает оценку по структуре разговора, а руководитель видит, где нужна доработка.
+                AI-тренажёр показывает слабые места до контакта с реальным клиентом: менеджер проходит диалог с ЛПР,
+                получает оценку по структуре разговора, а руководитель видит, что стоит разобрать.
               </p>
               <div className="landing-hero__actions">
                 <button type="button" className="landing-button landing-button--large" onClick={() => scrollToBlock("lead", "hero_demo_click")}>
@@ -279,30 +286,49 @@ export function LandingPage({ authenticated }: LandingPageProps) {
                 <button type="button" className="landing-button landing-button--secondary landing-button--large" onClick={() => scrollToBlock("pilot", "pilot_cta_click")}>
                   Обсудить пилот
                 </button>
-                <button type="button" className="landing-button landing-button--ghost landing-button--large" onClick={handleLoginClick}>
-                  Личный кабинет
-                </button>
               </div>
+              <button type="button" className="hero-login-link" onClick={handleLoginClick}>
+                Уже есть доступ? Войти в личный кабинет →
+              </button>
               <p className="landing-microcopy">
-                Без обещаний магического роста. Покажем, как тренажёр встраивается в онбординг, аттестацию и регулярную практику.
+                Без обещаний гарантированного результата. Покажем, как тренажёр встраивается в онбординг, аттестацию и регулярную практику.
               </p>
             </div>
 
             <div className="hero-dashboard fade-up" aria-label="Макет интерфейса тренажёра">
               <div className="dashboard-shell">
                 <div className="dashboard-topbar">
-                  <span>Тренировка · входящая встреча</span>
-                  <strong>ЛПР: собственник</strong>
+                  <div className="dashboard-session-meta">
+                    <span>Тренировка #ST-024</span>
+                    <strong>Илья · попытка 2 из 3</strong>
+                  </div>
+                  <div className="dashboard-tabs" aria-label="Разделы интерфейса">
+                    <span>Диалог</span>
+                    <span>Оценка</span>
+                    <span>Разбор</span>
+                  </div>
                 </div>
                 <div className="dashboard-main">
                   <div className="chat-card">
-                    <div className="chat-line chat-line--client">Мне важно понять, чем это отличается от обычного обучения.</div>
-                    <div className="chat-line chat-line--manager">Расскажу через ваш процесс: как сейчас проверяете готовность менеджера?</div>
-                    <div className="system-note">Система: менеджер выяснил текущий процесс, но пока не уточнил критерии выбора.</div>
+                    <div className="mock-status-row">
+                      <span>Активная тренировка</span>
+                      <strong>Входящая встреча</strong>
+                    </div>
+                    <div className="chat-line chat-line--client">Чем это отличается от обычного обучения?</div>
+                    <div className="chat-line chat-line--manager">Покажу через ваш процесс. Как сейчас проверяете готовность?</div>
+                    <div className="mock-chips" aria-label="Фокус тренировки">
+                      <span>ЛПР</span>
+                      <span>Квалификация</span>
+                      <span>Следующий шаг</span>
+                    </div>
+                    <div className="system-note">
+                      <strong>Последнее действие</strong>
+                      <span>Выяснил процесс, но не уточнил критерии выбора.</span>
+                    </div>
                   </div>
                   <div className="scorecard">
                     <div className="scorecard__top">
-                      <span>Общий балл</span>
+                      <span>Оценка тренировки</span>
                       <strong>72/100</strong>
                     </div>
                     <ScoreBar label="Квалификация" value={78} />
@@ -310,10 +336,10 @@ export function LandingPage({ authenticated }: LandingPageProps) {
                     <ScoreBar label="Следующий шаг" value={58} />
                   </div>
                 </div>
-              </div>
-              <div className="manager-hint">
-                <strong>Подсказка руководителю</strong>
-                <p>Разберите, как менеджер фиксирует критерии выбора и следующий шаг после сомнения клиента.</p>
+                <div className="dashboard-hint">
+                  <strong>Подсказка руководителю</strong>
+                  <p>Разберите, как менеджер фиксирует критерии выбора и следующий шаг после сомнения клиента.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -370,26 +396,38 @@ export function LandingPage({ authenticated }: LandingPageProps) {
             </div>
             <div className="leader-dashboard" aria-label="Макет кабинета руководителя">
               <aside className="leader-list">
-                {["Анна", "Илья", "Мария"].map((name, index) => (
+                {["Анна", "Илья", "Мария", "Денис"].map((name, index) => (
                   <div className={index === 1 ? "leader-person leader-person--active" : "leader-person"} key={name}>
                     <span>{name}</span>
-                    <strong>{[82, 67, 74][index]}</strong>
+                    <strong>{[82, 67, 74, 71][index]}</strong>
                   </div>
                 ))}
               </aside>
               <div className="leader-detail">
                 <div className="leader-detail__head">
-                  <span>Выбранный менеджер</span>
-                  <strong>Илья, 67/100</strong>
+                  <div>
+                    <span>Выбранная тренировка</span>
+                    <strong>Илья · входящая встреча</strong>
+                  </div>
+                  <div className="leader-detail__status">67/100</div>
                 </div>
-                <p>Последние тренировки: входящая встреча, возражение по бюджету, повторный контакт.</p>
-                <ScoreBar label="Квалификация" value={76} />
-                <ScoreBar label="Аргументация" value={69} />
-                <ScoreBar label="Работа с возражениями" value={54} />
-                <ScoreBar label="Следующий шаг" value={61} />
-                <div className="recommendation">
-                  <strong>Рекомендация к разбору</strong>
-                  <p>Проверить, как менеджер фиксирует критерии выбора и следующий шаг после сомнения по бюджету.</p>
+                <div className="leader-screen-grid">
+                  <div className="leader-score-panel">
+                    <ScoreBar label="Квалификация" value={76} />
+                    <ScoreBar label="Аргументация" value={69} />
+                    <ScoreBar label="Работа с возражениями" value={54} />
+                    <ScoreBar label="Следующий шаг" value={61} />
+                  </div>
+                  <div className="attempt-history" aria-label="История попыток">
+                    <strong>Динамика попыток</strong>
+                    <div><span>1</span><meter min="0" max="100" value="54" /></div>
+                    <div><span>2</span><meter min="0" max="100" value="67" /></div>
+                    <div><span>3</span><meter min="0" max="100" value="0" /></div>
+                  </div>
+                  <div className="recommendation">
+                    <strong>Рекомендация к разбору</strong>
+                    <p>Проверить, как менеджер фиксирует критерии выбора и следующий шаг после сомнения по бюджету.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -419,13 +457,30 @@ export function LandingPage({ authenticated }: LandingPageProps) {
               <span className="section-kicker">Для кого</span>
               <h2>Один тренажёр закрывает разные управленческие вопросы</h2>
             </div>
-            <div className="roles-grid">
-              {audienceCards.map(([title, text]) => (
-                <article className="role-card" key={title}>
-                  <h3>{title}</h3>
-                  <p>{text}</p>
-                </article>
-              ))}
+            <div className="audience-split">
+              <div className="audience-roles" aria-label="Роли">
+                {audienceCards.map(([title], index) => (
+                  <div className={index === 1 ? "audience-role audience-role--active" : "audience-role"} key={title}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <strong>{title}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="audience-outcomes">
+                {audienceCards.map(([title, wants, gets]) => (
+                  <article className="audience-outcome" key={title}>
+                    <span>{title}</span>
+                    <div>
+                      <strong>Что хочет понять</strong>
+                      <p>{wants}</p>
+                    </div>
+                    <div>
+                      <strong>Что получает</strong>
+                      <p>{gets}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -434,7 +489,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Сценарии использования</span>
-              <h2>Сценарий можно собрать под конкретную просадку в воронке</h2>
+              <h2>Сценарии собираются под места, где команда чаще всего теряет разговор</h2>
             </div>
             <div className="usecase-grid">
               {useCases.map(([title, text]) => (
@@ -451,7 +506,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Безопасность и операционная зрелость</span>
-              <h2>Безопасная тренировка до разговора с клиентом</h2>
+              <h2>Тренировка без риска для реальных сделок</h2>
               <p>
                 Тренажёр не подменяет руководителя и не обещает финансовый результат сам по себе. Он добавляет
                 практический слой: менеджер проходит сценарий, система фиксирует ошибки, руководитель получает материал
@@ -494,7 +549,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           <div className="landing-container">
             <div className="section-heading">
               <span className="section-kicker">Форматы запуска</span>
-              <h2>Формат запуска зависит от задачи и глубины настройки</h2>
+              <h2>Можно начать с демонстрации, пилота или регулярной практики</h2>
             </div>
             <div className="launch-grid">
               {launchFormats.map(([title, text]) => (
@@ -523,6 +578,14 @@ export function LandingPage({ authenticated }: LandingPageProps) {
                 <strong>Что обсудим на демо</strong>
                 <ul>
                   {demoDiscussionItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="demo-topics demo-topics--quiet">
+                <strong>Для старта не нужны</strong>
+                <ul>
+                  {demoNotNeededItems.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
@@ -563,6 +626,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
               <button type="submit" className="landing-button landing-button--large" disabled={!leadConsent || leadStatus === "submitting"}>
                 {leadStatus === "submitting" ? "Отправляем..." : "Оставить заявку"}
               </button>
+              <p className="submit-microcopy">Без навязчивой презентации: сначала уточним продукт, команду и один сложный сценарий.</p>
               {leadStatus === "success" ? <p className="form-status form-status--success">Заявка принята. Мы свяжемся, чтобы уточнить вводные для демонстрации.</p> : null}
               {leadStatus === "error" ? <p className="form-status form-status--error">Не удалось отправить заявку. Проверьте обязательные поля и согласие.</p> : null}
             </form>
