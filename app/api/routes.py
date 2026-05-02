@@ -8,6 +8,8 @@ from app.access.service import AccessService
 from app.api.schemas import (
     ErrorResponse,
     FinishSessionResponse,
+    LandingLeadRequest,
+    LandingSubmitResponse,
     PersonaOptionDTO,
     ScenarioOptionDTO,
     SessionCreateRequest,
@@ -59,6 +61,17 @@ def raise_api_error(error: SalesTrainerError) -> None:
 @router.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.post("/leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
+def submit_landing_lead(request: LandingLeadRequest) -> LandingSubmitResponse:
+    if request.consent_personal_data is not True:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="consent_personal_data must be true.",
+        )
+    # TODO: Persist leads or send them to CRM once the integration target is chosen.
+    return LandingSubmitResponse(status="accepted")
 
 
 @router.get("/scenarios", response_model=list[ScenarioOptionDTO], responses=ERROR_RESPONSES)

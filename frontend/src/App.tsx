@@ -3,6 +3,7 @@ import { ApiError, createSession, finishSession, getMe, getReport, getSession, l
 import { ChatWindow } from "./components/ChatWindow";
 import { Composer } from "./components/Composer";
 import { FactsPanel } from "./components/FactsPanel";
+import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
 import { MetricsPanel } from "./components/MetricsPanel";
 import { PhoneShell } from "./components/PhoneShell";
@@ -84,7 +85,6 @@ export default function App() {
       return;
     }
     if (path === "/") {
-      navigate(user ? "/app" : "/login", true);
       return;
     }
     if (path === "/login" && user) {
@@ -234,8 +234,12 @@ export default function App() {
     }
   };
 
-  if (authBootstrapping || path === "/") {
+  if (authBootstrapping) {
     return <div className="app-shell">Loading...</div>;
+  }
+
+  if (path === "/") {
+    return <LandingPage authenticated={Boolean(user)} />;
   }
 
   if (path === "/login" || !user) {

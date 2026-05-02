@@ -133,3 +133,10 @@ export function finishSession(sessionId: string): Promise<FinishSessionResponse>
 export function getReport(sessionId: string): Promise<SessionReportResponse> {
   return request<SessionReportResponse>(`/api/sessions/${sessionId}/report`);
 }
+
+export function submitLead(payload: Record<string, unknown>): Promise<{ status: string }> {
+  return request<{ status: string }>("/api/leads", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

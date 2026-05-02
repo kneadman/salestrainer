@@ -56,6 +56,25 @@ class SessionCreateRequest(BaseModel):
     persona_id: str | None = None
 
 
+class LandingLeadRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=1, max_length=320)
+    phone: str = Field(min_length=1, max_length=80)
+    company: str = Field(min_length=1, max_length=200)
+    role: str = Field(min_length=1, max_length=200)
+    sales_team_size: str = Field(min_length=1, max_length=80)
+    consent_personal_data: bool
+    consent_marketing: bool = False
+    comment: str | None = Field(default=None, max_length=2000)
+    query_params: dict[str, str] = Field(default_factory=dict)
+    page: str | None = Field(default=None, max_length=80)
+    form_id: str | None = Field(default=None, max_length=120)
+
+
+class LandingSubmitResponse(BaseModel):
+    status: str
+
+
 class TurnRequest(BaseModel):
     manager_message: str = Field(min_length=1, max_length=2000)
 
