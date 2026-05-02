@@ -186,6 +186,8 @@ In `APP_ENV=local`, a development fallback key is available for local tests and 
 
 Optional experimental provider path:
 
+These Yandex environment variables are the legacy/global runtime LLM configuration. They do not select the new organization-level `llm_provider_config_id` for a training dialog yet.
+
 ```bash
 set LLM_BACKEND=yandex_compatible
 set YANDEX_API_KEY=...
