@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
-import os
+
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.infrastructure.config import Settings
 
@@ -22,31 +22,19 @@ def require_secret_encryption_key(settings: Settings) -> str:
 
 
 def encrypt_secret(plaintext: str, settings: Settings) -> str:
-    key = _derive_key(require_secret_encryption_key(settings))
-    nonce = os.urandom(16)
-    data = plaintext.encode("utf-8")
-    ciphertext = _xor_with_keystream(data, key, nonce)
-    tag = hmac.new(key, nonce + ciphertext, hashlib.sha256).digest()
-    return "v1:" + base64.urlsafe_b64encode(nonce + tag + ciphertext).decode("ascii")
+    fernet = _build_fernet(require_secret_encryption_key(settings))
+    encrypted = fernet.encrypt(plaintext.encode("utf-8")).decode("ascii")
+    return f"fernet:v1:{encrypted}"
 
 
 def decrypt_secret(token: str, settings: Settings) -> str:
-    key = _derive_key(require_secret_encryption_key(settings))
-    if not token.startswith("v1:"):
+    if not token.startswith("fernet:v1:"):
         raise SecretEncryptionError("Unsupported encrypted secret format.")
+    fernet = _build_fernet(require_secret_encryption_key(settings))
     try:
-        payload = base64.urlsafe_b64decode(token[3:].encode("ascii"))
-    except ValueError as error:
-        raise SecretEncryptionError("Invalid encrypted secret payload.") from error
-    if len(payload) < 48:
-        raise SecretEncryptionError("Invalid encrypted secret payload.")
-    nonce = payload[:16]
-    tag = payload[16:48]
-    ciphertext = payload[48:]
-    expected_tag = hmac.new(key, nonce + ciphertext, hashlib.sha256).digest()
-    if not hmac.compare_digest(tag, expected_tag):
-        raise SecretEncryptionError("Encrypted secret authentication failed.")
-    return _xor_with_keystream(ciphertext, key, nonce).decode("utf-8")
+        return fernet.decrypt(token.removeprefix("fernet:v1:").encode("ascii")).decode("utf-8")
+    except InvalidToken as error:
+        raise SecretEncryptionError("Encrypted secret authentication failed.") from error
 
 
 def mask_secret(plaintext: str | None) -> str | None:
@@ -63,15 +51,6 @@ def preview_encrypted_secret(token: str | None, settings: Settings) -> str | Non
     return mask_secret(decrypt_secret(token, settings))
 
 
-def _derive_key(secret_key: str) -> bytes:
-    return hashlib.sha256(secret_key.encode("utf-8")).digest()
-
-
-def _xor_with_keystream(data: bytes, key: bytes, nonce: bytes) -> bytes:
-    output = bytearray()
-    counter = 0
-    while len(output) < len(data):
-        block = hmac.new(key, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest()
-        output.extend(block)
-        counter += 1
-    return bytes(value ^ output[index] for index, value in enumerate(data))
+def _build_fernet(secret_key: str) -> Fernet:
+    digest = hashlib.sha256(secret_key.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))

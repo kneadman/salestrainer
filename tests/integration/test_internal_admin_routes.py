@@ -169,6 +169,10 @@ def test_user_management_create_roles_reject_admin_reset_disable_enable() -> Non
         f"/api/internal/organizations/{organization['id']}/users",
         json={"email": "bad@example.com", "password": "temporary", "role": "internal_admin"},
     )
+    legacy_rejected = client.post(
+        f"/api/internal/organizations/{organization['id']}/users",
+        json={"email": "legacy@example.com", "password": "temporary", "role": "client_user"},
+    )
     user_id = manager.json()["id"]
     reset = client.post(f"/api/internal/users/{user_id}/reset-password", json={"password": "new-temp"})
     disabled = client.post(f"/api/internal/users/{user_id}/disable")
@@ -183,6 +187,7 @@ def test_user_management_create_roles_reject_admin_reset_disable_enable() -> Non
     assert lead.status_code == 201
     assert lead.json()["role"] == "client_lead"
     assert rejected.status_code == 422
+    assert legacy_rejected.status_code == 422
     assert reset.status_code == 200
     assert reset.json()["must_change_password"] is True
     assert user is not None
@@ -268,4 +273,69 @@ def test_llm_provider_config_secret_masking_storage_update_disable() -> None:
     assert disable_response.json()["is_active"] is False
     assert assign_disabled.status_code == 422
     assert "abcd-secret-yz" not in str([record.payload for record in session.scalars(select(AuditLog))])
+    session.close()
+
+
+def test_internal_admin_schema_validation_rejects_invalid_inputs() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+
+    invalid_slug = client.post("/api/internal/organizations", json={"name": "Acme", "slug": "Bad Slug"})
+    organization = _create_org(client)
+    invalid_email = client.post(
+        f"/api/internal/organizations/{organization['id']}/users",
+        json={"email": "not-email", "password": "temporary", "role": "client_manager"},
+    )
+    short_password = client.post(
+        f"/api/internal/organizations/{organization['id']}/users",
+        json={"email": "short@example.com", "password": "short", "role": "client_manager"},
+    )
+    invalid_scenario = client.post(
+        f"/api/internal/organizations/{organization['id']}/training-configs",
+        json={
+            "name": "Invalid scenario",
+            "default_scenario_id": "missing",
+            "product_line": "accounting_outsourcing",
+        },
+    )
+    invalid_product_line = client.post(
+        f"/api/internal/organizations/{organization['id']}/training-configs",
+        json={
+            "name": "Invalid product",
+            "default_scenario_id": "generic_b2b_first_contact",
+            "product_line": "unknown",
+        },
+    )
+    invalid_provider = client.post(
+        f"/api/internal/organizations/{organization['id']}/llm-provider-configs",
+        json={"name": "Provider", "provider": "unknown"},
+    )
+
+    assert invalid_slug.status_code == 422
+    assert invalid_email.status_code == 422
+    assert short_password.status_code == 422
+    assert invalid_scenario.status_code == 422
+    assert invalid_product_line.status_code == 422
+    assert invalid_provider.status_code == 422
+    session.close()
+
+
+def test_audit_log_filters_by_organization_before_limit_and_payload_has_org_id() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    org_a = _create_org(client, "audit-a")
+    org_b = _create_org(client, "audit-b")
+    _create_training_config(client, str(org_b["id"]), "B1")
+    _create_training_config(client, str(org_b["id"]), "B2")
+    _create_training_config(client, str(org_a["id"]), "A1")
+
+    response = client.get(f"/api/internal/audit-log?organization_id={org_a['id']}&limit=1")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert len(payload) == 1
+    assert payload[0]["payload"]["organization_id"] == org_a["id"]
+    for record in session.scalars(select(AuditLog).where(AuditLog.action.like("%created"))):
+        assert "organization_id" in record.payload
+        assert "client_account_id" in record.payload
     session.close()

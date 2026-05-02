@@ -78,6 +78,10 @@ class IdentityRepository:
         statement = select(User).options(joinedload(User.client_account)).where(User.id == user_id)
         return self._session.scalar(statement)
 
+    def get_first_user_by_role(self, role: str) -> User | None:
+        statement = select(User).where(User.role == role).order_by(User.created_at.asc())
+        return self._session.scalar(statement)
+
     def get_client_account_by_id(self, client_account_id: UUID) -> ClientAccount | None:
         return self._session.get(ClientAccount, client_account_id)
 

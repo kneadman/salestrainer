@@ -165,6 +165,8 @@ The endpoint requires auth cookie and CSRF token, verifies the current password,
 
 Organization-level LLM provider configs are stored in PostgreSQL in `llm_provider_configs`. Plain API keys are accepted only in request bodies and are never returned in API responses or audit payloads.
 
+`llm_provider_config_id` can already be stored on a training config and managed through internal admin API. Runtime training turns still use the globally configured LLM client from environment settings in this stage; per-organization/per-config LLM selection is not wired into the simulator flow yet.
+
 Responses expose only:
 
 ```json

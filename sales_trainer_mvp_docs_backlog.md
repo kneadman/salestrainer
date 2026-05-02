@@ -1492,6 +1492,7 @@ Implemented backend foundation for platform owner administration:
 - enforced password-change API: `/auth/change-password`, `must_change_password` in `/auth/login` and `/auth/me`;
 - organization training config management and user config assignment/default selection;
 - organization-scoped LLM provider config storage with encrypted API key and masked API responses;
+- `llm_provider_config_id` is stored and assignable on training configs, but runtime training turns still use the global LLM client from environment settings;
 - audit log records for internal admin mutations.
 
 Accepted architecture decisions:
