@@ -35,6 +35,7 @@ packages = [
     "app.domain",
     "app.identity",
     "app.infrastructure",
+    "app.internal_admin",
     "app.prompts",
     "app.web",
 ]

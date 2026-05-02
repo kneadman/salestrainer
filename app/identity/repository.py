@@ -7,6 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.identity.models import ClientAccount, LoginSession, User
+from app.identity.roles import UserRole
 
 
 class IdentityRepository:
@@ -44,7 +45,7 @@ class IdentityRepository:
         client_account_id: UUID,
         email: str,
         password_hash: str,
-        role: str = "client_user",
+        role: str = UserRole.CLIENT_MANAGER.value,
         is_active: bool = True,
         must_change_password: bool = True,
         user_id: UUID | None = None,
@@ -76,6 +77,9 @@ class IdentityRepository:
     def get_user_by_id(self, user_id: UUID) -> User | None:
         statement = select(User).options(joinedload(User.client_account)).where(User.id == user_id)
         return self._session.scalar(statement)
+
+    def get_client_account_by_id(self, client_account_id: UUID) -> ClientAccount | None:
+        return self._session.get(ClientAccount, client_account_id)
 
     def update_user_password(
         self,
@@ -158,6 +162,16 @@ class IdentityRepository:
             return None
 
         user.is_active = False
+        self._session.commit()
+        self._session.refresh(user)
+        return user
+
+    def enable_user(self, *, user_id: UUID) -> User | None:
+        user = self.get_user_by_id(user_id)
+        if user is None:
+            return None
+
+        user.is_active = True
         self._session.commit()
         self._session.refresh(user)
         return user

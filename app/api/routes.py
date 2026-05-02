@@ -39,6 +39,7 @@ from app.identity.dependencies import (
     require_internal_admin,
 )
 from app.identity.service import CurrentSession
+from app.identity.roles import is_internal_admin
 
 router = APIRouter(prefix="/api")
 
@@ -80,7 +81,7 @@ def get_scenarios(
     current_session: CurrentSession = Depends(require_current_user),
 ) -> list[ScenarioOptionDTO]:
     scenarios = list_scenarios()
-    if current_session.user.role != "internal_admin":
+    if not is_internal_admin(current_session.user.role):
         try:
             training_config = access_service.get_default_training_config_for_user(current_session.user.id)
         except LookupError as error:
@@ -129,14 +130,14 @@ def create_session(
 ) -> SessionStateResponse:
     try:
         user_role = current_session.user.role
-        if user_role != "internal_admin" and request.persona_id is not None:
+        if not is_internal_admin(user_role) and request.persona_id is not None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="persona_id is not allowed for client_user sessions.",
+                detail="persona_id is not allowed for client sessions.",
             )
 
         training_config = access_service.get_default_training_config_for_user(current_session.user.id)
-        if user_role == "internal_admin" and request.persona_id is not None:
+        if is_internal_admin(user_role) and request.persona_id is not None:
             session = session_service.start_session(
                 scenario_id=request.scenario_id,
                 persona_id=request.persona_id,

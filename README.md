@@ -9,6 +9,7 @@ CLI/API MVP for an interactive sales training simulator. A manager writes messag
 - Session state stored in app-managed repository
 - Redis docker setup included
 - PostgreSQL stores identity and client access data; Alembic manages relational migrations
+- Internal admin backend foundation exists under `/api/internal/*`
 - Domain validation via Pydantic v2
 - The client profile is generated at session start and remains hidden during the training
 
@@ -122,6 +123,65 @@ Disable user (sets `is_active=false`):
 python -m app.admin.cli disable-user --email manager@romashka.ru
 ```
 
+## Roles and internal admin API
+
+User roles are centralized in `app.identity.roles`:
+
+- `internal_admin`: platform owner / internal operator
+- `client_lead`: client-side lead
+- `client_manager`: client-side manager
+- legacy `client_user` is normalized to `client_manager` for backward compatibility
+
+Internal admin API endpoints are mounted under `/api/internal/*` and require an authenticated `internal_admin` session plus CSRF for mutating requests. Client roles receive `403`.
+
+Internal admin foundation includes:
+
+- organizations: list/create/detail/update/disable/enable via `/api/internal/organizations`
+- organization users: create `client_lead` / `client_manager`, update, disable/enable, reset temporary password
+- training configs: create/update/disable/enable and assign/unassign/make-default per user
+- LLM provider configs: create/update/disable/enable organization-scoped provider settings
+- audit log: `GET /api/internal/audit-log`
+
+Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. This stage does not add a React admin UI, persistent training history, billing, analytics, or a new LLM/persona generation flow.
+
+## Password change flow
+
+`/auth/login` and `/auth/me` now include `user.must_change_password`. A user with a temporary password can call:
+
+```http
+POST /auth/change-password
+```
+
+```json
+{
+  "current_password": "temporary-password",
+  "new_password": "new-password"
+}
+```
+
+The endpoint requires auth cookie and CSRF token, verifies the current password, stores only an Argon2id hash, clears `must_change_password`, and writes an audit record.
+
+## Secret config strategy
+
+Organization-level LLM provider configs are stored in PostgreSQL in `llm_provider_configs`. Plain API keys are accepted only in request bodies and are never returned in API responses or audit payloads.
+
+Responses expose only:
+
+```json
+{
+  "has_api_key": true,
+  "api_key_preview": "abcd...yz"
+}
+```
+
+Set `SECRET_ENCRYPTION_KEY` for application-level secret encryption:
+
+```bash
+set SECRET_ENCRYPTION_KEY=replace-with-random-32-plus-character-secret
+```
+
+In `APP_ENV=local`, a development fallback key is available for local tests and demos. Outside local environment, operations that encrypt/decrypt provider secrets require `SECRET_ENCRYPTION_KEY`.
+
 Optional experimental provider path:
 
 ```bash
@@ -229,6 +289,7 @@ http://localhost:8000/login
 Current client access flow:
 
 - `/auth/login`, `/auth/logout`, `/auth/me`, and `/auth/csrf` implement the browser login flow
+- `/auth/change-password` lets authenticated users replace temporary passwords and clears `must_change_password`
 - auth uses an HttpOnly session cookie; CSRF tokens are sent with mutating requests through `X-CSRF-Token`
 - `/api/sessions` requires an authenticated user
 - `POST /api/sessions` creates a training session from the current user's default training config

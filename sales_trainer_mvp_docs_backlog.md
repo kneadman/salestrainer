@@ -1479,6 +1479,39 @@ Acceptance criteria:
 
 ## 24. Milestones
 
+### Milestone: Internal Admin Foundation
+
+Status: done on 2026-05-02.
+
+Implemented backend foundation for platform owner administration:
+
+- explicit roles: `internal_admin`, `client_lead`, `client_manager`; legacy `client_user` maps to `client_manager`;
+- isolated internal admin API under `/api/internal/*`, protected by `internal_admin`;
+- organization management on top of `client_accounts`;
+- organization user management with temporary passwords, disable/enable, reset password;
+- enforced password-change API: `/auth/change-password`, `must_change_password` in `/auth/login` and `/auth/me`;
+- organization training config management and user config assignment/default selection;
+- organization-scoped LLM provider config storage with encrypted API key and masked API responses;
+- audit log records for internal admin mutations.
+
+Accepted architecture decisions:
+
+- runtime training state stays in Redis;
+- PostgreSQL stores identity/access/config/admin metadata;
+- LLM provider configs are not wired into runtime LLM execution yet;
+- internal admin API foundation is backend-only, no React admin UI in this stage;
+- plaintext provider secrets must not appear in DB, responses, logs, or audit payloads.
+
+Open questions:
+
+- replace MVP stdlib secret codec with a reviewed KMS/Fernet-style mechanism before production secret storage;
+- add stronger audit filtering by organization once audit payload querying is standardized per database;
+- decide UX and policy for forced password change in the frontend.
+
+Next stage: Persistent Training History.
+
+Goal: persist completed session metadata, turn history summaries, and final reports in PostgreSQL for history, reporting, and later analytics while keeping active runtime state in Redis.
+
 ### Milestone 0. Skeleton
 
 Цель: проект запускается, Redis работает, структура готова.
@@ -1658,4 +1691,3 @@ MVP считается готовым, если:
 Нужно разработать CLI MVP тренажера продаж, где пользователь ведет переписку с симулированным B2B-клиентом. Система хранит состояние сессии в Redis, передает в LLM текущий snapshot состояния и сообщение менеджера, получает JSON с репликой клиента, изменением интереса и patch состояния, валидирует ответ, обновляет state и показывает клиентскую реплику пользователю.
 
 Архитектура должна быть слоистой: CLI как тонкий адаптер, application services как ядро, domain layer для бизнес-правил, infrastructure layer для Redis и LLM. Это позволит позже добавить frontend через API без переписывания основной логики.
-

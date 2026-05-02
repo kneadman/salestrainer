@@ -42,6 +42,11 @@ class ClientTrainingConfig(Base):
         default=dict,
         server_default=text("'{}'"),
     )
+    llm_provider_config_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("llm_provider_configs.id"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -65,6 +70,36 @@ class UserTrainingConfig(Base):
         primary_key=True,
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+
+
+class LLMProviderConfig(Base):
+    __tablename__ = "llm_provider_configs"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    client_account_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("client_accounts.id"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    folder_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_or_agent_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 class TrainingSessionOwnership(Base):
@@ -124,6 +159,7 @@ class RuntimeTrainingConfig(BaseModel):
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
     limits: dict[str, object] = Field(default_factory=dict)
+    llm_provider_config_id: UUID | None = None
 
     def allowed_scenario_ids(self) -> list[str]:
         if self.allowed_scenarios:

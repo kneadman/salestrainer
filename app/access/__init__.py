@@ -1,6 +1,7 @@
 from app.access.models import (
     AuditLog,
     ClientTrainingConfig,
+    LLMProviderConfig,
     RuntimeTrainingConfig,
     TrainingSessionOwnership,
     UserTrainingConfig,
@@ -13,6 +14,7 @@ __all__ = [
     "AccessService",
     "AuditLog",
     "ClientTrainingConfig",
+    "LLMProviderConfig",
     "RuntimeTrainingConfig",
     "TrainingSessionOwnership",
     "UserTrainingConfig",

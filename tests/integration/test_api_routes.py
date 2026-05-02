@@ -501,7 +501,7 @@ def test_api_create_session_rejects_request_persona_id_in_client_auth_mode() -> 
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
-    assert response.json()["error"]["message"] == "persona_id is not allowed for client_user sessions."
+    assert response.json()["error"]["message"] == "persona_id is not allowed for client sessions."
 
     db_session.close()
 
