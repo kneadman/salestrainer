@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.dependencies import get_report_service, get_session_service, get_turn_service
+from app.api.dependencies import get_persona_generation_service, get_report_service, get_session_service, get_turn_service
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
 from app.api.schemas import (
@@ -20,11 +20,14 @@ from app.api.schemas import (
     TurnResponse,
 )
 from app.application.projections import build_session_public_dto, build_turn_public_dto
+from app.application.persona_generation_service import PersonaGenerationService
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
 from app.domain.errors import (
     SalesTrainerError,
+    LLMProviderConfigurationError,
+    PersonaGenerationError,
     SessionNotActiveError,
     SessionNotFoundError,
     StateVersionConflictError,
@@ -59,6 +62,10 @@ def raise_api_error(error: SalesTrainerError) -> None:
         raise not_found(str(error)) from error
     if isinstance(error, (SessionNotActiveError, StateVersionConflictError)):
         raise conflict(str(error)) from error
+    if isinstance(error, LLMProviderConfigurationError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    if isinstance(error, PersonaGenerationError):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
     raise error
 
 
@@ -130,6 +137,7 @@ def create_session(
     session_service: TrainingSessionService = Depends(get_session_service),
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
+    persona_generation_service: PersonaGenerationService = Depends(get_persona_generation_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> SessionStateResponse:
     try:
@@ -147,9 +155,14 @@ def create_session(
                 persona_id=request.persona_id,
             )
         else:
+            persona = persona_generation_service.generate_for_training_config(
+                training_config=training_config,
+                scenario_id=request.scenario_id,
+            )
             session = session_service.start_session(
                 scenario_id=request.scenario_id,
                 training_config=training_config,
+                persona_override=persona,
             )
         access_service.bind_session_to_user(
             session.session_id,

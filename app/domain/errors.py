@@ -29,5 +29,9 @@ class LLMProviderConfigurationError(SalesTrainerError):
     """Raised when LLM provider configuration or policy is invalid."""
 
 
+class PersonaGenerationError(SalesTrainerError):
+    """Raised when persona generation cannot produce a valid profile."""
+
+
 class RepositoryUnavailableError(SalesTrainerError):
     """Raised when the configured repository backend cannot be used."""

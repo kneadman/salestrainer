@@ -1479,6 +1479,36 @@ Acceptance criteria:
 
 ## 24. Milestones
 
+### Milestone: New LLM Persona Generation Flow
+
+Status: done on 2026-05-03.
+
+Implemented a separate hidden-persona generation flow for authenticated API sessions:
+
+- `PersonaGenerationInput` normalizes `client_training_configs.persona_policy`, product line, scenario, target action, allowed roles/product lines, training goal, difficulty, seed, organization context, and constraints;
+- `PersonaGenerationOutput` validates provider output around the existing `PersonaProfile` contract;
+- `PersonaGenerationService` resolves organization LLM provider config per request and generates a persona before `TrainingSessionService.start_session(...)`;
+- `TrainingSessionService.start_session(...)` accepts `persona_override` so API can inject an LLM-generated persona while CLI/debug flows keep the legacy Python generator;
+- `FakePersonaGeneratorClient` preserves the existing Python generator as local/fake fallback;
+- `StructuredPersonaGeneratorClient` supports `yandex_compatible` and `openai_compatible` provider configs through structured JSON responses;
+- API session creation stores the generated hidden persona in Redis runtime state and persistent history continues to snapshot it server-side;
+- client-facing DTOs still do not expose hidden persona, raw prompts, raw LLM payloads, raw LLM responses, or provider secrets.
+
+Accepted architecture decisions:
+
+- Persona Generator LLM and Dialogue Simulator LLM are separate responsibilities;
+- Redis remains the active runtime state store;
+- PostgreSQL remains the source of training config, LLM provider config, history, reports, and snapshots;
+- missing persona provider config falls back to the legacy generator only in local/fake-fallback-compatible environments;
+- runtime dialogue turns still use the global dialogue LLM client until a separate per-client dialogue resolver stage.
+
+Open questions:
+
+- verify the persona generator against live Yandex/OpenAI-compatible providers;
+- add prompt/schema version fields to saved history snapshots;
+- decide whether admin should expose protected persona-generation diagnostics without raw payload leakage;
+- harden provider retry/backoff and observability around persona generation.
+
 ### Milestone: Internal Admin Foundation
 
 Status: done on 2026-05-02.

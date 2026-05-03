@@ -143,7 +143,7 @@ Internal admin foundation includes:
 - LLM provider configs: create/update/disable/enable organization-scoped provider settings
 - audit log: `GET /api/internal/audit-log`
 
-Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. This stage does not add billing or a new LLM/persona generation flow.
+Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. Billing is not implemented.
 
 ## Internal Admin UI
 
@@ -247,7 +247,7 @@ The endpoint requires auth cookie and CSRF token, verifies the current password,
 
 Organization-level LLM provider configs are stored in PostgreSQL in `llm_provider_configs`. Plain API keys are accepted only in request bodies and are never returned in API responses or audit payloads.
 
-`llm_provider_config_id` can already be stored on a training config and managed through internal admin API. Runtime training turns still use the globally configured LLM client from environment settings in this stage; per-organization/per-config LLM selection is not wired into the simulator flow yet.
+`llm_provider_config_id` can be stored on a training config and managed through internal admin API. It is now used by the persona generation flow when a client starts a new authenticated API training session. Runtime dialogue turns still use the globally configured dialogue LLM client from environment settings; per-organization/per-config dialogue LLM selection is not wired into the simulator flow yet.
 
 Responses expose only:
 
@@ -257,6 +257,37 @@ Responses expose only:
   "api_key_preview": "abcd...yz"
 }
 ```
+
+## LLM Persona Generation
+
+Authenticated API session creation separates persona generation from dialogue simulation:
+
+- Persona Generator LLM creates the hidden `PersonaProfile` once at session start from the user's default `client_training_config`.
+- Dialogue Simulator LLM continues to answer manager turns from the saved hidden profile and runtime state.
+- Redis stores the active `TrainingSessionState`, including the hidden persona.
+- PostgreSQL history stores server-side snapshots after the API session is created.
+
+Generation input is normalized into `PersonaGenerationInput`:
+
+- product line and scenario;
+- training config name;
+- free-form `persona_policy`;
+- optional organization context, target action, allowed roles/product lines, training goal, difficulty, seed, and constraints.
+
+Generation output must validate as `PersonaGenerationOutput` and contain a Pydantic-valid `PersonaProfile`. Provider responses are parsed as structured JSON; invalid output is retried by the provider client and then fails the API request unless local fallback is explicitly allowed.
+
+Provider behavior:
+
+- `fake` provider uses the legacy Python `PersonaGenerator`.
+- `yandex_compatible` and `openai_compatible` use a structured Responses API request with the stored organization provider config.
+- Missing provider config falls back to the legacy Python generator only when local/fake fallback is allowed.
+- API keys are decrypted server-side only for the provider call and are never logged or returned.
+
+Security notes:
+
+- client-facing session and history endpoints still do not expose the hidden persona before the final report flow allows it;
+- raw persona-generation prompts, raw provider payloads, raw provider responses, and secrets are not written to client endpoints or usage events;
+- debug payload logging remains gated by `DEBUG_LLM_PAYLOAD`.
 
 Set `SECRET_ENCRYPTION_KEY` for application-level secret encryption:
 
@@ -488,9 +519,9 @@ Debug-compatible preset mode still works:
 }
 ```
 
-## Hidden client generation
+## Legacy Hidden Client Generation
 
-The generator lives in `app/domain/persona_generation.py`.
+The fallback/debug generator lives in `app/domain/persona_generation.py`.
 
 Each generated client profile includes:
 
@@ -511,7 +542,7 @@ Each generated client profile includes:
 - urgency
 - trust_baseline
 
-To add more client variants, extend the role templates in that module with new combinations of role, pains, context, and constraints.
+For production client API sessions, prefer configuring `persona_policy` and an organization LLM provider config. To improve the fallback path, extend the role templates in that module with new combinations of role, pains, context, and constraints.
 
 ## MVP limitations
 
@@ -526,6 +557,6 @@ To add more client variants, extend the role templates in that module with new c
 ## Next step roadmap
 
 1. Client/Admin analytics API hardening with focused frontend tests and richer filtering
-2. Per-client LLM runtime resolver for `llm_provider_config_id`
+2. Per-client dialogue LLM runtime resolver for `llm_provider_config_id`
 3. Real billing/limits model for organization usage
 4. Provider retry/backoff and prompt/schema versioning
