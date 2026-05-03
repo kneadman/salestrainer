@@ -23,6 +23,8 @@ from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
 from app.identity.rate_limit import build_login_rate_limiter
 from app.identity.routes import router as auth_router
 from app.internal_admin.routes import router as internal_admin_router
+from app.history.internal_routes import router as internal_history_router
+from app.history.routes import router as history_router
 from app.web.static import mount_frontend
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -159,7 +161,9 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)
     app.include_router(router)
+    app.include_router(history_router)
     app.include_router(internal_admin_router)
+    app.include_router(internal_history_router)
     mount_frontend(app)
     return app
 

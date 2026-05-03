@@ -1509,9 +1509,37 @@ Open questions:
 - add stronger audit filtering by organization once audit payload querying is standardized per database;
 - decide UX and policy for forced password change in the frontend.
 
-Next stage: Persistent Training History.
+Next stage: Client/Admin Analytics API hardening + UI foundation.
 
-Goal: persist completed session metadata, turn history summaries, and final reports in PostgreSQL for history, reporting, and later analytics while keeping active runtime state in Redis.
+Goal: build on persistent history with dashboard-ready API shapes, stronger filters, and first UI surfaces for managers/leads/admins.
+
+### Milestone: Persistent Training History
+
+Status: done on 2026-05-03.
+
+Implemented backend foundation for durable training history while keeping Redis as the active runtime state store:
+
+- new PostgreSQL tables: `training_sessions`, `training_turns`, `training_reports`, `usage_events`;
+- authenticated `/api/sessions/*` flow records session start, turns, finish, report generation, and usage events;
+- client-facing history API under `/api/history/*`;
+- internal admin history and usage summary endpoints under `/api/internal/*`;
+- access rules: `client_manager` sees own history, `client_lead` sees same-organization history, `internal_admin` uses internal endpoints;
+- public history DTOs exclude hidden persona snapshots, raw LLM payloads, raw LLM responses, and secrets;
+- integration tests cover persistence, access control, saved reports, internal history, and usage summary.
+
+Accepted architecture decisions:
+
+- Redis remains canonical for active runtime training state;
+- PostgreSQL is canonical for durable history, reports, usage events, and future analytics;
+- API history writes are fail-fast for authenticated SaaS flow;
+- CLI local flow is not wired to PostgreSQL history in this stage;
+- old Redis-only sessions are not backfilled.
+
+Open questions:
+
+- add retention/cleanup policy for old history and Redis sessions;
+- decide whether hidden server-side snapshots need internal admin read endpoints;
+- harden internal usage filters before building analytics UI.
 
 ### Milestone 0. Skeleton
 

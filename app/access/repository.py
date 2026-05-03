@@ -200,6 +200,10 @@ class AccessRepository:
 
         return self._session.scalar(statement) is not None
 
+    def get_session_ownership(self, session_id: UUID) -> TrainingSessionOwnership | None:
+        """Load ownership metadata needed by API-side history writes."""
+        return self._session.get(TrainingSessionOwnership, session_id)
+
     def create_audit_log_record(
         self,
         *,

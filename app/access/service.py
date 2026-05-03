@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from app.access.models import RuntimeTrainingConfig
+from app.access.models import RuntimeTrainingConfig, TrainingSessionOwnership
 from app.access.repository import AccessRepository
 
 
@@ -37,6 +37,14 @@ class AccessService:
             user_id=user_id,
         ):
             raise LookupError("Session not found.")
+
+    def get_session_ownership(self, session_id: str | UUID) -> TrainingSessionOwnership:
+        """Return ownership metadata or hide missing/invalid sessions behind LookupError."""
+        normalized_session_id = session_id if isinstance(session_id, UUID) else self._parse_session_id(session_id)
+        ownership = self._repository.get_session_ownership(normalized_session_id)
+        if ownership is None:
+            raise LookupError("Session not found.")
+        return ownership
 
     @staticmethod
     def _parse_session_id(session_id: str) -> UUID:

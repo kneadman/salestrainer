@@ -35,6 +35,7 @@ packages = [
     "app.application",
     "app.cli",
     "app.domain",
+    "app.history",
     "app.identity",
     "app.infrastructure",
     "app.internal_admin",

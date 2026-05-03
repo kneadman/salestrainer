@@ -9,6 +9,7 @@ CLI/API MVP for an interactive sales training simulator. A manager writes messag
 - Session state stored in app-managed repository
 - Redis docker setup included
 - PostgreSQL stores identity and client access data; Alembic manages relational migrations
+- PostgreSQL stores persistent training history, reports, and usage events for authenticated API sessions
 - Internal admin backend foundation exists under `/api/internal/*`
 - Domain validation via Pydantic v2
 - The client profile is generated at session start and remains hidden during the training
@@ -142,7 +143,54 @@ Internal admin foundation includes:
 - LLM provider configs: create/update/disable/enable organization-scoped provider settings
 - audit log: `GET /api/internal/audit-log`
 
-Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. This stage does not add a React admin UI, persistent training history, billing, analytics, or a new LLM/persona generation flow.
+Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. This stage does not add a React admin UI, billing, or a new LLM/persona generation flow.
+
+## Persistent Training History
+
+Active training state and long-term history have separate owners:
+
+- Redis stores active runtime `TrainingSessionState` while a dialog is in progress.
+- PostgreSQL stores durable history, reports, usage events, and analytics inputs.
+
+The authenticated `/api/sessions/*` flow now writes persistent history after the runtime operation succeeds:
+
+- `POST /api/sessions` creates a `training_sessions` row and `session_started` usage event.
+- `POST /api/sessions/{session_id}/messages` appends `training_turns`, updates session counters/snapshots, and writes `turn_processed`.
+- `POST /api/sessions/{session_id}/finish` marks the session finished, stores `training_reports`, and writes `session_finished` plus `report_generated`.
+- `GET /api/sessions/{session_id}` and resume calls may write view/resume usage events.
+
+New tables:
+
+- `training_sessions`: durable session metadata, public brief, summary, server-side persona and state snapshots.
+- `training_turns`: durable turn history with manager/client messages, interest/stage transition, public-safe state snapshots, and evaluation snapshot.
+- `training_reports`: saved final report text per session.
+- `usage_events`: minimal event stream for future analytics.
+
+Client-facing history endpoints:
+
+- `GET /api/history/sessions`
+- `GET /api/history/sessions/{session_id}`
+- `GET /api/history/sessions/{session_id}/report`
+
+Internal admin history endpoints:
+
+- `GET /api/internal/organizations/{organization_id}/history/sessions`
+- `GET /api/internal/organizations/{organization_id}/usage-summary`
+- `GET /api/internal/users/{user_id}/history/sessions`
+
+Access rules:
+
+- `client_manager` sees only their own history.
+- `client_lead` sees sessions for users in the same client account.
+- `internal_admin` uses `/api/internal/*` history and usage endpoints.
+- Client-facing history DTOs do not expose `persona_snapshot`, raw LLM payloads, raw LLM responses, API keys, or hidden persona fields.
+
+Limitations:
+
+- History starts only for sessions created after the migration is applied.
+- Old Redis-only sessions are not backfilled.
+- Analytics is a basic aggregation API, not a dashboard.
+- Hidden snapshots can be stored server-side for future internal/admin use, but are not returned by client-facing endpoints.
 
 ## Password change flow
 
@@ -298,7 +346,7 @@ Current client access flow:
 - `/api/sessions` requires an authenticated user
 - `POST /api/sessions` creates a training session from the current user's default training config
 - `training_session_ownership` is used to check access to session endpoints
-- PostgreSQL stores identity and access data
+- PostgreSQL stores identity, access data, persistent training history, reports, and usage events
 - Redis stores runtime training sessions
 
 ## Run with Docker
@@ -398,10 +446,11 @@ To add more client variants, extend the role templates in that module with new c
 - CLI still uses a simple terminal flow
 - Reports and evaluator scores are rule-based, not judge-model based
 - Session resume across process restarts requires Redis; in-memory mode is process-local and does not survive restarts
+- Persistent history is written by the authenticated API flow; CLI local training remains runtime-only.
 
 ## Next step roadmap
 
-1. Add real LLM client behind the same protocol
-2. Add JSON schema enforcement and retry on invalid provider output
-3. Expose the same application services through API DTOs
-4. Add public projections for future frontend
+1. Stage 3: Client/Admin Analytics API hardening + UI foundation
+2. Per-client LLM runtime resolver for `llm_provider_config_id`
+3. Provider retry/backoff and prompt/schema versioning
+4. Exportable reports and manager analytics
