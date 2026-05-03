@@ -34,6 +34,7 @@ packages = [
     "app.api",
     "app.application",
     "app.cli",
+    "app.client_portal",
     "app.domain",
     "app.history",
     "app.identity",

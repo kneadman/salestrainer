@@ -83,6 +83,7 @@ export type AuthUser = {
   id: string;
   email: string;
   role: string;
+  must_change_password: boolean;
   client_account: ClientAccount;
 };
 

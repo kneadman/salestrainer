@@ -1,0 +1,98 @@
+import { useEffect, useState } from "react";
+import type { AuthUser } from "../types";
+import { getHistorySessions, getMyAnalytics, getTeamUsageSummary } from "./api";
+import { ClientState, ClientStat } from "./components/ClientPrimitives";
+import type { ClientUserAnalyticsDTO, HistorySessionSummaryDTO, TeamUsageSummaryDTO } from "./types";
+import { formatClientDate, getClientErrorMessage } from "./utils";
+
+type DashboardPageProps = {
+  user: AuthUser;
+  onNavigate: (path: string) => void;
+};
+
+export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
+  /** Render the client cabinet overview with personal and lead team summaries. */
+  const [analytics, setAnalytics] = useState<ClientUserAnalyticsDTO | null>(null);
+  const [teamSummary, setTeamSummary] = useState<TeamUsageSummaryDTO | null>(null);
+  const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    /** Load dashboard data from real history/team endpoints only. */
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [myAnalytics, recentHistory] = await Promise.all([
+          getMyAnalytics(),
+          getHistorySessions({ limit: 5, offset: 0 }),
+        ]);
+        setAnalytics(myAnalytics);
+        setHistory(recentHistory);
+        if (user.role === "client_lead") {
+          setTeamSummary(await getTeamUsageSummary().catch(() => null));
+        }
+      } catch (loadError) {
+        setError(getClientErrorMessage(loadError));
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [user.role]);
+
+  if (loading) {
+    return <ClientState title="Загрузка кабинета" />;
+  }
+
+  if (error) {
+    return <ClientState title="Не удалось загрузить обзор" detail={error} tone="error" />;
+  }
+
+  return (
+    <div className="client-page">
+      <div className="client-page__header">
+        <div>
+          <span className="client-kicker">Личный кабинет</span>
+          <h1>Обзор</h1>
+          <p>Добро пожаловать, {user.email}</p>
+        </div>
+        <button type="button" className="client-button client-button--primary" onClick={() => onNavigate("/app/trainer")}>
+          Начать тренировку
+        </button>
+      </div>
+      <section className="client-stats-grid">
+        <ClientStat label="Всего тренировок" value={analytics?.total_sessions ?? 0} />
+        <ClientStat label="Завершено" value={analytics?.finished_sessions ?? 0} />
+        <ClientStat label="Средний interest" value={analytics?.avg_final_interest_score?.toFixed(1) ?? "—"} />
+        <ClientStat label="Среднее число ходов" value={analytics?.avg_turn_count?.toFixed(1) ?? "—"} />
+        <ClientStat label="Последняя активность" value={formatClientDate(analytics?.last_activity_at)} />
+      </section>
+      {user.role === "client_lead" ? (
+        <section className="client-stats-grid">
+          <ClientStat label="Менеджеров" value={teamSummary?.users.length ?? "—"} />
+          <ClientStat label="Тренировок команды" value={teamSummary?.total_sessions ?? "—"} />
+          <ClientStat label="Завершено командой" value={teamSummary?.finished_sessions ?? "—"} />
+          <ClientStat label="Средний score команды" value={teamSummary?.avg_final_interest_score?.toFixed(1) ?? "—"} />
+        </section>
+      ) : null}
+      <section className="client-panel">
+        <div className="client-panel__header">
+          <h2>Последние тренировки</h2>
+          <button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>Открыть историю</button>
+        </div>
+        {history.length === 0 ? (
+          <ClientState title="Аналитика появится после первых завершенных тренировок." />
+        ) : (
+          <div className="client-table-wrap">
+            <table className="client-table">
+              <thead><tr><th>Дата</th><th>Статус</th><th>Сценарий</th><th>Ходы</th><th>Interest</th></tr></thead>
+              <tbody>{history.map((item) => <tr key={item.session_id}><td>{formatClientDate(item.started_at)}</td><td>{item.status}</td><td>{item.scenario_id}</td><td>{item.turn_count}</td><td>{item.final_interest_score ?? "—"}</td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

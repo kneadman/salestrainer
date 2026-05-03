@@ -1509,9 +1509,71 @@ Open questions:
 - add stronger audit filtering by organization once audit payload querying is standardized per database;
 - decide UX and policy for forced password change in the frontend.
 
-Next stage: Client/Admin Analytics API hardening + UI foundation.
+Next stage: Client analytics hardening + billing/limits design.
 
-Goal: build on persistent history with dashboard-ready API shapes, stronger filters, and first UI surfaces for managers/leads/admins.
+Goal: add focused frontend tests, richer analytics filters/charts, safe evaluation aggregates, and a reviewed billing/limits model without payment processing shortcuts.
+
+### Milestone: Client UI Analytics
+
+Status: done on 2026-05-03.
+
+Implemented client cabinet foundation:
+
+- `/app` became a client dashboard instead of only the trainer screen;
+- `/app/trainer` preserves the existing Redis-backed trainer flow;
+- `/app/history` and `/app/history/{session_id}` use client-facing persistent history endpoints;
+- `/app/analytics` shows personal persistent-history analytics;
+- `/app/team`, `/app/team/{user_id}`, and `/app/team-analytics` are available to `client_lead`;
+- `/app/balance` shows honest usage/billing placeholder without payment processing;
+- `/app/settings` shows profile fields and supports `/auth/change-password`;
+- client navigation is role-aware and hides team sections from `client_manager`;
+- new client-facing backend endpoints under `/api/client/*` and `/api/team/*` avoid using `/api/internal/*` in client UI.
+
+Accepted architecture decisions:
+
+- existing path-based frontend routing remains; no React Router dependency added;
+- no fake analytics or fake billing data;
+- team APIs are read-only and scoped to the lead's own `client_account_id`;
+- Redis runtime flow and per-client LLM runtime selection remain unchanged.
+
+Open questions:
+
+- add frontend tests for client role navigation and password form;
+- add date-range filters and richer trend aggregation in backend;
+- expose safe evaluation/skill aggregates for analytics;
+- design real billing/limits model separately.
+
+### Milestone: Internal Admin UI
+
+Status: done on 2026-05-03.
+
+Implemented production-oriented frontend foundation for platform owner administration:
+
+- protected `/admin` route for `internal_admin`;
+- no-access screen for `client_lead` and `client_manager`;
+- redirect unauthenticated admin visits through `/login`;
+- shared frontend API client for credentials, CSRF, and normalized errors;
+- admin dashboard with organization, config, LLM, usage, and audit overview;
+- organizations list/search/create/edit/enable/disable;
+- organization detail workspace with users, training configs, LLM settings, history, usage, and audit sections;
+- user create/update/reset-password/enable/disable and training config assignment actions;
+- training config forms with client-side JSON validation;
+- LLM provider config forms that never display full API keys and omit blank API key on update;
+- persistent history and usage views backed by Stage 2 endpoints;
+- audit log page with filters and compact JSON payload rendering.
+
+Accepted architecture decisions:
+
+- no new frontend routing dependency; existing path-based router was extended;
+- no fake analytics or fake history data;
+- no frontend UI library added;
+- no billing, client cabinet, Redis flow changes, or per-client LLM runtime resolver in this stage.
+
+Open questions:
+
+- add frontend component/integration tests for admin flows;
+- improve organization-level history filters with date range support when backend supports it;
+- decide which internal-only hidden snapshots, if any, should get protected admin views.
 
 ### Milestone: Persistent Training History
 

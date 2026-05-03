@@ -143,7 +143,41 @@ Internal admin foundation includes:
 - LLM provider configs: create/update/disable/enable organization-scoped provider settings
 - audit log: `GET /api/internal/audit-log`
 
-Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. This stage does not add a React admin UI, billing, or a new LLM/persona generation flow.
+Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. This stage does not add billing or a new LLM/persona generation flow.
+
+## Internal Admin UI
+
+The internal platform owner cabinet is available at:
+
+```text
+/admin
+```
+
+Access rules:
+
+- unauthenticated users are redirected to `/login`;
+- `internal_admin` can open the admin cabinet;
+- `client_lead` and `client_manager` see a no-access screen and can return to `/app`;
+- admin requests use the existing HttpOnly auth cookie and CSRF token flow.
+
+Admin UI sections:
+
+- Dashboard: organization totals, users/config counts, LLM config count, usage totals, latest audit events;
+- Organizations: list/search/create/edit/enable/disable organizations;
+- Organization detail: overview, users, training configs, LLM settings, history, usage, audit;
+- Users: create/update users, reset temporary passwords, enable/disable, assign/default/unassign training configs;
+- Training Configs: create/update/enable/disable configs with client-side JSON validation;
+- LLM Settings: create/update/enable/disable provider configs, showing only masked API key preview;
+- Training History: persistent history list and public-safe session detail;
+- Usage Analytics: basic usage summary from persistent history;
+- Audit Log: filterable audit events with compact JSON payload display.
+
+Security notes:
+
+- full API keys are never displayed;
+- blank API key fields are not sent on LLM config update;
+- passwords are not stored in localStorage/sessionStorage and reset fields are cleared after success;
+- hidden persona snapshots, raw LLM payloads, raw LLM responses, and secrets are not rendered in admin history views.
 
 ## Persistent Training History
 
@@ -343,11 +377,52 @@ Current client access flow:
 - `/auth/login`, `/auth/logout`, `/auth/me`, and `/auth/csrf` implement the browser login flow
 - `/auth/change-password` lets authenticated users replace temporary passwords and clears `must_change_password`
 - auth uses an HttpOnly session cookie; CSRF tokens are sent with mutating requests through `X-CSRF-Token`
+- `/app` is the client cabinet dashboard
+- `/app/trainer` contains the Redis-backed active training flow
 - `/api/sessions` requires an authenticated user
 - `POST /api/sessions` creates a training session from the current user's default training config
 - `training_session_ownership` is used to check access to session endpoints
 - PostgreSQL stores identity, access data, persistent training history, reports, and usage events
 - Redis stores runtime training sessions
+- `/admin` serves the internal admin UI for `internal_admin` users
+
+## Client Cabinet
+
+The client cabinet is mounted under `/app` and is separate from the internal admin cabinet.
+
+Routes:
+
+- `/app`: client dashboard with personal overview and lead team summary when available;
+- `/app/trainer`: active training simulator;
+- `/app/history`: role-scoped persistent training history;
+- `/app/history/{session_id}`: public-safe session detail and saved report;
+- `/app/analytics`: personal analytics;
+- `/app/team`: same-organization manager list for `client_lead`;
+- `/app/team/{user_id}`: manager analytics card for `client_lead`;
+- `/app/team-analytics`: organization analytics for `client_lead`;
+- `/app/balance`: usage and billing placeholder without payment processing;
+- `/app/settings`: profile and password change form.
+
+Role rules:
+
+- `client_manager` sees only personal navigation and personal history/analytics.
+- `client_lead` sees personal sections plus team and team analytics for the same organization.
+- `client_manager` cannot use `/app/team` or `/app/team-analytics`.
+- Team APIs never use `/api/internal/*`; they use client-facing `/api/team/*` endpoints protected by `client_lead`.
+
+Client-facing analytics endpoints:
+
+- `GET /api/client/analytics/me`
+- `GET /api/team/users`
+- `GET /api/team/usage-summary`
+- `GET /api/team/users/{user_id}/analytics`
+- `GET /api/team/users/{user_id}/history/sessions`
+
+Limitations:
+
+- Balance is usage-oriented only; real billing, invoices, and payment forms are not implemented.
+- Detailed skill/evaluation aggregates are shown as an empty state until backend exposes safe aggregates.
+- Analytics appears only after persistent history rows exist.
 
 ## Run with Docker
 
@@ -450,7 +525,7 @@ To add more client variants, extend the role templates in that module with new c
 
 ## Next step roadmap
 
-1. Stage 3: Client/Admin Analytics API hardening + UI foundation
+1. Client/Admin analytics API hardening with focused frontend tests and richer filtering
 2. Per-client LLM runtime resolver for `llm_provider_config_id`
-3. Provider retry/backoff and prompt/schema versioning
-4. Exportable reports and manager analytics
+3. Real billing/limits model for organization usage
+4. Provider retry/backoff and prompt/schema versioning

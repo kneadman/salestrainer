@@ -1,0 +1,70 @@
+import type { AuthUser } from "../types";
+import { ClientBadge } from "./components/ClientPrimitives";
+
+type ClientLayoutProps = {
+  user: AuthUser;
+  path: string;
+  children: React.ReactNode;
+  onNavigate: (path: string, replace?: boolean) => void;
+  onLogout: () => Promise<void>;
+};
+
+const MANAGER_NAV = [
+  { label: "Обзор", path: "/app" },
+  { label: "Тренажер", path: "/app/trainer" },
+  { label: "История", path: "/app/history" },
+  { label: "Моя аналитика", path: "/app/analytics" },
+  { label: "Баланс", path: "/app/balance" },
+  { label: "Настройки", path: "/app/settings" },
+];
+
+const LEAD_EXTRA_NAV = [
+  { label: "Команда", path: "/app/team" },
+  { label: "Аналитика команды", path: "/app/team-analytics" },
+];
+
+export function ClientLayout({ user, path, children, onNavigate, onLogout }: ClientLayoutProps) {
+  /** Render the client cabinet shell with role-aware navigation. */
+  const nav = user.role === "client_lead"
+    ? [...MANAGER_NAV.slice(0, 4), ...LEAD_EXTRA_NAV, ...MANAGER_NAV.slice(4)]
+    : MANAGER_NAV;
+  return (
+    <div className="client-shell">
+      <aside className="client-sidebar">
+        <div className="client-brand">
+          <span>ST</span>
+          <div>
+            <strong>Sales Trainer</strong>
+            <small>{user.client_account.name}</small>
+          </div>
+        </div>
+        <nav className="client-nav" aria-label="Client cabinet navigation">
+          {nav.map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              className={path === item.path ? "client-nav__item client-nav__item--active" : "client-nav__item"}
+              onClick={() => onNavigate(item.path)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
+      <div className="client-main-shell">
+        <header className="client-topbar">
+          <div>
+            <strong>{user.email}</strong>
+            <span>{user.client_account.name}</span>
+          </div>
+          <div className="client-topbar__actions">
+            <ClientBadge tone={user.role === "client_lead" ? "good" : "neutral"}>{user.role}</ClientBadge>
+            {user.must_change_password ? <ClientBadge tone="warning">must change password</ClientBadge> : null}
+            <button type="button" className="client-button" onClick={() => void onLogout()}>Logout</button>
+          </div>
+        </header>
+        <main className="client-content">{children}</main>
+      </div>
+    </div>
+  );
+}
