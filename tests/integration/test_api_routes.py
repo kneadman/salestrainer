@@ -433,10 +433,16 @@ def test_api_create_session_uses_users_default_training_config_and_creates_owner
 def test_api_create_session_uses_persona_generation_service_for_client_config() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
-    _seed_authenticated_user(
+    _, training_config = _seed_authenticated_user(
         db_session,
         default_scenario_id="sales_audit_cold_outreach",
         product_line="outsourced_cfo",
+        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_financial_diagnostic"},
+    )
+    access_repository = AccessRepository(db_session)
+    access_repository.update_training_config(
+        training_config_id=training_config.id,
+        persona_generation_prompt="CFO persona for a company with cash-gap risk and messy reporting.",
         persona_policy={"allowed_roles": ["cfo"], "target_action": "book_financial_diagnostic"},
     )
     app = create_app(
@@ -445,9 +451,14 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
         llm_client=FakeLLMClient(),
     )
 
+    captured: dict[str, object] = {}
+
     class StubPersonaGenerationService:
         def generate_for_training_config(self, *, training_config, scenario_id):
             """Return a known generated persona so the API wiring is observable."""
+            captured["persona_generation_prompt"] = training_config.persona_generation_prompt
+            captured["llm_provider_config_id"] = training_config.llm_provider_config_id
+            captured["scenario_id"] = scenario_id
             return PersonaProfile(
                 id="llm_generated_cfo_cash_gap",
                 display_name="Unknown B2B contact",
@@ -493,6 +504,9 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert saved_session.persona.id == "llm_generated_cfo_cash_gap"
     assert saved_session.persona.role == "cfo"
     assert saved_session.interest_score == 31
+    assert captured["persona_generation_prompt"] == "CFO persona for a company with cash-gap risk and messy reporting."
+    assert captured["llm_provider_config_id"] is None
+    assert captured["scenario_id"] is None
     assert "llm_generated_cfo_cash_gap" not in response.text
 
     db_session.close()

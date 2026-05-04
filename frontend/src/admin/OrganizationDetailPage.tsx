@@ -1,25 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  productLineLabel,
-  providerLabel,
-  roleLabel,
-  scenarioLabel,
-  statusLabel as entityStatusLabel,
-} from "../labels";
+import { productLineLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
 import {
   assignTrainingConfig,
-  createLLMProviderConfig,
   createTrainingConfig,
   createUser,
-  disableLLMProviderConfig,
   disableTrainingConfig,
   disableUser,
-  enableLLMProviderConfig,
   enableTrainingConfig,
   enableUser,
   getUsageSummary,
   listAuditLog,
-  listLLMProviderConfigs,
   listOrganizationHistory,
   listOrganizations,
   listScenarios,
@@ -29,7 +19,6 @@ import {
   makeDefaultTrainingConfig,
   resetUserPassword,
   unassignTrainingConfig,
-  updateLLMProviderConfig,
   updateTrainingConfig,
   updateUser,
 } from "./api";
@@ -37,8 +26,6 @@ import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./compone
 import type {
   AuditLogDTO,
   HistorySessionSummaryDTO,
-  LLMProviderConfigDTO,
-  LLMProviderConfigPayload,
   OrganizationDTO,
   ScenarioOptionDTO,
   TrainingConfigDTO,
@@ -54,7 +41,7 @@ type OrganizationDetailPageProps = {
   onNavigate: (path: string) => void;
 };
 
-type DetailTab = "overview" | "users" | "configs" | "llm" | "history" | "usage" | "audit";
+type DetailTab = "overview" | "users" | "configs" | "history" | "usage" | "audit";
 
 type UserForm = {
   email: string;
@@ -67,70 +54,37 @@ type ConfigForm = {
   name: string;
   default_scenario_id: string;
   product_line: string;
+  persona_generation_prompt: string;
   persona_policy: string;
   ui_config: string;
   limits: string;
-  llm_provider_config_id: string;
-};
-
-type LLMForm = {
-  id?: string;
-  name: string;
-  provider: "yandex_compatible" | "openai_compatible" | "fake";
-  persona_api_key: string;
-  persona_folder_id: string;
-  persona_agent_id: string;
-  persona_master_prompt: string;
-  persona_json_template: string;
-  dialogue_api_key: string;
-  dialogue_folder_id: string;
-  dialogue_agent_id: string;
-  dialogue_master_prompt: string;
-  dialogue_json_template: string;
 };
 
 const DEFAULT_CONFIG_FORM: ConfigForm = {
   name: "",
   default_scenario_id: "generic_b2b_first_contact",
   product_line: "accounting_outsourcing",
+  persona_generation_prompt: "",
   persona_policy: "{}",
   ui_config: "{}",
   limits: "{}",
-  llm_provider_config_id: "",
-};
-
-const DEFAULT_LLM_FORM: LLMForm = {
-  name: "",
-  provider: "yandex_compatible",
-  persona_api_key: "",
-  persona_folder_id: "",
-  persona_agent_id: "",
-  persona_master_prompt: "",
-  persona_json_template: "",
-  dialogue_api_key: "",
-  dialogue_folder_id: "",
-  dialogue_agent_id: "",
-  dialogue_master_prompt: "",
-  dialogue_json_template: "",
 };
 
 const TAB_LABELS: Record<DetailTab, string> = {
   overview: "Обзор",
   users: "Пользователи",
   configs: "Конфиги",
-  llm: "LLM",
   history: "История",
   usage: "Использование",
   audit: "Аудит",
 };
 
 export function OrganizationDetailPage({ organizationId, onNavigate }: OrganizationDetailPageProps) {
-  /** Render one organization workspace with users, configs, LLM, history, usage, and audit sections. */
+  /** Render one organization workspace with users, training configs, history, usage, and audit sections. */
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
   const [organization, setOrganization] = useState<OrganizationDTO | null>(null);
   const [users, setUsers] = useState<UserDTO[]>([]);
   const [configs, setConfigs] = useState<TrainingConfigDTO[]>([]);
-  const [llmConfigs, setLlmConfigs] = useState<LLMProviderConfigDTO[]>([]);
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [usage, setUsage] = useState<UsageSummaryDTO | null>(null);
   const [audit, setAudit] = useState<AuditLogDTO[]>([]);
@@ -144,7 +98,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [resetPasswordByUser, setResetPasswordByUser] = useState<Record<string, string>>({});
   const [configForm, setConfigForm] = useState<ConfigForm>(DEFAULT_CONFIG_FORM);
-  const [llmForm, setLlmForm] = useState<LLMForm>(DEFAULT_LLM_FORM);
 
   const scenarioIds = useMemo(() => {
     /** Prefer backend scenario options but keep known ids when the list endpoint is unavailable. */
@@ -152,7 +105,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
   }, [scenarios]);
 
   const loadAll = async () => {
-    /** Load all organization detail data from available internal endpoints. */
+    /** Load all organization detail data from internal admin endpoints. */
     setLoading(true);
     setError(null);
     try {
@@ -162,10 +115,9 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       if (!selectedOrg) {
         throw new Error("Организация не найдена.");
       }
-      const [loadedUsers, loadedConfigs, loadedLlm, loadedHistory, loadedUsage, loadedAudit, loadedScenarios] = await Promise.all([
+      const [loadedUsers, loadedConfigs, loadedHistory, loadedUsage, loadedAudit, loadedScenarios] = await Promise.all([
         listUsers(organizationId),
         listTrainingConfigs(organizationId),
-        listLLMProviderConfigs(organizationId),
         listOrganizationHistory(organizationId, { limit: 50, offset: 0 }).catch(() => []),
         getUsageSummary(organizationId).catch(() => null),
         listAuditLog({ organization_id: organizationId, limit: 50, offset: 0 }).catch(() => []),
@@ -173,7 +125,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       ]);
       setUsers(loadedUsers);
       setConfigs(loadedConfigs);
-      setLlmConfigs(loadedLlm);
       setHistory(loadedHistory);
       setUsage(loadedUsage);
       setAudit(loadedAudit);
@@ -266,10 +217,11 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       name: configForm.name,
       default_scenario_id: configForm.default_scenario_id,
       product_line: configForm.product_line,
+      persona_generation_prompt: configForm.persona_generation_prompt,
       persona_policy: parseJsonObject(configForm.persona_policy, "persona_policy"),
       ui_config: parseJsonObject(configForm.ui_config, "ui_config"),
       limits: parseJsonObject(configForm.limits, "limits"),
-      llm_provider_config_id: configForm.llm_provider_config_id || null,
+      llm_provider_config_id: null,
     };
   };
 
@@ -310,69 +262,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
         await enableTrainingConfig(config.id);
       }
       setSuccess(config.is_active ? "Тренировочный конфиг отключён." : "Тренировочный конфиг включён.");
-      await loadAll();
-    } catch (toggleError) {
-      setError(getErrorMessage(toggleError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitLlm = async (event: FormEvent<HTMLFormElement>) => {
-    /** Create or update an LLM config without sending blank API keys on update. */
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    setSuccess(null);
-    const payload: LLMProviderConfigPayload = {
-      name: llmForm.name,
-      provider: llmForm.provider,
-      persona_folder_id: llmForm.persona_folder_id || null,
-      persona_agent_id: llmForm.persona_agent_id || null,
-      persona_master_prompt: llmForm.persona_master_prompt || null,
-      persona_json_template: llmForm.persona_json_template || null,
-      dialogue_folder_id: llmForm.dialogue_folder_id || null,
-      dialogue_agent_id: llmForm.dialogue_agent_id || null,
-      dialogue_master_prompt: llmForm.dialogue_master_prompt || null,
-      dialogue_json_template: llmForm.dialogue_json_template || null,
-    };
-    if (llmForm.persona_api_key.trim()) {
-      payload.persona_api_key = llmForm.persona_api_key;
-    }
-    if (llmForm.dialogue_api_key.trim()) {
-      payload.dialogue_api_key = llmForm.dialogue_api_key;
-    }
-    try {
-      if (llmForm.id) {
-        await updateLLMProviderConfig(llmForm.id, payload);
-        setSuccess("LLM-настройки обновлены.");
-      } else {
-        await createLLMProviderConfig(organizationId, payload);
-        setSuccess("LLM-настройки созданы.");
-      }
-      setLlmForm(DEFAULT_LLM_FORM);
-      await loadAll();
-    } catch (submitError) {
-      setError(getErrorMessage(submitError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const toggleLlm = async (config: LLMProviderConfigDTO) => {
-    /** Enable or disable one LLM config after confirmation for disable. */
-    if (config.is_active && !window.confirm(`Отключить LLM-настройки ${config.name}?`)) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      if (config.is_active) {
-        await disableLLMProviderConfig(config.id);
-      } else {
-        await enableLLMProviderConfig(config.id);
-      }
-      setSuccess(config.is_active ? "LLM-настройки отключены." : "LLM-настройки включены.");
       await loadAll();
     } catch (toggleError) {
       setError(getErrorMessage(toggleError));
@@ -434,14 +323,14 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       {error ? <div className="admin-alert admin-alert--error">{error}</div> : null}
       {success ? <div className="admin-alert">{success}</div> : null}
       <div className="admin-tabs">
-        {(["overview", "users", "configs", "llm", "history", "usage", "audit"] as DetailTab[]).map((tab) => (
+        {(["overview", "users", "configs", "history", "usage", "audit"] as DetailTab[]).map((tab) => (
           <button key={tab} type="button" className={activeTab === tab ? "admin-tab admin-tab--active" : "admin-tab"} onClick={() => setActiveTab(tab)}>
             {TAB_LABELS[tab]}
           </button>
         ))}
       </div>
       {activeTab === "overview" ? (
-        <OverviewSection organization={organization} llmCount={llmConfigs.length} usage={usage} />
+        <OverviewSection organization={organization} usage={usage} />
       ) : null}
       {activeTab === "users" ? (
         <UsersSection
@@ -464,7 +353,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       {activeTab === "configs" ? (
         <ConfigsSection
           configs={configs}
-          llmConfigs={llmConfigs}
           scenarioIds={scenarioIds}
           form={configForm}
           setForm={setConfigForm}
@@ -473,9 +361,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
           onToggle={toggleConfig}
         />
       ) : null}
-      {activeTab === "llm" ? (
-        <LLMSection configs={llmConfigs} form={llmForm} setForm={setLlmForm} busy={busy} onSubmit={submitLlm} onToggle={toggleLlm} />
-      ) : null}
       {activeTab === "history" ? <HistorySection history={history} onNavigate={onNavigate} /> : null}
       {activeTab === "usage" ? <UsageSection usage={usage} /> : null}
       {activeTab === "audit" ? <AuditSection audit={audit} /> : null}
@@ -483,17 +368,25 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
   );
 }
 
-function OverviewSection({ organization, llmCount, usage }: { organization: OrganizationDTO; llmCount: number; usage: UsageSummaryDTO | null }) {
-  /** Render organization summary cards and usage teaser. */
+function OverviewSection({ organization, usage }: { organization: OrganizationDTO; usage: UsageSummaryDTO | null }) {
+  /** Render organization summary cards and MVP LLM architecture note. */
   return (
-    <section className="admin-stats-grid">
-      <StatCard label="Пользователи" value={organization.users_count} detail={`${organization.active_users_count} активны`} />
-      <StatCard label="Тренировочные конфиги" value={organization.training_configs_count} />
-      <StatCard label="LLM-настройки" value={llmCount} />
-      <StatCard label="Всего сессий" value={usage?.total_sessions ?? "—"} />
-      <StatCard label="Завершено сессий" value={usage?.finished_sessions ?? "—"} />
-      <StatCard label="Всего сообщений" value={usage?.total_turns ?? "—"} />
-    </section>
+    <>
+      <section className="admin-stats-grid">
+        <StatCard label="Пользователи" value={organization.users_count} detail={`${organization.active_users_count} активны`} />
+        <StatCard label="Тренировочные конфиги" value={organization.training_configs_count} />
+        <StatCard label="Всего сессий" value={usage?.total_sessions ?? "—"} />
+        <StatCard label="Завершено сессий" value={usage?.finished_sessions ?? "—"} />
+        <StatCard label="Всего сообщений" value={usage?.total_turns ?? "—"} />
+      </section>
+      <section className="admin-panel">
+        <div className="admin-panel__header"><h2>MVP LLM flow</h2></div>
+        <p className="admin-muted">
+          Для MVP организация настраивает только бизнес-контекст тренировки. Глобальные Yandex API key, persona agent и
+          dialogue agent берутся из конфигурации приложения и не редактируются в UI организации.
+        </p>
+      </section>
+    </>
   );
 }
 
@@ -513,57 +406,30 @@ function UsersSection(props: {
   onReset: (user: UserDTO) => void;
   onAssignment: (userId: string, configId: string, action: "assign" | "default" | "unassign") => void;
 }) {
-  /** Render user management and per-user training config assignment controls. */
+  /** Render user form, assignments, and reset-password actions. */
   return (
     <section className="admin-panel">
       <div className="admin-panel__header"><h2>Пользователи</h2></div>
-      <form className="admin-form admin-form--inline" onSubmit={props.onSubmit}>
-        <label>
-          <span>Email</span>
-          <input type="email" value={props.userForm.email} onChange={(event) => props.setUserForm({ ...props.userForm, email: event.target.value })} required />
-        </label>
-        {!props.editingUserId ? (
-          <label>
-            <span>Временный пароль</span>
-            <input type="password" minLength={8} value={props.userForm.password} onChange={(event) => props.setUserForm({ ...props.userForm, password: event.target.value })} required />
-          </label>
-        ) : null}
-        <label>
-          <span>Роль</span>
-          <select value={props.userForm.role} onChange={(event) => props.setUserForm({ ...props.userForm, role: event.target.value as UserForm["role"] })}>
-            <option value="client_manager">Менеджер</option>
-            <option value="client_lead">Руководитель</option>
-          </select>
-        </label>
-        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.editingUserId ? "Обновить" : "Создать"}</button>
+      <form className="admin-form admin-form--stacked" onSubmit={props.onSubmit}>
+        <div className="admin-form-grid">
+          <label><span>Email</span><input type="email" value={props.userForm.email} onChange={(event) => props.setUserForm({ ...props.userForm, email: event.target.value })} required /></label>
+          <label><span>Пароль</span><input type="password" minLength={8} value={props.userForm.password} onChange={(event) => props.setUserForm({ ...props.userForm, password: event.target.value })} required={!props.editingUserId} /></label>
+          <label><span>Роль</span><select value={props.userForm.role} onChange={(event) => props.setUserForm({ ...props.userForm, role: event.target.value as UserForm["role"] })}><option value="client_manager">Менеджер</option><option value="client_lead">Руководитель</option></select></label>
+        </div>
+        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.editingUserId ? "Обновить пользователя" : "Создать пользователя"}</button>
       </form>
       {props.users.length === 0 ? <EmptyState title="Пользователей нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Пароль</th><th>Назначения</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Конфиги</th><th>Пароль</th><th>Действия</th></tr></thead>
             <tbody>
               {props.users.map((user) => {
                 const assignments = props.assignmentsByUser[user.id] ?? [];
                 return (
                   <tr key={user.id}>
                     <td>{user.email}</td>
-                    <td><Badge>{roleLabel(user.role)}</Badge></td>
-                    <td>
-                      <Badge tone={user.is_active ? "good" : "danger"}>{statusLabel(user.is_active)}</Badge>
-                      {user.must_change_password ? <Badge tone="warning">сменить пароль</Badge> : null}
-                    </td>
-                    <td>
-                      <div className="admin-password-reset">
-                        <input
-                          type="password"
-                          placeholder="Новый временный пароль"
-                          minLength={8}
-                          value={props.resetPasswordByUser[user.id] ?? ""}
-                          onChange={(event) => props.setResetPasswordByUser({ ...props.resetPasswordByUser, [user.id]: event.target.value })}
-                        />
-                        <button type="button" className="admin-link-button" onClick={() => props.onReset(user)}>Сбросить</button>
-                      </div>
-                    </td>
+                    <td>{roleLabel(user.role)}</td>
+                    <td><Badge tone={user.is_active ? "good" : "danger"}>{statusLabel(user.is_active)}</Badge></td>
                     <td>
                       <div className="admin-assignment-list">
                         {props.configs.map((config) => {
@@ -579,6 +445,18 @@ function UsersSection(props: {
                             </div>
                           );
                         })}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="admin-password-reset">
+                        <input
+                          type="password"
+                          placeholder="Новый временный пароль"
+                          minLength={8}
+                          value={props.resetPasswordByUser[user.id] ?? ""}
+                          onChange={(event) => props.setResetPasswordByUser({ ...props.resetPasswordByUser, [user.id]: event.target.value })}
+                        />
+                        <button type="button" className="admin-link-button" onClick={() => props.onReset(user)}>Сбросить</button>
                       </div>
                     </td>
                     <td>
@@ -603,7 +481,6 @@ function UsersSection(props: {
 
 function ConfigsSection(props: {
   configs: TrainingConfigDTO[];
-  llmConfigs: LLMProviderConfigDTO[];
   scenarioIds: string[];
   form: ConfigForm;
   setForm: (form: ConfigForm) => void;
@@ -611,7 +488,7 @@ function ConfigsSection(props: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggle: (config: TrainingConfigDTO) => void;
 }) {
-  /** Render training config form, JSON fields, and config list. */
+  /** Render training config form, prompt field, JSON fields, and config list. */
   return (
     <section className="admin-panel">
       <div className="admin-panel__header"><h2>Тренировочные конфиги</h2></div>
@@ -620,10 +497,21 @@ function ConfigsSection(props: {
           <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
           <label><span>Сценарий</span><select value={props.form.default_scenario_id} onChange={(event) => props.setForm({ ...props.form, default_scenario_id: event.target.value })}>{props.scenarioIds.map((id) => <option key={id} value={id}>{scenarioLabel(id)}</option>)}</select></label>
           <label><span>Продукт</span><select value={props.form.product_line} onChange={(event) => props.setForm({ ...props.form, product_line: event.target.value })}><option value="accounting_outsourcing">Бухгалтерский аутсорсинг</option><option value="outsourced_cfo">Финансовый директор на аутсорсинге</option></select></label>
-          <label><span>LLM-настройки</span><select value={props.form.llm_provider_config_id} onChange={(event) => props.setForm({ ...props.form, llm_provider_config_id: event.target.value })}><option value="">Глобальная runtime-модель / не выбрано</option>{props.llmConfigs.map((config) => <option key={config.id} value={config.id}>{config.name}</option>)}</select></label>
         </div>
+        <label>
+          <span>Промпт генерации личности</span>
+          <textarea
+            rows={8}
+            value={props.form.persona_generation_prompt}
+            onChange={(event) => props.setForm({ ...props.form, persona_generation_prompt: event.target.value })}
+          />
+          <small className="admin-muted">
+            Опишите продукт, ЦА, типовые роли ЛПР, боли, возражения, критерии выбора и ограничения. Этот текст
+            отправляется в глобальный Yandex persona generator как бизнес-контекст.
+          </small>
+        </label>
         <div className="admin-json-grid">
-          <label><span>Политика персоны JSON</span><textarea value={props.form.persona_policy} onChange={(event) => props.setForm({ ...props.form, persona_policy: event.target.value })} /></label>
+          <label><span>Дополнительные JSON-настройки личности</span><textarea value={props.form.persona_policy} onChange={(event) => props.setForm({ ...props.form, persona_policy: event.target.value })} /></label>
           <label><span>UI-конфиг JSON</span><textarea value={props.form.ui_config} onChange={(event) => props.setForm({ ...props.form, ui_config: event.target.value })} /></label>
           <label><span>Лимиты JSON</span><textarea value={props.form.limits} onChange={(event) => props.setForm({ ...props.form, limits: event.target.value })} /></label>
         </div>
@@ -632,17 +520,36 @@ function ConfigsSection(props: {
       {props.configs.length === 0 ? <EmptyState title="Тренировочных конфигов нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Название</th><th>Сценарий</th><th>Продукт</th><th>Статус</th><th>LLM</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Название</th><th>Сценарий</th><th>Продукт</th><th>Промпт</th><th>Статус</th><th>Действия</th></tr></thead>
             <tbody>
               {props.configs.map((config) => (
                 <tr key={config.id}>
-                  <td>{config.name}</td><td>{scenarioLabel(config.default_scenario_id)}</td><td>{productLineLabel(config.product_line)}</td>
+                  <td>{config.name}</td>
+                  <td>{scenarioLabel(config.default_scenario_id)}</td>
+                  <td>{productLineLabel(config.product_line)}</td>
+                  <td>{config.persona_generation_prompt ? `${config.persona_generation_prompt.slice(0, 120)}${config.persona_generation_prompt.length > 120 ? "..." : ""}` : "—"}</td>
                   <td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td>
-                  <td>{props.llmConfigs.find((item) => item.id === config.llm_provider_config_id)?.name ?? "—"}</td>
-                  <td><div className="admin-row-actions">
-                    <button type="button" className="admin-link-button" onClick={() => props.setForm({ id: config.id, name: config.name, default_scenario_id: config.default_scenario_id, product_line: config.product_line, persona_policy: stringifyJson(config.persona_policy), ui_config: stringifyJson(config.ui_config), limits: stringifyJson(config.limits), llm_provider_config_id: config.llm_provider_config_id ?? "" })}>Изменить</button>
-                    <button type="button" className="admin-link-button" onClick={() => props.onToggle(config)}>{config.is_active ? "Отключить" : "Включить"}</button>
-                  </div></td>
+                  <td>
+                    <div className="admin-row-actions">
+                      <button
+                        type="button"
+                        className="admin-link-button"
+                        onClick={() => props.setForm({
+                          id: config.id,
+                          name: config.name,
+                          default_scenario_id: config.default_scenario_id,
+                          product_line: config.product_line,
+                          persona_generation_prompt: config.persona_generation_prompt,
+                          persona_policy: stringifyJson(config.persona_policy),
+                          ui_config: stringifyJson(config.ui_config),
+                          limits: stringifyJson(config.limits),
+                        })}
+                      >
+                        Изменить
+                      </button>
+                      <button type="button" className="admin-link-button" onClick={() => props.onToggle(config)}>{config.is_active ? "Отключить" : "Включить"}</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -653,59 +560,10 @@ function ConfigsSection(props: {
   );
 }
 
-function LLMSection(props: {
-  configs: LLMProviderConfigDTO[];
-  form: LLMForm;
-  setForm: (form: LLMForm) => void;
-  busy: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onToggle: (config: LLMProviderConfigDTO) => void;
-}) {
-  /** Render LLM provider config form and secret-safe config list. */
-  return (
-    <section className="admin-panel">
-      <div className="admin-panel__header"><h2>LLM-настройки</h2></div>
-      <form className="admin-form admin-form--stacked" onSubmit={props.onSubmit}>
-        <p className="admin-muted">Base URL Yandex задается глобально и одинаков для всех клиентов.</p>
-        <p className="admin-muted">Пустое поле API key при сохранении не меняет текущий ключ.</p>
-        <p className="admin-muted">Ключ хранится зашифрованно и полностью не отображается.</p>
-        <div className="admin-form-grid">
-          <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
-          <label><span>Провайдер</span><select value={props.form.provider} onChange={(event) => props.setForm({ ...props.form, provider: event.target.value as LLMForm["provider"] })}><option value="yandex_compatible">Yandex AI Studio</option><option value="openai_compatible">OpenAI-compatible</option><option value="fake">Локальная тестовая модель</option></select></label>
-        </div>
-        <div className="admin-json-grid">
-          <fieldset className="admin-fieldset">
-            <legend>Генерация личности</legend>
-            <label><span>API key</span><input type="password" value={props.form.persona_api_key} onChange={(event) => props.setForm({ ...props.form, persona_api_key: event.target.value })} /></label>
-            <label><span>Agent ID</span><input value={props.form.persona_agent_id} onChange={(event) => props.setForm({ ...props.form, persona_agent_id: event.target.value })} /></label>
-            <label><span>Folder ID</span><input value={props.form.persona_folder_id} onChange={(event) => props.setForm({ ...props.form, persona_folder_id: event.target.value })} /></label>
-            <label><span>Master prompt</span><textarea value={props.form.persona_master_prompt} onChange={(event) => props.setForm({ ...props.form, persona_master_prompt: event.target.value })} /></label>
-            <label><span>JSON template</span><textarea value={props.form.persona_json_template} onChange={(event) => props.setForm({ ...props.form, persona_json_template: event.target.value })} /></label>
-          </fieldset>
-          <fieldset className="admin-fieldset">
-            <legend>Диалоговая модель</legend>
-            <label><span>API key</span><input type="password" value={props.form.dialogue_api_key} onChange={(event) => props.setForm({ ...props.form, dialogue_api_key: event.target.value })} /></label>
-            <label><span>Agent ID</span><input value={props.form.dialogue_agent_id} onChange={(event) => props.setForm({ ...props.form, dialogue_agent_id: event.target.value })} /></label>
-            <label><span>Folder ID</span><input value={props.form.dialogue_folder_id} onChange={(event) => props.setForm({ ...props.form, dialogue_folder_id: event.target.value })} /></label>
-            <label><span>Master prompt</span><textarea value={props.form.dialogue_master_prompt} onChange={(event) => props.setForm({ ...props.form, dialogue_master_prompt: event.target.value })} /></label>
-            <label><span>JSON template</span><textarea value={props.form.dialogue_json_template} onChange={(event) => props.setForm({ ...props.form, dialogue_json_template: event.target.value })} /></label>
-          </fieldset>
-        </div>
-        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Сохранить LLM-настройки" : "Создать LLM-настройки"}</button>
-      </form>
-      {props.configs.length === 0 ? <EmptyState title="LLM-настройки не созданы" /> : (
-        <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Название</th><th>Провайдер</th><th>Статус</th><th>Генерация личности</th><th>Диалоговая модель</th><th>Действия</th></tr></thead><tbody>{props.configs.map((config) => (
-          <tr key={config.id}><td>{config.name}</td><td>{providerLabel(config.provider)}</td><td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td><td>{config.has_persona_api_key ? config.persona_api_key_preview ?? "ключ скрыт" : "не настроено"}<br />{config.persona_folder_id ?? "Folder ID не настроен"}<br />{config.persona_agent_id ?? "Agent ID не настроен"}</td><td>{config.has_dialogue_api_key ? config.dialogue_api_key_preview ?? "ключ скрыт" : "не настроено"}<br />{config.dialogue_folder_id ?? "Folder ID не настроен"}<br />{config.dialogue_agent_id ?? "Agent ID не настроен"}</td><td><div className="admin-row-actions"><button type="button" className="admin-link-button" onClick={() => props.setForm({ id: config.id, name: config.name, provider: config.provider === "openai_compatible" || config.provider === "fake" ? config.provider : "yandex_compatible", persona_api_key: "", persona_folder_id: config.persona_folder_id ?? "", persona_agent_id: config.persona_agent_id ?? "", persona_master_prompt: config.persona_master_prompt ?? "", persona_json_template: config.persona_json_template ?? "", dialogue_api_key: "", dialogue_folder_id: config.dialogue_folder_id ?? "", dialogue_agent_id: config.dialogue_agent_id ?? "", dialogue_master_prompt: config.dialogue_master_prompt ?? "", dialogue_json_template: config.dialogue_json_template ?? "" })}>Изменить</button><button type="button" className="admin-link-button" onClick={() => props.onToggle(config)}>{config.is_active ? "Отключить" : "Включить"}</button></div></td></tr>
-        ))}</tbody></table></div>
-      )}
-    </section>
-  );
-}
-
 function HistorySection({ history, onNavigate }: { history: HistorySessionSummaryDTO[]; onNavigate: (path: string) => void }) {
   /** Render persistent training history rows without hidden snapshots. */
   if (history.length === 0) {
-    return <EmptyState title="История тренировок пуста" detail="История появится после первых сохраненных тренировок." />;
+    return <EmptyState title="История тренировок пуста" detail="История появится после первых сохранённых тренировок." />;
   }
   return <section className="admin-panel"><div className="admin-panel__header"><h2>История тренировок</h2></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>ID сессии</th><th>Пользователь</th><th>Статус</th><th>Сценарий</th><th>Сообщения</th><th>Интерес</th><th>Начало</th><th>Действия</th></tr></thead><tbody>{history.map((session) => <tr key={session.session_id}><td>{session.session_id.slice(0, 8)}</td><td>{session.user_email}</td><td><Badge>{entityStatusLabel(session.status)}</Badge></td><td>{scenarioLabel(session.scenario_id)}</td><td>{session.turn_count}</td><td>{session.final_interest_score ?? "—"}</td><td>{formatDate(session.started_at)}</td><td><button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/history/sessions/${session.session_id}`)}>Открыть</button></td></tr>)}</tbody></table></div></section>;
 }

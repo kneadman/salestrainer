@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     yandex_api_key: str = ""
     yandex_folder_id: str = ""
     yandex_agent_id: str = ""
+    yandex_persona_folder_id: str = ""
+    yandex_persona_agent_id: str = ""
+    yandex_dialogue_folder_id: str = ""
+    yandex_dialogue_agent_id: str = ""
     yandex_base_url: str = "https://ai.api.cloud.yandex.net/v1"
     recent_turn_limit: int = Field(default=6, ge=1, le=20)
     persona_random_seed: int | None = None

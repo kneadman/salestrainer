@@ -149,6 +149,7 @@ class PersonaGenerationInput(BaseModel):
     product_line: str
     scenario: Scenario
     training_config_name: str | None = None
+    persona_generation_prompt: str = ""
     persona_policy: dict[str, Any] = Field(default_factory=dict)
     organization_context: dict[str, Any] = Field(default_factory=dict)
     target_action: str | None = None

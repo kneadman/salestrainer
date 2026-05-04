@@ -140,7 +140,7 @@ Internal admin foundation includes:
 - organizations: list/create/detail/update/disable/enable via `/api/internal/organizations`
 - organization users: create `client_lead` / `client_manager`, update, disable/enable, reset temporary password
 - training configs: create/update/disable/enable and assign/unassign/make-default per user
-- LLM provider configs: create/update/disable/enable organization-scoped provider settings
+- legacy LLM provider config endpoints remain available for future/internal use, but are not part of the MVP training flow
 - audit log: `GET /api/internal/audit-log`
 
 Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. Billing is not implemented.
@@ -162,12 +162,11 @@ Access rules:
 
 Admin UI sections:
 
-- Dashboard: organization totals, users/config counts, LLM config count, usage totals, latest audit events;
+- Dashboard: organization totals, users/config counts, usage totals, latest audit events;
 - Organizations: list/search/create/edit/enable/disable organizations;
-- Organization detail: overview, users, training configs, LLM settings, history, usage, audit;
+- Organization detail: overview, users, training configs, history, usage, audit;
 - Users: create/update users, reset temporary passwords, enable/disable, assign/default/unassign training configs;
-- Training Configs: create/update/enable/disable configs with client-side JSON validation;
-- LLM Settings: create/update/enable/disable provider configs, showing only masked API key preview;
+- Training Configs: create/update/enable/disable configs with client-side JSON validation and `persona_generation_prompt`;
 - Training History: persistent history list and public-safe session detail;
 - Usage Analytics: basic usage summary from persistent history;
 - Audit Log: filterable audit events with compact JSON payload display.
@@ -244,20 +243,37 @@ POST /auth/change-password
 
 The endpoint requires auth cookie and CSRF token, verifies the current password, stores only an Argon2id hash, clears `must_change_password`, and writes an audit record.
 
-## Secret config strategy
+## MVP LLM model
 
-Organization-level LLM provider configs are stored in PostgreSQL in `llm_provider_configs`. Plain API keys are accepted only in request bodies and are never returned in API responses or audit payloads.
+MVP runtime no longer depends on organization-level `llm_provider_config_id`.
 
-`llm_provider_config_id` can be stored on a training config and managed through internal admin API. It is now used by the persona generation flow when a client starts a new authenticated API training session. Runtime dialogue turns still use the globally configured dialogue LLM client from environment settings; per-organization/per-config dialogue LLM selection is not wired into the simulator flow yet.
+- One global `YANDEX_API_KEY` is configured in `.env`.
+- One global persona generator agent is configured in `.env`.
+- One global dialogue agent is configured in `.env`.
+- `persona_generation_prompt` is stored on `client_training_configs` and edited only by `internal_admin`.
+- Persona and dialogue master prompts plus JSON templates live inside Yandex Agents, not in the service database.
+- Backend still validates provider JSON through Pydantic and business rules before it touches runtime state.
 
-For demo-ready Yandex setup, one LLM config contains two Yandex AI Studio sets:
+Recommended environment variables:
 
-- Persona generation: API key, Agent ID, Folder ID, master prompt, JSON template.
-- Dialogue model: API key, Agent ID, Folder ID, master prompt, JSON template.
+```bash
+set LLM_BACKEND=yandex_compatible
+set YANDEX_API_KEY=...
+set YANDEX_BASE_URL=https://ai.api.cloud.yandex.net/v1
+set YANDEX_PERSONA_FOLDER_ID=...
+set YANDEX_PERSONA_AGENT_ID=...
+set YANDEX_DIALOGUE_FOLDER_ID=...
+set YANDEX_DIALOGUE_AGENT_ID=...
+```
 
-`YANDEX_BASE_URL` is global and is not edited per client in the admin UI. Provider defaults to `yandex_compatible`. API keys are encrypted at rest with `SECRET_ENCRYPTION_KEY`; responses expose only `has_persona_api_key`, `persona_api_key_preview`, `has_dialogue_api_key`, and `dialogue_api_key_preview`. Blank API key fields on update keep the existing keys. The persona set is already used for LLM persona generation. The dialogue set is saved and visible for the configured training flow; runtime dialogue still uses the global dialogue resolver until the per-client resolver is implemented.
+Legacy fallback variables are still supported:
 
-API responses expose only key flags and masked previews for the persona and dialogue sets; plain API keys are never returned.
+```bash
+set YANDEX_FOLDER_ID=...
+set YANDEX_AGENT_ID=...
+```
+
+`llm_provider_configs` and `/api/internal/*/llm-provider-configs` remain in the backend as legacy/future-enterprise groundwork, but the MVP runtime and primary admin UI do not use them.
 
 ## LLM Persona Generation
 
@@ -272,6 +288,7 @@ Generation input is normalized into `PersonaGenerationInput`:
 
 - product line and scenario;
 - training config name;
+- `persona_generation_prompt` business context;
 - free-form `persona_policy`;
 - optional organization context, target action, allowed roles/product lines, training goal, difficulty, seed, and constraints.
 
@@ -280,9 +297,9 @@ Generation output must validate as `PersonaGenerationOutput` and contain a Pydan
 Provider behavior:
 
 - `fake` provider uses the legacy Python `PersonaGenerator`.
-- `yandex_compatible` and `openai_compatible` use a structured Responses API request with the stored organization provider config.
-- Missing provider config falls back to the legacy Python generator only when local/fake fallback is allowed.
-- API keys are decrypted server-side only for the provider call and are never logged or returned.
+- `yandex_compatible` uses the global persona agent from `.env`.
+- If `persona_generation_prompt` is empty, local mode can fall back to the legacy Python generator; production-like mode returns a controlled configuration error.
+- API keys are read from environment settings, are never logged in full, and are never returned.
 
 Security notes:
 
@@ -298,15 +315,13 @@ set SECRET_ENCRYPTION_KEY=replace-with-random-32-plus-character-secret
 
 In `APP_ENV=local`, a development fallback key is available for local tests and demos. Outside local environment, operations that encrypt/decrypt provider secrets require `SECRET_ENCRYPTION_KEY`.
 
-Optional experimental provider path:
-
-These Yandex environment variables are the legacy/global runtime LLM configuration. They do not select the new organization-level `llm_provider_config_id` for a training dialog yet.
+Dialogue runtime uses the same global API key and base URL, plus dialogue-specific routing:
 
 ```bash
 set LLM_BACKEND=yandex_compatible
 set YANDEX_API_KEY=...
-set YANDEX_FOLDER_ID=...
-set YANDEX_AGENT_ID=fvtpps65vhjr2j1qul0a
+set YANDEX_DIALOGUE_FOLDER_ID=...
+set YANDEX_DIALOGUE_AGENT_ID=...
 python -m app.cli.main
 ```
 
@@ -357,20 +372,19 @@ python -m app.admin.cli create-internal-admin --client-name "Platform" --client-
 
 4. Open `http://localhost:8080/login`, sign in, then open `/admin`.
 5. Create an organization.
-6. Create LLM settings with two Yandex sets: persona generation and dialogue model. For a local demo without real credentials, use the fake provider path.
-7. Create a training config and attach the LLM settings.
-8. Create a client manager or lead user.
-9. Assign the training config to the user and mark it as default.
-10. Sign in as the client user.
-11. Open `/app/trainer`.
-12. Start a training and send at least one manager message.
-13. Finish the session.
-14. Open `/app/history`, the saved report, and `/app/analytics`.
+6. Create a training config and fill `persona_generation_prompt`.
+7. Create a client manager or lead user.
+8. Assign the training config to the user and mark it as default.
+9. Sign in as the client user.
+10. Open `/app/trainer`.
+11. Start a training and send at least one manager message.
+12. Finish the session.
+13. Open `/app/history`, the saved report, and `/app/analytics`.
 
 Demo notes:
 
-- The persona-generation Yandex set is used by authenticated session creation.
-- The dialogue Yandex set is stored in the config for the dialogue flow, but runtime dialogue turns may still use the global dialogue resolver until per-client dialogue selection is wired.
+- Authenticated session creation uses the global persona agent from `.env`.
+- Runtime dialogue turns use the global dialogue agent from `.env`.
 - Landing form submissions are persisted in `landing_leads`.
 - `/app/balance` is a usage placeholder, not billing or payment processing.
 
@@ -586,15 +600,15 @@ Each generated client profile includes:
 - urgency
 - trust_baseline
 
-For production client API sessions, prefer configuring `persona_policy` and an organization LLM provider config. To improve the fallback path, extend the role templates in that module with new combinations of role, pains, context, and constraints.
+For production client API sessions, prefer configuring `persona_generation_prompt` plus optional `persona_policy`. To improve the fallback path, extend the role templates in that module with new combinations of role, pains, context, and constraints.
 
 ## MVP limitations
 
 - A live Yandex cloud smoke test is not part of this iteration.
-- Dialogue LLM per-client runtime selection for `llm_provider_config_id` is the next step if organization-specific dialogue models are required.
 - Real Yandex/OpenAI API is not connected to the working flow
 - Yandex adapter now follows the AI Studio `OpenAI(...).responses.create(...)` contract and is covered by mocked request/response tests, but is still not verified here against a live cloud account
-- The local `client_simulator.md` file is not injected into Yandex runtime requests; the remote agent remains the runtime prompt source for that backend
+- The local `client_simulator.md` file is not injected into Yandex runtime requests; the remote dialogue agent remains the runtime prompt source
+- Legacy `llm_provider_configs` still exist in the backend, but the primary MVP flow does not use them
 - CLI still uses a simple terminal flow
 - Reports and evaluator scores are rule-based, not judge-model based
 - Session resume across process restarts requires Redis; in-memory mode is process-local and does not survive restarts
@@ -603,6 +617,6 @@ For production client API sessions, prefer configuring `persona_policy` and an o
 ## Next step roadmap
 
 1. Client/Admin analytics API hardening with focused frontend tests and richer filtering
-2. Per-client dialogue LLM runtime resolver for `llm_provider_config_id`
+2. Prompt examples, stricter startup validation, and wider regression coverage for hidden-field safety
 3. Real billing/limits model for organization usage
 4. Provider retry/backoff and prompt/schema versioning

@@ -74,6 +74,7 @@ export type TrainingConfigDTO = {
   is_active: boolean;
   default_scenario_id: string;
   product_line: string;
+  persona_generation_prompt: string;
   persona_policy: JsonObject;
   ui_config: JsonObject;
   limits: JsonObject;
@@ -86,6 +87,7 @@ export type TrainingConfigPayload = {
   name: string;
   default_scenario_id: string;
   product_line: string;
+  persona_generation_prompt: string;
   persona_policy: JsonObject;
   ui_config: JsonObject;
   limits: JsonObject;

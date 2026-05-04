@@ -534,7 +534,9 @@ def build_llm_client(settings: Settings) -> LLMClient:
     if backend == "fake":
         return FakeLLMClient()
     if backend == "yandex_compatible":
-        if not all([settings.yandex_api_key, settings.yandex_folder_id, settings.yandex_agent_id]):
+        folder_id = settings.yandex_dialogue_folder_id or settings.yandex_folder_id
+        agent_id = settings.yandex_dialogue_agent_id or settings.yandex_agent_id
+        if not all([settings.yandex_api_key, folder_id, agent_id]):
             if _should_allow_fake_fallback(settings):
                 logger.warning("llm_backend_incomplete_config backend=%s fallback=fake", backend)
                 return FakeLLMClient()
@@ -544,8 +546,8 @@ def build_llm_client(settings: Settings) -> LLMClient:
         return YandexCompatibleLLMClient(
             base_url=settings.yandex_base_url,
             api_key=settings.yandex_api_key,
-            folder_id=settings.yandex_folder_id,
-            agent_id=settings.yandex_agent_id,
+            folder_id=folder_id,
+            agent_id=agent_id,
             timeout_seconds=settings.llm_request_timeout_seconds,
             max_retries=1,
             fallback_client=FakeLLMClient() if _should_allow_fake_fallback(settings) else None,
