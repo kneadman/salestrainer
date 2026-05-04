@@ -67,56 +67,56 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   }, [organizations, usageSummaries]);
 
   if (loading) {
-    return <LoadingState title="Loading dashboard" detail="Fetching organizations, audit log, and usage summaries." />;
+    return <LoadingState title="Загрузка панели" detail="Получаем организации, аудит и сводки использования." />;
   }
 
   if (error) {
-    return <ErrorState title="Dashboard unavailable" detail={error} />;
+    return <ErrorState title="Панель недоступна" detail={error} />;
   }
 
   return (
     <div className="admin-page">
       <div className="admin-page__header">
         <div>
-          <span className="admin-kicker">Internal admin</span>
-          <h1>Dashboard</h1>
+          <span className="admin-kicker">Внутреннее администрирование</span>
+          <h1>Панель управления</h1>
         </div>
         <div className="admin-actions">
           <button type="button" className="admin-button admin-button--primary" onClick={() => onNavigate("/admin/organizations")}>
-            Create organization
+            Создать организацию
           </button>
           <button type="button" className="admin-button" onClick={() => onNavigate("/admin/audit-log")}>
-            Audit log
+            Журнал аудита
           </button>
         </div>
       </div>
       <section className="admin-stats-grid">
-        <StatCard label="Organizations" value={totals.organizations} detail={`${totals.activeOrganizations} active`} />
-        <StatCard label="Users" value={totals.users} detail="Across all organizations" />
-        <StatCard label="Training configs" value={totals.trainingConfigs} />
-        <StatCard label="LLM provider configs" value={llmCount} />
-        <StatCard label="Total sessions" value={totals.totalSessions} detail={`${totals.finishedSessions} finished`} />
-        <StatCard label="Total turns" value={totals.totalTurns} />
-        <StatCard label="Avg final interest" value={totals.avgInterest ?? "—"} detail="Across organizations with data" />
+        <StatCard label="Организации" value={totals.organizations} detail={`${totals.activeOrganizations} активны`} />
+        <StatCard label="Пользователи" value={totals.users} detail="По всем организациям" />
+        <StatCard label="Тренировочные конфиги" value={totals.trainingConfigs} />
+        <StatCard label="LLM-настройки" value={llmCount} />
+        <StatCard label="Всего сессий" value={totals.totalSessions} detail={`${totals.finishedSessions} завершены`} />
+        <StatCard label="Всего сообщений" value={totals.totalTurns} />
+        <StatCard label="Средний итоговый интерес" value={totals.avgInterest ?? "—"} detail="По организациям с данными" />
       </section>
       <section className="admin-panel">
         <div className="admin-panel__header">
-          <h2>Latest audit events</h2>
+          <h2>Последние события аудита</h2>
           <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/audit-log")}>
-            Open all
+            Открыть все
           </button>
         </div>
         {auditLog.length === 0 ? (
-          <EmptyState title="No audit events" detail="Audit records will appear after internal admin mutations." />
+          <EmptyState title="Событий аудита нет" detail="Записи появятся после действий администратора." />
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>Actor</th>
+                  <th>Время</th>
+                  <th>Действие</th>
+                  <th>Сущность</th>
+                  <th>Автор</th>
                 </tr>
               </thead>
               <tbody>
@@ -125,7 +125,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                     <td>{formatDate(event.created_at)}</td>
                     <td><Badge>{event.action}</Badge></td>
                     <td>{event.entity_type}</td>
-                    <td>{event.actor_user_id ?? "system"}</td>
+                    <td>{event.actor_user_id ?? "система"}</td>
                   </tr>
                 ))}
               </tbody>

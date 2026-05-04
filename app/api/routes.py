@@ -173,7 +173,15 @@ def create_session(
                 detail="persona_id is not allowed for client sessions.",
             )
 
-        training_config = access_service.get_default_training_config_for_user(current_session.user.id)
+        try:
+            training_config = access_service.get_default_training_config_for_user(current_session.user.id)
+        except LookupError as error:
+            if is_internal_admin(user_role) and request.persona_id is not None:
+                raise not_found(
+                    "Default training config is required for internal admin debug sessions."
+                ) from error
+            raise
+
         session = None
         if is_internal_admin(user_role) and request.persona_id is not None:
             session = session_service.start_session(

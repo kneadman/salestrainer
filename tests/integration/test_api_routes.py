@@ -109,6 +109,25 @@ def _create_session_for_logged_in_user(client: TestClient) -> str:
     return response.json()["session"]["session_id"]
 
 
+def _valid_lead_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "name": "Иван",
+        "email": "ivan@example.com",
+        "phone": "+79990000000",
+        "company": "ООО Ромашка",
+        "role": "Руководитель",
+        "sales_team_size": "5-10",
+        "consent_personal_data": True,
+        "consent_marketing": False,
+        "comment": "Хочу демо",
+        "query_params": {},
+        "page": "landing",
+        "form_id": "demo",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_api_session_flow() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
@@ -513,6 +532,86 @@ def test_api_leads_persist_whitelisted_query_params_and_honeypot() -> None:
     db_session.close()
 
 
+def test_api_leads_accepts_valid_payload_and_creates_row() -> None:
+    db_session = _create_db_session()
+    client = _create_client(db_session)
+
+    response = client.post("/api/leads", json=_valid_lead_payload())
+    lead = db_session.scalar(select(LandingLead))
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "accepted"}
+    assert lead is not None
+    assert lead.email == "ivan@example.com"
+    assert lead.consent_personal_data is True
+    assert lead.is_spam is False
+
+    db_session.close()
+
+
+def test_api_leads_rejects_invalid_email() -> None:
+    db_session = _create_db_session()
+    client = _create_client(db_session)
+
+    response = client.post("/api/leads", json=_valid_lead_payload(email="not-an-email"))
+
+    assert response.status_code == 422
+    assert db_session.scalar(select(LandingLead)) is None
+
+    db_session.close()
+
+
+def test_api_leads_rejects_missing_or_false_personal_data_consent() -> None:
+    db_session = _create_db_session()
+    client = _create_client(db_session)
+
+    missing_payload = _valid_lead_payload()
+    missing_payload.pop("consent_personal_data")
+    missing_response = client.post("/api/leads", json=missing_payload)
+    false_response = client.post("/api/leads", json=_valid_lead_payload(consent_personal_data=False))
+
+    assert missing_response.status_code == 422
+    assert false_response.status_code == 422
+    assert db_session.scalar(select(LandingLead)) is None
+
+    db_session.close()
+
+
+def test_api_leads_keeps_whitelisted_query_params_and_truncates_values() -> None:
+    db_session = _create_db_session()
+    client = _create_client(db_session)
+    long_value = "x" * 350
+
+    response = client.post(
+        "/api/leads",
+        json=_valid_lead_payload(
+            query_params={
+                "utm_source": long_value,
+                "utm_medium": "cpc",
+                "utm_campaign": "spring",
+                "utm_content": "hero",
+                "utm_term": "sales trainer",
+                "ref": "partner",
+                "unknown": "drop",
+            }
+        ),
+    )
+    lead = db_session.scalar(select(LandingLead))
+
+    assert response.status_code == 202
+    assert lead is not None
+    assert lead.query_params == {
+        "utm_source": long_value[:300],
+        "utm_medium": "cpc",
+        "utm_campaign": "spring",
+        "utm_content": "hero",
+        "utm_term": "sales trainer",
+        "ref": "partner",
+    }
+
+    db_session.close()
+
+
 def test_api_create_session_compensates_runtime_and_ownership_when_history_fails() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
@@ -657,7 +756,24 @@ def test_api_create_session_allows_request_persona_id_for_internal_admin() -> No
             "target_action": "book_express_audit",
         },
     )
-    client = _create_client(db_session, repository=repository)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    class FailingPersonaGenerationService:
+        def generate_for_training_config(self, **_: object) -> PersonaProfile:
+            """Fail the test if debug preset sessions call persona generation."""
+            raise AssertionError("persona generation must not run for internal admin persona_id sessions")
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        """Share the in-memory database with the tested FastAPI app."""
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_persona_generation_service] = lambda: FailingPersonaGenerationService()
+    client = TestClient(app)
     _login(client)
 
     response = client.post(
@@ -671,6 +787,8 @@ def test_api_create_session_allows_request_persona_id_for_internal_admin() -> No
     assert saved_session is not None
     assert saved_session.persona.id == "purchase_manager"
     assert saved_session.scenario_id == "accounting_outsource_cold_outreach"
+
+    db_session.close()
 
 
 def test_api_internal_admin_persona_id_without_default_config_returns_clear_error() -> None:
@@ -691,7 +809,10 @@ def test_api_internal_admin_persona_id_without_default_config_returns_clear_erro
     response = client.post("/api/sessions", json={"persona_id": "owner"})
 
     assert response.status_code == 404
-    assert "Default training config" in response.json()["error"]["message"]
+    assert (
+        response.json()["error"]["message"]
+        == "Default training config is required for internal admin debug sessions."
+    )
     assert repository._store == {}
 
     db_session.close()

@@ -105,8 +105,6 @@ export type LLMProviderConfigDTO = {
   name: string;
   provider: string;
   is_active: boolean;
-  has_api_key: boolean;
-  api_key_preview: string | null;
   has_persona_api_key: boolean;
   persona_api_key_preview: string | null;
   persona_folder_id: string | null;

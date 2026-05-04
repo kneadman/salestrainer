@@ -3,6 +3,7 @@ import type { AuthUser } from "../types";
 import { getHistorySessions, getMyAnalytics, getTeamUsageSummary } from "./api";
 import { ClientState, ClientStat } from "./components/ClientPrimitives";
 import type { ClientUserAnalyticsDTO, HistorySessionSummaryDTO, TeamUsageSummaryDTO } from "./types";
+import { scenarioLabel, statusLabel } from "../labels";
 import { formatClientDate, getClientErrorMessage } from "./utils";
 
 type DashboardPageProps = {
@@ -65,7 +66,7 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
       <section className="client-stats-grid">
         <ClientStat label="Всего тренировок" value={analytics?.total_sessions ?? 0} />
         <ClientStat label="Завершено" value={analytics?.finished_sessions ?? 0} />
-        <ClientStat label="Средний interest" value={analytics?.avg_final_interest_score?.toFixed(1) ?? "—"} />
+        <ClientStat label="Средний интерес" value={analytics?.avg_final_interest_score?.toFixed(1) ?? "—"} />
         <ClientStat label="Среднее число ходов" value={analytics?.avg_turn_count?.toFixed(1) ?? "—"} />
         <ClientStat label="Последняя активность" value={formatClientDate(analytics?.last_activity_at)} />
       </section>
@@ -74,7 +75,7 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
           <ClientStat label="Менеджеров" value={teamSummary?.users.length ?? "—"} />
           <ClientStat label="Тренировок команды" value={teamSummary?.total_sessions ?? "—"} />
           <ClientStat label="Завершено командой" value={teamSummary?.finished_sessions ?? "—"} />
-          <ClientStat label="Средний score команды" value={teamSummary?.avg_final_interest_score?.toFixed(1) ?? "—"} />
+          <ClientStat label="Средний интерес команды" value={teamSummary?.avg_final_interest_score?.toFixed(1) ?? "—"} />
         </section>
       ) : null}
       <section className="client-panel">
@@ -87,8 +88,8 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
         ) : (
           <div className="client-table-wrap">
             <table className="client-table">
-              <thead><tr><th>Дата</th><th>Статус</th><th>Сценарий</th><th>Ходы</th><th>Interest</th></tr></thead>
-              <tbody>{history.map((item) => <tr key={item.session_id}><td>{formatClientDate(item.started_at)}</td><td>{item.status}</td><td>{item.scenario_id}</td><td>{item.turn_count}</td><td>{item.final_interest_score ?? "—"}</td></tr>)}</tbody>
+              <thead><tr><th>Дата</th><th>Статус</th><th>Сценарий</th><th>Ходы</th><th>Интерес</th></tr></thead>
+              <tbody>{history.map((item) => <tr key={item.session_id}><td>{formatClientDate(item.started_at)}</td><td>{statusLabel(item.status)}</td><td>{scenarioLabel(item.scenario_id)}</td><td>{item.turn_count}</td><td>{item.final_interest_score ?? "—"}</td></tr>)}</tbody>
             </table>
           </div>
         )}

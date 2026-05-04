@@ -60,10 +60,10 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
     try {
       if (form.id) {
         await updateOrganization(form.id, { name: form.name, slug: form.slug });
-        setSuccess("Organization updated.");
+        setSuccess("Организация обновлена.");
       } else {
         await createOrganization({ name: form.name, slug: form.slug });
-        setSuccess("Organization created.");
+        setSuccess("Организация создана.");
       }
       setForm({ name: "", slug: "" });
       await load();
@@ -76,7 +76,7 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
 
   const toggleOrganization = async (org: OrganizationDTO) => {
     /** Enable or disable one organization after a destructive-action confirmation. */
-    if (org.is_active && !window.confirm(`Disable organization ${org.name}?`)) {
+    if (org.is_active && !window.confirm(`Отключить организацию ${org.name}?`)) {
       return;
     }
     setError(null);
@@ -84,10 +84,10 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
     try {
       if (org.is_active) {
         await disableOrganization(org.id);
-        setSuccess("Organization disabled.");
+        setSuccess("Организация отключена.");
       } else {
         await enableOrganization(org.id);
-        setSuccess("Organization enabled.");
+        setSuccess("Организация включена.");
       }
       await load();
     } catch (toggleError) {
@@ -96,19 +96,19 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
   };
 
   if (loading) {
-    return <LoadingState title="Loading organizations" />;
+    return <LoadingState title="Загрузка организаций" />;
   }
 
   if (error && organizations.length === 0) {
-    return <ErrorState title="Organizations unavailable" detail={error} />;
+    return <ErrorState title="Организации недоступны" detail={error} />;
   }
 
   return (
     <div className="admin-page">
       <div className="admin-page__header">
         <div>
-          <span className="admin-kicker">Platform tenants</span>
-          <h1>Organizations</h1>
+          <span className="admin-kicker">Клиентские аккаунты</span>
+          <h1>Организации</h1>
         </div>
       </div>
       {error ? <div className="admin-alert admin-alert--error">{error}</div> : null}
@@ -116,7 +116,7 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
       <section className="admin-panel">
         <form className="admin-form admin-form--inline" onSubmit={handleSubmit}>
           <label>
-            <span>Name</span>
+            <span>Название</span>
             <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
           </label>
           <label>
@@ -124,40 +124,40 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
             <input
               value={form.slug}
               pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$"
-              title="Use lowercase latin letters, numbers, and hyphens."
+              title="Используйте латиницу в нижнем регистре, цифры и дефисы."
               onChange={(event) => setForm({ ...form, slug: event.target.value })}
               required
             />
           </label>
           <button type="submit" className="admin-button admin-button--primary" disabled={saving}>
-            {form.id ? "Update" : "Create"}
+            {form.id ? "Обновить" : "Создать"}
           </button>
           {form.id ? (
             <button type="button" className="admin-button" onClick={() => setForm({ name: "", slug: "" })}>
-              Cancel
+              Отмена
             </button>
           ) : null}
         </form>
       </section>
       <section className="admin-panel">
         <div className="admin-panel__header">
-          <h2>Organization list</h2>
-          <input className="admin-search" placeholder="Search name or slug" value={filter} onChange={(event) => setFilter(event.target.value)} />
+          <h2>Список организаций</h2>
+          <input className="admin-search" placeholder="Поиск по названию или slug" value={filter} onChange={(event) => setFilter(event.target.value)} />
         </div>
         {visibleOrganizations.length === 0 ? (
-          <EmptyState title="No organizations" detail="Create the first organization to start configuring client access." />
+          <EmptyState title="Организаций нет" detail="Создайте первую организацию, чтобы настроить доступ клиента." />
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>Название</th>
                   <th>Slug</th>
-                  <th>Status</th>
-                  <th>Users</th>
-                  <th>Configs</th>
-                  <th>Updated</th>
-                  <th>Actions</th>
+                  <th>Статус</th>
+                  <th>Пользователи</th>
+                  <th>Конфиги</th>
+                  <th>Обновлено</th>
+                  <th>Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,13 +172,13 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
                     <td>
                       <div className="admin-row-actions">
                         <button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/organizations/${org.id}`)}>
-                          Open
+                          Открыть
                         </button>
                         <button type="button" className="admin-link-button" onClick={() => setForm({ id: org.id, name: org.name, slug: org.slug })}>
-                          Edit
+                          Изменить
                         </button>
                         <button type="button" className="admin-link-button" onClick={() => void toggleOrganization(org)}>
-                          {org.is_active ? "Disable" : "Enable"}
+                          {org.is_active ? "Отключить" : "Включить"}
                         </button>
                       </div>
                     </td>

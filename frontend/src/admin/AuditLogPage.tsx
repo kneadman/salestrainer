@@ -54,29 +54,29 @@ export function AuditLogPage() {
   };
 
   if (loading) {
-    return <LoadingState title="Loading audit log" />;
+    return <LoadingState title="Загрузка журнала аудита" />;
   }
 
   if (error) {
-    return <ErrorState title="Audit log unavailable" detail={error} />;
+    return <ErrorState title="Журнал аудита недоступен" detail={error} />;
   }
 
   return (
     <div className="admin-page">
-      <div className="admin-page__header"><div><span className="admin-kicker">Internal trace</span><h1>Audit Log</h1></div></div>
+      <div className="admin-page__header"><div><span className="admin-kicker">Внутренний след</span><h1>Журнал аудита</h1></div></div>
       <section className="admin-panel">
         <form className="admin-form admin-form--inline" onSubmit={handleSubmit}>
-          <label><span>Organization</span><select value={filters.organization_id} onChange={(event) => setFilters({ ...filters, organization_id: event.target.value, offset: 0 })}><option value="">All</option>{organizations.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
-          <label><span>Actor user id</span><input value={filters.actor_user_id} onChange={(event) => setFilters({ ...filters, actor_user_id: event.target.value, offset: 0 })} /></label>
-          <label><span>Action</span><input value={filters.action} onChange={(event) => setFilters({ ...filters, action: event.target.value, offset: 0 })} /></label>
-          <label><span>Entity type</span><input value={filters.entity_type} onChange={(event) => setFilters({ ...filters, entity_type: event.target.value, offset: 0 })} /></label>
-          <label><span>Limit</span><input type="number" min={1} max={500} value={filters.limit} onChange={(event) => setFilters({ ...filters, limit: Number(event.target.value), offset: 0 })} /></label>
-          <button type="submit" className="admin-button admin-button--primary">Apply</button>
+          <label><span>Организация</span><select value={filters.organization_id} onChange={(event) => setFilters({ ...filters, organization_id: event.target.value, offset: 0 })}><option value="">Все</option>{organizations.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
+          <label><span>ID пользователя</span><input value={filters.actor_user_id} onChange={(event) => setFilters({ ...filters, actor_user_id: event.target.value, offset: 0 })} /></label>
+          <label><span>Действие</span><input value={filters.action} onChange={(event) => setFilters({ ...filters, action: event.target.value, offset: 0 })} /></label>
+          <label><span>Тип сущности</span><input value={filters.entity_type} onChange={(event) => setFilters({ ...filters, entity_type: event.target.value, offset: 0 })} /></label>
+          <label><span>Лимит</span><input type="number" min={1} max={500} value={filters.limit} onChange={(event) => setFilters({ ...filters, limit: Number(event.target.value), offset: 0 })} /></label>
+          <button type="submit" className="admin-button admin-button--primary">Применить</button>
         </form>
       </section>
       <section className="admin-panel">
-        {events.length === 0 ? <EmptyState title="No audit events" /> : (
-          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Created</th><th>Action</th><th>Entity</th><th>Actor</th><th>Payload</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{formatDate(event.created_at)}</td><td>{event.action}</td><td>{event.entity_type}<br /><span className="admin-muted">{event.entity_id ?? ""}</span></td><td>{event.actor_user_id ?? "system"}</td><td><pre className="admin-json-cell">{compactJson(event.payload)}</pre></td></tr>)}</tbody></table></div>
+        {events.length === 0 ? <EmptyState title="Событий аудита нет" /> : (
+          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Создано</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{formatDate(event.created_at)}</td><td>{event.action}</td><td>{event.entity_type}<br /><span className="admin-muted">{event.entity_id ?? ""}</span></td><td>{event.actor_user_id ?? "система"}</td><td><pre className="admin-json-cell">{compactJson(event.payload)}</pre></td></tr>)}</tbody></table></div>
         )}
       </section>
     </div>

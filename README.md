@@ -81,7 +81,7 @@ python -m app.cli.main
 
 Internal admin CLI for manual management of clients, users, and training configs.
 
-Before running commands, ensure migrations are applied (`alembic upgrade head`) and `DATABASE_URL` points to the target PostgreSQL.
+Before running commands, ensure migrations are applied (`python -m alembic upgrade head`) and `DATABASE_URL` points to the target PostgreSQL.
 
 Create client:
 
@@ -225,6 +225,7 @@ Limitations:
 - Old Redis-only sessions are not backfilled.
 - Analytics is a basic aggregation API, not a dashboard.
 - Hidden snapshots can be stored server-side for future internal/admin use, but are not returned by client-facing endpoints.
+- If a persistent history turn write fails after Redis state is updated, the API returns a controlled `500` and logs a critical consistency error; automated retry/reconciliation is a later step.
 
 ## Password change flow
 
@@ -256,14 +257,7 @@ For demo-ready Yandex setup, one LLM config contains two Yandex AI Studio sets:
 
 `YANDEX_BASE_URL` is global and is not edited per client in the admin UI. Provider defaults to `yandex_compatible`. API keys are encrypted at rest with `SECRET_ENCRYPTION_KEY`; responses expose only `has_persona_api_key`, `persona_api_key_preview`, `has_dialogue_api_key`, and `dialogue_api_key_preview`. Blank API key fields on update keep the existing keys. The persona set is already used for LLM persona generation. The dialogue set is saved and visible for the configured training flow; runtime dialogue still uses the global dialogue resolver until the per-client resolver is implemented.
 
-Responses expose only:
-
-```json
-{
-  "has_api_key": true,
-  "api_key_preview": "abcd...yz"
-}
-```
+API responses expose only key flags and masked previews for the persona and dialogue sets; plain API keys are never returned.
 
 ## LLM Persona Generation
 
@@ -352,7 +346,7 @@ docker compose up --build
 2. Migrations are run by the `migrate` compose service. For manual local backend runs, use:
 
 ```bash
-alembic upgrade head
+python -m alembic upgrade head
 ```
 
 3. Create the first internal admin:
@@ -363,12 +357,22 @@ python -m app.admin.cli create-internal-admin --client-name "Platform" --client-
 
 4. Open `http://localhost:8080/login`, sign in, then open `/admin`.
 5. Create an organization.
-6. Create LLM settings with two Yandex sets: persona generation and dialogue model.
+6. Create LLM settings with two Yandex sets: persona generation and dialogue model. For a local demo without real credentials, use the fake provider path.
 7. Create a training config and attach the LLM settings.
 8. Create a client manager or lead user.
 9. Assign the training config to the user and mark it as default.
-10. Sign in as the client user and open `/app/trainer`.
-11. Start a training, send at least one manager message, finish the session, and open history/report.
+10. Sign in as the client user.
+11. Open `/app/trainer`.
+12. Start a training and send at least one manager message.
+13. Finish the session.
+14. Open `/app/history`, the saved report, and `/app/analytics`.
+
+Demo notes:
+
+- The persona-generation Yandex set is used by authenticated session creation.
+- The dialogue Yandex set is stored in the config for the dialogue flow, but runtime dialogue turns may still use the global dialogue resolver until per-client dialogue selection is wired.
+- Landing form submissions are persisted in `landing_leads`.
+- `/app/balance` is a usage placeholder, not billing or payment processing.
 
 If real Yandex credentials are unavailable, keep `APP_ENV=local` and use fake/local fallback for a presentation of the product flow. For staging/prod, configure real secrets and disable fake fallback.
 
@@ -396,7 +400,7 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer
 Apply migrations:
 
 ```bash
-alembic upgrade head
+python -m alembic upgrade head
 ```
 
 ## Frontend GUI
@@ -406,7 +410,7 @@ Minimal React/Vite web UI lives in `frontend/`.
 Backend:
 
 ```bash
-alembic upgrade head
+python -m alembic upgrade head
 python -m uvicorn app.api.main:app --reload
 ```
 
@@ -493,6 +497,7 @@ Limitations:
 - Balance is usage-oriented only; real billing, invoices, and payment forms are not implemented.
 - Detailed skill/evaluation aggregates are shown as an empty state until backend exposes safe aggregates.
 - Analytics appears only after persistent history rows exist.
+- `/api/leads` uses persistence, payload limits, attribution whitelisting, and a honeypot, but full rate limiting and CRM integration are not implemented yet.
 
 ## Run with Docker
 
@@ -511,7 +516,7 @@ http://localhost:8080
 Notes:
 
 - `frontend` is built once and served by `nginx`
-- `migrate` runs `alembic upgrade head` before `backend` starts
+- `migrate` runs `python -m alembic upgrade head` before `backend` starts
 - `nginx` proxies `/api/*` and `/auth/*` to the internal `backend:8000` service
 - `backend` connects to Redis through `redis://redis:6379/0`
 - `backend` connects to PostgreSQL through `postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer`
@@ -585,6 +590,8 @@ For production client API sessions, prefer configuring `persona_policy` and an o
 
 ## MVP limitations
 
+- A live Yandex cloud smoke test is not part of this iteration.
+- Dialogue LLM per-client runtime selection for `llm_provider_config_id` is the next step if organization-specific dialogue models are required.
 - Real Yandex/OpenAI API is not connected to the working flow
 - Yandex adapter now follows the AI Studio `OpenAI(...).responses.create(...)` contract and is covered by mocked request/response tests, but is still not verified here against a live cloud account
 - The local `client_simulator.md` file is not injected into Yandex runtime requests; the remote agent remains the runtime prompt source for that backend

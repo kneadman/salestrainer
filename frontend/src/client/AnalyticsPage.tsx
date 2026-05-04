@@ -39,14 +39,14 @@ export function AnalyticsPage() {
       <section className="client-stats-grid">
         <ClientStat label="Всего" value={analytics.total_sessions} />
         <ClientStat label="Завершено" value={analytics.finished_sessions} />
-        <ClientStat label="Completion rate" value={percent(analytics.completion_rate)} />
-        <ClientStat label="Avg interest" value={analytics.avg_final_interest_score?.toFixed(1) ?? "—"} />
-        <ClientStat label="Avg turns" value={analytics.avg_turn_count?.toFixed(1) ?? "—"} />
-        <ClientStat label="Last activity" value={formatClientDate(analytics.last_activity_at)} />
+        <ClientStat label="Доля завершённых" value={percent(analytics.completion_rate)} />
+        <ClientStat label="Средний интерес" value={analytics.avg_final_interest_score?.toFixed(1) ?? "—"} />
+        <ClientStat label="Среднее число ходов" value={analytics.avg_turn_count?.toFixed(1) ?? "—"} />
+        <ClientStat label="Последняя активность" value={formatClientDate(analytics.last_activity_at)} />
       </section>
       <section className="client-panel"><h2>По статусам</h2><SimpleBars values={analytics.sessions_by_status} /></section>
       <section className="client-panel"><h2>По сценариям</h2><SimpleBars values={analytics.sessions_by_scenario} /></section>
-      <section className="client-panel"><h2>Оценки навыков</h2><ClientState title="Детальные оценки появятся, когда backend начнет отдавать turn evaluation aggregates." /></section>
+      <section className="client-panel"><h2>Оценки навыков</h2><ClientState title="Детальные оценки появятся, когда backend начнет отдавать агрегаты оценки ходов." /></section>
     </div>
   );
 }

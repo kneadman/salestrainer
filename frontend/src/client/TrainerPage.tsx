@@ -122,7 +122,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   };
 
   if (busyAction === "boot") {
-    return <div className="client-state"><strong>Loading trainer</strong></div>;
+    return <div className="client-state"><strong>Загрузка тренажера</strong></div>;
   }
 
   if (!session) {
@@ -146,7 +146,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
         <FactsPanel state={factsState} />
         {report ? (
           <section className="panel-card">
-            <div className="panel-card__header"><h2>Final report</h2></div>
+            <div className="panel-card__header"><h2>Итоговый отчёт</h2></div>
             <pre className="report-block">{report}</pre>
           </section>
         ) : null}
