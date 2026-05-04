@@ -102,6 +102,7 @@ class TrainingConfigDTO(BaseModel):
     is_active: bool
     default_scenario_id: str
     product_line: str
+    persona_generation_prompt: str
     persona_policy: dict[str, object]
     ui_config: dict[str, object]
     limits: dict[str, object]
@@ -116,6 +117,7 @@ class TrainingConfigCreateRequest(BaseModel):
     name: NameStr
     default_scenario_id: ScenarioIdStr
     product_line: ProductLineStr
+    persona_generation_prompt: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
     limits: dict[str, object] = Field(default_factory=dict)
@@ -142,6 +144,7 @@ class TrainingConfigUpdateRequest(BaseModel):
     name: NameStr | None = None
     default_scenario_id: ScenarioIdStr | None = None
     product_line: ProductLineStr | None = None
+    persona_generation_prompt: str | None = None
     persona_policy: dict[str, object] | None = None
     ui_config: dict[str, object] | None = None
     limits: dict[str, object] | None = None

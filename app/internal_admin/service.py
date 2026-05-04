@@ -220,18 +220,19 @@ class InternalAdminService:
         name: str,
         default_scenario_id: str,
         product_line: str,
+        persona_generation_prompt: str,
         persona_policy: dict[str, object],
         ui_config: dict[str, object],
         limits: dict[str, object],
         llm_provider_config_id: UUID | None,
     ) -> TrainingConfigDTO:
         self._get_account(organization_id)
-        self._validate_llm_config_for_training_config(organization_id, llm_provider_config_id)
         config = ClientTrainingConfig(
             client_account_id=organization_id,
             name=name,
             default_scenario_id=default_scenario_id,
             product_line=product_line,
+            persona_generation_prompt=persona_generation_prompt,
             persona_policy=persona_policy,
             ui_config=ui_config,
             limits=limits,
@@ -256,15 +257,11 @@ class InternalAdminService:
 
     def update_training_config(self, *, actor_user_id: UUID, config_id: UUID, **updates: object) -> TrainingConfigDTO:
         config = self._get_training_config(config_id)
-        if "llm_provider_config_id" in updates:
-            self._validate_llm_config_for_training_config(
-                config.client_account_id,
-                updates["llm_provider_config_id"],  # type: ignore[arg-type]
-            )
         for field in (
             "name",
             "default_scenario_id",
             "product_line",
+            "persona_generation_prompt",
             "persona_policy",
             "ui_config",
             "limits",
@@ -666,6 +663,7 @@ class InternalAdminService:
             is_active=config.is_active,
             default_scenario_id=config.default_scenario_id,
             product_line=config.product_line,
+            persona_generation_prompt=config.persona_generation_prompt,
             persona_policy=config.persona_policy,
             ui_config=config.ui_config,
             limits=config.limits,

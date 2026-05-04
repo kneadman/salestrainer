@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { listAuditLog, listLLMProviderConfigs, listOrganizations, getUsageSummary } from "./api";
+import { listAuditLog, listOrganizations, getUsageSummary } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO, UsageSummaryDTO } from "./types";
 import { formatDate, getErrorMessage } from "./utils";
@@ -13,25 +13,22 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   const [organizations, setOrganizations] = useState<OrganizationDTO[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLogDTO[]>([]);
   const [usageSummaries, setUsageSummaries] = useState<UsageSummaryDTO[]>([]);
-  const [llmCount, setLlmCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    /** Bootstrap dashboard metrics from organization, usage, LLM, and audit endpoints. */
+    /** Bootstrap dashboard metrics from organization, usage, and audit endpoints. */
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
         const orgs = await listOrganizations();
         setOrganizations(orgs);
-        const [audit, llmGroups, usageGroups] = await Promise.all([
+        const [audit, usageGroups] = await Promise.all([
           listAuditLog({ limit: 5, offset: 0 }),
-          Promise.all(orgs.map((org) => listLLMProviderConfigs(org.id).catch(() => []))),
           Promise.all(orgs.map((org) => getUsageSummary(org.id).catch(() => null))),
         ]);
         setAuditLog(audit);
-        setLlmCount(llmGroups.reduce((count, group) => count + group.length, 0));
         setUsageSummaries(usageGroups.filter((summary): summary is UsageSummaryDTO => summary !== null));
       } catch (loadError) {
         setError(getErrorMessage(loadError));
@@ -94,7 +91,6 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         <StatCard label="Организации" value={totals.organizations} detail={`${totals.activeOrganizations} активны`} />
         <StatCard label="Пользователи" value={totals.users} detail="По всем организациям" />
         <StatCard label="Тренировочные конфиги" value={totals.trainingConfigs} />
-        <StatCard label="LLM-настройки" value={llmCount} />
         <StatCard label="Всего сессий" value={totals.totalSessions} detail={`${totals.finishedSessions} завершены`} />
         <StatCard label="Всего сообщений" value={totals.totalTurns} />
         <StatCard label="Средний итоговый интерес" value={totals.avgInterest ?? "—"} detail="По организациям с данными" />

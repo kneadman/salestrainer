@@ -14,7 +14,6 @@ const NAV_ITEMS = [
   { label: "Организации", path: "/admin/organizations" },
   { label: "Пользователи", path: "/admin/organizations" },
   { label: "Тренировочные конфиги", path: "/admin/organizations" },
-  { label: "LLM-настройки", path: "/admin/organizations" },
   { label: "История тренировок", path: "/admin/history" },
   { label: "Аналитика", path: "/admin/organizations" },
   { label: "Аудит", path: "/admin/audit-log" },

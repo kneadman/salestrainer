@@ -231,6 +231,7 @@ def create_training_config(
             name=request.name,
             default_scenario_id=request.default_scenario_id,
             product_line=request.product_line,
+            persona_generation_prompt=request.persona_generation_prompt,
             persona_policy=request.persona_policy,
             ui_config=request.ui_config,
             limits=request.limits,

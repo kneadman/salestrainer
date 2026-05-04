@@ -2,42 +2,83 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.access.models import LLMProviderConfig
-from app.application import persona_generation_service as service_module
-from app.application.persona_generation_service import PersonaGeneratorClientFactory
+import pytest
+
+from app.access.models import RuntimeTrainingConfig
+from app.application.persona_generation_service import PersonaGenerationService, PersonaGeneratorClientFactory
+from app.domain.errors import LLMProviderConfigurationError
 from app.domain.persona_generation import PersonaGenerator
 from app.infrastructure.config import Settings
-from app.infrastructure.secrets import encrypt_secret
 
 
-def test_persona_generation_client_factory_uses_persona_yandex_set(monkeypatch) -> None:
-    captured: dict[str, object] = {}
-    settings = Settings(secret_encryption_key="test-secret-key", allow_fake_llm_fallback=False)
-    provider_config = LLMProviderConfig(
+def _training_config(*, prompt: str = "Generate a CFO persona for a Russian B2B finance diagnostic.") -> RuntimeTrainingConfig:
+    return RuntimeTrainingConfig(
         id=uuid4(),
         client_account_id=uuid4(),
-        name="Demo",
-        provider="yandex_compatible",
-        persona_api_key_encrypted=encrypt_secret("persona-key", settings),
-        persona_folder_id="persona-folder",
-        persona_agent_id="persona-agent",
-        persona_master_prompt="persona prompt",
-        persona_json_template="{\"persona\": {}}",
-        dialogue_api_key_encrypted=encrypt_secret("dialogue-key", settings),
-        dialogue_folder_id="dialogue-folder",
-        dialogue_agent_id="dialogue-agent",
+        name="Default config",
+        default_scenario_id="generic_b2b_first_contact",
+        product_line="outsourced_cfo",
+        persona_generation_prompt=prompt,
+        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_financial_diagnostic"},
+        ui_config={},
+        limits={},
+        llm_provider_config_id=None,
+    )
+
+
+def test_persona_generation_service_build_input_uses_training_config_prompt() -> None:
+    service = PersonaGenerationService(db_session=None, settings=Settings())  # type: ignore[arg-type]
+
+    payload = service.build_input(training_config=_training_config())
+
+    assert payload.persona_generation_prompt == "Generate a CFO persona for a Russian B2B finance diagnostic."
+    assert payload.allowed_roles == ["cfo"]
+    assert payload.target_action == "book_financial_diagnostic"
+
+
+def test_persona_generation_client_factory_uses_global_persona_yandex_settings(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    settings = Settings(
+        llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=False,
+        yandex_api_key="persona-key",
+        yandex_base_url="https://ai.api.cloud.yandex.net/v1",
+        yandex_persona_folder_id="persona-folder",
+        yandex_persona_agent_id="persona-agent",
     )
 
     class CapturingClient:
         def __init__(self, **kwargs: object) -> None:
             captured.update(kwargs)
 
-    monkeypatch.setattr(service_module, "StructuredPersonaGeneratorClient", CapturingClient)
+    monkeypatch.setattr("app.application.persona_generation_service.StructuredPersonaGeneratorClient", CapturingClient)
 
-    PersonaGeneratorClientFactory(settings=settings).build(provider_config, fallback_generator=PersonaGenerator())
+    PersonaGeneratorClientFactory(settings=settings).build_global_persona_client(fallback_generator=PersonaGenerator())
 
     assert captured["api_key"] == "persona-key"
     assert captured["folder_id"] == "persona-folder"
     assert captured["agent_id"] == "persona-agent"
-    assert captured["master_prompt"] == "persona prompt"
-    assert captured["json_template"] == "{\"persona\": {}}"
+    assert captured["base_url"] == "https://ai.api.cloud.yandex.net/v1"
+
+
+def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_mode() -> None:
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(),
+        fallback_generator=PersonaGenerator(seed=1),
+    )
+
+    persona = service.generate_for_training_config(training_config=_training_config(prompt=""))
+
+    assert persona.role == "cfo"
+    assert persona.authority_level == "final_decider"
+
+
+def test_persona_generation_service_rejects_empty_prompt_without_fallback() -> None:
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(app_env="prod", allow_fake_llm_fallback=False),
+    )
+
+    with pytest.raises(LLMProviderConfigurationError, match="persona_generation_prompt"):
+        service.generate_for_training_config(training_config=_training_config(prompt=""))

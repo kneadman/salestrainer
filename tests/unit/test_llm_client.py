@@ -193,6 +193,24 @@ def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None
     assert isinstance(client, FakeLLMClient)
 
 
+def test_build_llm_client_uses_dialogue_specific_yandex_settings() -> None:
+    settings = Settings(
+        llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=False,
+        yandex_api_key="token",
+        yandex_folder_id="legacy-folder",
+        yandex_agent_id="legacy-agent",
+        yandex_dialogue_folder_id="dialogue-folder",
+        yandex_dialogue_agent_id="dialogue-agent",
+    )
+
+    client = build_llm_client(settings)
+
+    assert isinstance(client, YandexCompatibleLLMClient)
+    assert client._folder_id == "dialogue-folder"
+    assert client._agent_id == "dialogue-agent"
+
+
 def test_build_llm_client_raises_when_provider_config_is_incomplete_and_fallback_is_disabled() -> None:
     settings = Settings(
         app_env="prod",

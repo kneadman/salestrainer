@@ -99,6 +99,7 @@ def _create_training_config(client: TestClient, organization_id: str, name: str 
             "name": name,
             "default_scenario_id": "generic_b2b_first_contact",
             "product_line": "accounting_outsourcing",
+            "persona_generation_prompt": "Собственник малого бизнеса, нужен аудит текущего учета и рисков.",
             "persona_policy": {},
             "ui_config": {},
             "limits": {},
@@ -227,6 +228,37 @@ def test_training_config_management_assignment_cross_org_and_default() -> None:
     session.close()
 
 
+def test_training_config_create_and_update_work_without_llm_provider_config() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+
+    create_response = client.post(
+        f"/api/internal/organizations/{organization['id']}/training-configs",
+        json={
+            "name": "Prompt config",
+            "default_scenario_id": "generic_b2b_first_contact",
+            "product_line": "accounting_outsourcing",
+            "persona_generation_prompt": "Финальный ЛПР по бухгалтерскому аутсорсингу, боли в сроках и прозрачности.",
+            "persona_policy": {},
+            "ui_config": {},
+            "limits": {"max_turns": 10},
+        },
+    )
+    config_id = create_response.json()["id"]
+    update_response = client.patch(
+        f"/api/internal/training-configs/{config_id}",
+        json={"persona_generation_prompt": "Обновлённый контекст для генерации личности."},
+    )
+
+    assert create_response.status_code == 201
+    assert create_response.json()["persona_generation_prompt"].startswith("Финальный ЛПР")
+    assert create_response.json()["llm_provider_config_id"] is None
+    assert update_response.status_code == 200
+    assert update_response.json()["persona_generation_prompt"] == "Обновлённый контекст для генерации личности."
+    session.close()
+
+
 def test_llm_provider_config_secret_masking_storage_update_disable() -> None:
     session = _create_session()
     client = _admin_client(session)
@@ -250,16 +282,6 @@ def test_llm_provider_config_secret_masking_storage_update_disable() -> None:
         json={"name": "Yandex updated"},
     )
     disable_response = client.post(f"/api/internal/llm-provider-configs/{payload['id']}/disable")
-    assign_disabled = client.post(
-        f"/api/internal/organizations/{organization['id']}/training-configs",
-        json={
-            "name": "With disabled LLM",
-            "default_scenario_id": "generic_b2b_first_contact",
-            "product_line": "accounting_outsourcing",
-            "llm_provider_config_id": payload["id"],
-        },
-    )
-
     assert create_response.status_code == 201
     assert payload["has_api_key"] is True
     assert payload["api_key_preview"] == "abcd...yz"
@@ -271,7 +293,6 @@ def test_llm_provider_config_secret_masking_storage_update_disable() -> None:
     assert update_response.json()["api_key_preview"] == "abcd...yz"
     assert disable_response.status_code == 200
     assert disable_response.json()["is_active"] is False
-    assert assign_disabled.status_code == 422
     assert "abcd-secret-yz" not in str([record.payload for record in session.scalars(select(AuditLog))])
     session.close()
 
