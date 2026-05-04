@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.access.repository import AccessRepository
 from app.identity.repository import IdentityRepository
+from app.identity.roles import UserRole
 from app.identity.security import hash_password
 from app.infrastructure.config import get_settings
 from app.infrastructure.db import get_session_factory
@@ -72,6 +73,48 @@ def _create_user(
         must_change_password=True,
     )
     return f"created user email='{user.email}' client='{client.slug}' id={user.id}"
+
+
+def _create_internal_admin(
+    *,
+    identity_repository: IdentityRepository,
+    access_repository: AccessRepository | None = None,
+    client_name: str,
+    client_slug: str,
+    email: str,
+    password: str,
+) -> str:
+    existing_admin = identity_repository.get_first_user_by_role(UserRole.INTERNAL_ADMIN.value)
+    if existing_admin is not None:
+        raise AdminCLIError("internal admin already exists; use reset-password or DB-admin reviewed flow")
+
+    client = identity_repository.get_client_account_by_slug(client_slug)
+    if client is None:
+        client = identity_repository.create_client_account(name=client_name, slug=client_slug)
+
+    existing_user = identity_repository.get_user_by_email(email)
+    if existing_user is not None:
+        raise AdminCLIError(f"duplicate email: {email}")
+
+    user = identity_repository.create_user(
+        client_account_id=client.id,
+        email=email,
+        password_hash=hash_password(password),
+        role=UserRole.INTERNAL_ADMIN.value,
+        must_change_password=True,
+    )
+    if access_repository is not None:
+        access_repository.create_audit_log_record(
+            action="internal_admin_bootstrapped",
+            entity_type="user",
+            entity_id=user.id,
+            payload={
+                "email": user.email,
+                "client_account_id": str(client.id),
+                "organization_id": str(client.id),
+            },
+        )
+    return f"created internal admin email='{user.email}' client='{client.slug}' id={user.id}"
 
 
 def _create_config(
@@ -268,6 +311,12 @@ def _build_parser() -> argparse.ArgumentParser:
     create_user_parser.add_argument("--email", required=True)
     create_user_parser.add_argument("--password", required=True)
 
+    create_internal_admin_parser = subparsers.add_parser("create-internal-admin")
+    create_internal_admin_parser.add_argument("--client-name", required=True)
+    create_internal_admin_parser.add_argument("--client-slug", required=True)
+    create_internal_admin_parser.add_argument("--email", required=True)
+    create_internal_admin_parser.add_argument("--password", required=True)
+
     create_config_parser = subparsers.add_parser("create-config")
     create_config_parser.add_argument("--client", required=True)
     create_config_parser.add_argument("--name", required=True)
@@ -322,6 +371,15 @@ def run_cli(argv: list[str] | None = None) -> int:
                 message = _create_user(
                     identity_repository=identity_repository,
                     client_slug=args.client,
+                    email=args.email,
+                    password=args.password,
+                )
+            elif args.command == "create-internal-admin":
+                message = _create_internal_admin(
+                    identity_repository=identity_repository,
+                    access_repository=access_repository,
+                    client_name=args.client_name,
+                    client_slug=args.client_slug,
                     email=args.email,
                     password=args.password,
                 )

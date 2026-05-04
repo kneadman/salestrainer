@@ -52,6 +52,7 @@ def _create_user(
     email: str = "manager@example.com",
     password: str = "password",
     is_active: bool = True,
+    must_change_password: bool = True,
 ) -> None:
     identity_repository = IdentityRepository(session)
     client_account = identity_repository.create_client_account(name="ООО Ромашка", slug="romashka")
@@ -60,6 +61,7 @@ def _create_user(
         email=email,
         password_hash=hash_password(password),
         is_active=is_active,
+        must_change_password=must_change_password,
     )
 
 
@@ -85,7 +87,8 @@ def test_login_success_sets_cookie() -> None:
     assert "salestrainer_session=" in response.headers["set-cookie"]
     payload = response.json()
     assert payload["user"]["email"] == "manager@example.com"
-    assert payload["user"]["role"] == "client_user"
+    assert payload["user"]["role"] == "client_manager"
+    assert payload["user"]["must_change_password"] is True
     assert payload["user"]["client_account"]["slug"] == "romashka"
     assert session.scalar(select(LoginSession)).token_hash != client.cookies["salestrainer_session"]
 
@@ -149,7 +152,44 @@ def test_auth_me_with_valid_cookie_returns_user() -> None:
 
     assert response.status_code == 200
     assert response.json()["user"]["email"] == "manager@example.com"
+    assert response.json()["user"]["must_change_password"] is True
     assert response.json()["user"]["client_account"]["name"] == "ООО Ромашка"
+    session.close()
+
+
+def test_change_password_clears_must_change_password() -> None:
+    session = _create_session()
+    _create_user(session, must_change_password=True)
+    client = _create_client(session)
+    client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    _set_csrf_header(client)
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": "password", "new_password": "new-password"},
+    )
+    me_response = client.get("/auth/me")
+
+    assert response.status_code == 200
+    assert response.json()["user"]["must_change_password"] is False
+    assert me_response.status_code == 200
+    assert me_response.json()["user"]["must_change_password"] is False
+    session.close()
+
+
+def test_change_password_rejects_wrong_current_password() -> None:
+    session = _create_session()
+    _create_user(session, must_change_password=True)
+    client = _create_client(session)
+    client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    _set_csrf_header(client)
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": "wrong", "new_password": "new-password"},
+    )
+
+    assert response.status_code == 401
     session.close()
 
 

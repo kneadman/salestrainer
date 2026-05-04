@@ -23,6 +23,7 @@ DEFAULT_PUBLIC_BRIEF = (
 
 
 def build_initial_client_state(persona: PersonaProfile, starting_interest: int) -> ClientState:
+    """Build public runtime state from the hidden persona without revealing hidden facts."""
     return ClientState(
         tone=interest_band(starting_interest) if starting_interest <= 60 else "warm",
         trust=persona.trust_baseline,
@@ -44,6 +45,7 @@ class TrainingSessionService:
         persona_generator: PersonaGenerator | None = None,
         default_scenario_id: str = "generic_b2b_first_contact",
     ) -> None:
+        """Keep runtime repository and local persona fallback for CLI/debug flows."""
         self._repository = repository
         self._persona_generator = persona_generator or PersonaGenerator()
         self._default_scenario_id = default_scenario_id
@@ -53,13 +55,17 @@ class TrainingSessionService:
         scenario_id: str | None = None,
         persona_id: str | None = None,
         training_config: RuntimeTrainingConfig | None = None,
+        persona_override: PersonaProfile | None = None,
     ) -> TrainingSessionState:
+        """Start a runtime session with either generated, preset, or externally generated persona."""
         resolved_scenario_id = scenario_id or self._default_scenario_id
         if training_config is not None:
             resolved_scenario_id = scenario_id or training_config.default_scenario_id
 
         scenario = get_scenario(resolved_scenario_id)
-        if training_config is not None:
+        if persona_override is not None:
+            persona = persona_override
+        elif training_config is not None:
             persona = self._persona_generator.generate(
                 product_line=training_config.product_line,
                 persona_policy=training_config.persona_policy,
@@ -99,9 +105,15 @@ class TrainingSessionService:
         return session
 
     def get_session(self, session_id: str) -> TrainingSessionState | None:
+        """Return a runtime session snapshot if it still exists in the session repository."""
         return self._repository.get(session_id)
 
+    def delete_session(self, session_id: str) -> None:
+        """Remove a runtime session during API-side compensation or cleanup."""
+        self._repository.delete(session_id)
+
     def resume_session(self, session_id: str) -> TrainingSessionState:
+        """Resume an active runtime session or raise a domain error."""
         session = self._repository.get(session_id)
         if session is None:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")

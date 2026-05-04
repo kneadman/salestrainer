@@ -1,0 +1,138 @@
+import { useEffect, useMemo, useState } from "react";
+import { listAuditLog, listLLMProviderConfigs, listOrganizations, getUsageSummary } from "./api";
+import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
+import type { AuditLogDTO, OrganizationDTO, UsageSummaryDTO } from "./types";
+import { formatDate, getErrorMessage } from "./utils";
+
+type AdminDashboardProps = {
+  onNavigate: (path: string) => void;
+};
+
+export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
+  /** Load and render platform-level admin overview from available internal APIs. */
+  const [organizations, setOrganizations] = useState<OrganizationDTO[]>([]);
+  const [auditLog, setAuditLog] = useState<AuditLogDTO[]>([]);
+  const [usageSummaries, setUsageSummaries] = useState<UsageSummaryDTO[]>([]);
+  const [llmCount, setLlmCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    /** Bootstrap dashboard metrics from organization, usage, LLM, and audit endpoints. */
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const orgs = await listOrganizations();
+        setOrganizations(orgs);
+        const [audit, llmGroups, usageGroups] = await Promise.all([
+          listAuditLog({ limit: 5, offset: 0 }),
+          Promise.all(orgs.map((org) => listLLMProviderConfigs(org.id).catch(() => []))),
+          Promise.all(orgs.map((org) => getUsageSummary(org.id).catch(() => null))),
+        ]);
+        setAuditLog(audit);
+        setLlmCount(llmGroups.reduce((count, group) => count + group.length, 0));
+        setUsageSummaries(usageGroups.filter((summary): summary is UsageSummaryDTO => summary !== null));
+      } catch (loadError) {
+        setError(getErrorMessage(loadError));
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
+
+  const totals = useMemo(() => {
+    /** Aggregate organization and usage totals for dashboard cards. */
+    const totalSessions = usageSummaries.reduce((sum, item) => sum + item.total_sessions, 0);
+    const finishedSessions = usageSummaries.reduce((sum, item) => sum + item.finished_sessions, 0);
+    const totalTurns = usageSummaries.reduce((sum, item) => sum + item.total_turns, 0);
+    const interestValues = usageSummaries
+      .map((item) => item.avg_final_interest_score)
+      .filter((value): value is number => value !== null);
+    const avgInterest =
+      interestValues.length > 0
+        ? Math.round(interestValues.reduce((sum, value) => sum + value, 0) / interestValues.length)
+        : null;
+    return {
+      organizations: organizations.length,
+      activeOrganizations: organizations.filter((org) => org.is_active).length,
+      users: organizations.reduce((sum, org) => sum + org.users_count, 0),
+      trainingConfigs: organizations.reduce((sum, org) => sum + org.training_configs_count, 0),
+      totalSessions,
+      finishedSessions,
+      totalTurns,
+      avgInterest,
+    };
+  }, [organizations, usageSummaries]);
+
+  if (loading) {
+    return <LoadingState title="Загрузка панели" detail="Получаем организации, аудит и сводки использования." />;
+  }
+
+  if (error) {
+    return <ErrorState title="Панель недоступна" detail={error} />;
+  }
+
+  return (
+    <div className="admin-page">
+      <div className="admin-page__header">
+        <div>
+          <span className="admin-kicker">Внутреннее администрирование</span>
+          <h1>Панель управления</h1>
+        </div>
+        <div className="admin-actions">
+          <button type="button" className="admin-button admin-button--primary" onClick={() => onNavigate("/admin/organizations")}>
+            Создать организацию
+          </button>
+          <button type="button" className="admin-button" onClick={() => onNavigate("/admin/audit-log")}>
+            Журнал аудита
+          </button>
+        </div>
+      </div>
+      <section className="admin-stats-grid">
+        <StatCard label="Организации" value={totals.organizations} detail={`${totals.activeOrganizations} активны`} />
+        <StatCard label="Пользователи" value={totals.users} detail="По всем организациям" />
+        <StatCard label="Тренировочные конфиги" value={totals.trainingConfigs} />
+        <StatCard label="LLM-настройки" value={llmCount} />
+        <StatCard label="Всего сессий" value={totals.totalSessions} detail={`${totals.finishedSessions} завершены`} />
+        <StatCard label="Всего сообщений" value={totals.totalTurns} />
+        <StatCard label="Средний итоговый интерес" value={totals.avgInterest ?? "—"} detail="По организациям с данными" />
+      </section>
+      <section className="admin-panel">
+        <div className="admin-panel__header">
+          <h2>Последние события аудита</h2>
+          <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/audit-log")}>
+            Открыть все
+          </button>
+        </div>
+        {auditLog.length === 0 ? (
+          <EmptyState title="Событий аудита нет" detail="Записи появятся после действий администратора." />
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Время</th>
+                  <th>Действие</th>
+                  <th>Сущность</th>
+                  <th>Автор</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLog.map((event) => (
+                  <tr key={event.id}>
+                    <td>{formatDate(event.created_at)}</td>
+                    <td><Badge>{event.action}</Badge></td>
+                    <td>{event.entity_type}</td>
+                    <td>{event.actor_user_id ?? "система"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

@@ -142,6 +142,34 @@ class Scenario(BaseModel):
     failure_condition: str
 
 
+class PersonaGenerationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task: Literal["generate_client_persona"] = "generate_client_persona"
+    product_line: str
+    scenario: Scenario
+    training_config_name: str | None = None
+    persona_policy: dict[str, Any] = Field(default_factory=dict)
+    organization_context: dict[str, Any] = Field(default_factory=dict)
+    target_action: str | None = None
+    allowed_roles: list[str] | None = None
+    allowed_product_lines: list[str] | None = None
+    manager_training_goal: str | None = None
+    difficulty_level: str | None = None
+    randomization_seed: int | None = None
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    schema_version: int = 1
+
+
+class PersonaGenerationOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    persona: PersonaProfile
+    generation_notes: str = ""
+    policy_coverage: list[str] = Field(default_factory=list)
+    risk_flags: list[str] = Field(default_factory=list)
+
+
 class TurnEvaluation(BaseModel):
     turn_index: int
     discovery_quality_score: int = Field(ge=0, le=5)

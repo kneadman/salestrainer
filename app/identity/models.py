@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
 from app.infrastructure.db import Base
+from app.identity.roles import UserRole
 
 
 class ClientAccount(Base):
@@ -46,8 +47,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(
         Text,
         nullable=False,
-        default="client_user",
-        server_default=text("'client_user'"),
+        default=UserRole.CLIENT_MANAGER.value,
+        server_default=text("'client_manager'"),
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
     must_change_password: Mapped[bool] = mapped_column(

@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7,<3.0",
     "pydantic-settings>=2.2,<3.0",
+    "email-validator>=2.0,<3.0",
     "pytest>=8.0,<9.0",
     "argon2-cffi>=23.1,<24.0",
     "redis>=5.0,<6.0",
@@ -22,6 +23,7 @@ dependencies = [
     "uvicorn>=0.30,<1.0",
     "httpx>=0.27,<1.0",
     "openai>=1.75,<2.0",
+    "cryptography>=42.0,<46.0",
 ]
 
 [tool.setuptools]
@@ -32,9 +34,12 @@ packages = [
     "app.api",
     "app.application",
     "app.cli",
+    "app.client_portal",
     "app.domain",
+    "app.history",
     "app.identity",
     "app.infrastructure",
+    "app.internal_admin",
     "app.prompts",
     "app.web",
 ]

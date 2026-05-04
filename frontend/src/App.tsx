@@ -1,45 +1,39 @@
-import { useEffect, useMemo, useState } from "react";
-import { ApiError, createSession, finishSession, getMe, getReport, getSession, logout as logoutRequest, sendMessage } from "./api";
-import { ChatWindow } from "./components/ChatWindow";
-import { Composer } from "./components/Composer";
-import { FactsPanel } from "./components/FactsPanel";
+import { useEffect, useState } from "react";
+import { ApiError, getMe, logout as logoutRequest } from "./api";
+import { AdminApp } from "./admin/AdminApp";
+import { ClientApp } from "./client/ClientApp";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
-import { MetricsPanel } from "./components/MetricsPanel";
-import { PhoneShell } from "./components/PhoneShell";
-import { SessionHeader } from "./components/SessionHeader";
-import type { AuthUser, SessionPublicDTO, TurnPublicDTO } from "./types";
+import type { AuthUser } from "./types";
 
-const STORAGE_KEY = "salestrainer.currentSessionId";
+const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
 
 function getErrorMessage(error: unknown): string {
+  /** Normalize app-level API errors for display. */
   if (error instanceof ApiError) {
     return error.message;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unexpected error.";
+  return "Неожиданная ошибка.";
 }
 
 function getCurrentPath(): string {
+  /** Read the current browser path for the lightweight path-based router. */
   return window.location.pathname;
 }
 
 export default function App() {
+  /** Render public, login, client cabinet, and internal admin routes. */
   const [path, setPath] = useState(getCurrentPath);
   const [authBootstrapping, setAuthBootstrapping] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [session, setSession] = useState<SessionPublicDTO | null>(null);
-  const [turns, setTurns] = useState<TurnPublicDTO[]>([]);
-  const [inputValue, setInputValue] = useState("");
-  const [busyAction, setBusyAction] = useState<"boot" | "create" | "send" | "finish" | "logout" | null>(null);
-  const [sessionBootstrapping, setSessionBootstrapping] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<string | null>(null);
+  const [logoutBusy, setLogoutBusy] = useState(false);
 
   const navigate = (nextPath: string, replace = false) => {
+    /** Push or replace one browser history entry and update local route state. */
     if (window.location.pathname === nextPath) {
       setPath(nextPath);
       return;
@@ -53,12 +47,14 @@ export default function App() {
   };
 
   useEffect(() => {
+    /** Keep route state synchronized with browser back/forward navigation. */
     const handlePopState = () => setPath(getCurrentPath());
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   useEffect(() => {
+    /** Bootstrap auth once so protected routes can decide redirect/access states. */
     const bootstrapAuth = async () => {
       try {
         const response = await getMe();
@@ -81,161 +77,60 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    /** Enforce protected route redirects without adding a routing dependency. */
     if (authBootstrapping) {
       return;
     }
     if (path === "/") {
       return;
     }
-    if (path === "/login" && user) {
-      navigate("/app", true);
-      return;
-    }
-    if (path === "/app" && !user) {
+    if ((path.startsWith("/admin") || path.startsWith("/app")) && !user) {
+      sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, path);
       navigate("/login", true);
       return;
     }
-    if (path !== "/login" && path !== "/app") {
+    if (path === "/login" && user) {
+      const storedRedirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
+      sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+      navigate(storedRedirect?.startsWith("/admin") || storedRedirect?.startsWith("/app") ? storedRedirect : "/app", true);
+      return;
+    }
+    if (path.startsWith("/admin") || path.startsWith("/app")) {
+      return;
+    }
+    if (path !== "/login") {
       navigate(user ? "/app" : "/login", true);
     }
   }, [authBootstrapping, path, user]);
 
-  useEffect(() => {
-    if (!user || path !== "/app") {
-      return;
-    }
-
-    const restore = async () => {
-      const sessionId = localStorage.getItem(STORAGE_KEY);
-      if (!sessionId) {
-        setSessionBootstrapping(false);
-        return;
-      }
-
-      setSessionBootstrapping(true);
-      setBusyAction("boot");
-      try {
-        const detail = await getSession(sessionId);
-        setSession(detail.session);
-        setTurns(detail.turns);
-        setError(null);
-
-        if (detail.session.status === "finished") {
-          try {
-            const reportResponse = await getReport(sessionId);
-            setReport(reportResponse.report);
-          } catch {
-            setReport(null);
-          }
-        }
-      } catch (restoreError) {
-        const message = getErrorMessage(restoreError);
-        if (restoreError instanceof ApiError && restoreError.code === "not_found") {
-          localStorage.removeItem(STORAGE_KEY);
-        } else {
-          setError(message);
-        }
-      } finally {
-        setBusyAction(null);
-        setSessionBootstrapping(false);
-      }
-    };
-
-    void restore();
-  }, [path, user]);
-
-  const loading = busyAction !== null;
-  const isSending = busyAction === "send";
-  const canSend = session?.status === "active" && !loading;
-  const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
-
-  const startNewSession = async () => {
-    setBusyAction("create");
-    setError(null);
-    setReport(null);
-    setTurns([]);
-    setInputValue("");
-
-    try {
-      const response = await createSession();
-      setSession(response.session);
-      localStorage.setItem(STORAGE_KEY, response.session.session_id);
-    } catch (startError) {
-      setError(getErrorMessage(startError));
-      setSession(null);
-      localStorage.removeItem(STORAGE_KEY);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleSend = async () => {
-    if (!session || !inputValue.trim() || loading || session.status !== "active") {
-      return;
-    }
-
-    const message = inputValue.trim();
-    setInputValue("");
-    setBusyAction("send");
-    setError(null);
-
-    try {
-      const response = await sendMessage(session.session_id, message);
-      setSession(response.session);
-      setTurns(response.turns);
-    } catch (sendError) {
-      setInputValue(message);
-      setError(getErrorMessage(sendError));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleFinish = async () => {
-    if (!session || loading || session.status !== "active") {
-      return;
-    }
-
-    setBusyAction("finish");
-    setError(null);
-
-    try {
-      const response = await finishSession(session.session_id);
-      setSession(response.session);
-      setReport(response.report);
-    } catch (finishError) {
-      setError(getErrorMessage(finishError));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   const handleAuthenticated = (authenticatedUser: AuthUser) => {
+    /** Store the authenticated user and honor protected-route redirects after login. */
     setUser(authenticatedUser);
     setAuthError(null);
-    navigate("/app", true);
+    const storedRedirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
+    sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+    navigate(storedRedirect?.startsWith("/admin") || storedRedirect?.startsWith("/app") ? storedRedirect : "/app", true);
   };
 
   const handleLogout = async () => {
-    setBusyAction("logout");
-    setError(null);
+    /** Logout locally even if server revocation fails, avoiding stale protected UI. */
+    if (logoutBusy) {
+      return;
+    }
+    setLogoutBusy(true);
     try {
       await logoutRequest();
     } catch {
       // A failed logout request should not keep stale authenticated UI around.
     } finally {
       setUser(null);
-      setSession(null);
-      setTurns([]);
-      setInputValue("");
-      setReport(null);
-      setBusyAction(null);
+      setLogoutBusy(false);
       navigate("/login", true);
     }
   };
 
   if (authBootstrapping) {
-    return <div className="app-shell">Loading...</div>;
+    return <div className="app-shell">Загрузка...</div>;
   }
 
   if (path === "/") {
@@ -255,74 +150,9 @@ export default function App() {
     );
   }
 
-  if (sessionBootstrapping) {
-    return <div className="app-shell">Loading session...</div>;
+  if (path.startsWith("/admin")) {
+    return <AdminApp user={user} path={path} onNavigate={navigate} onLogout={handleLogout} />;
   }
 
-  if (!session) {
-    return (
-      <div className="app-shell">
-        <div className="welcome-card">
-          <span className="welcome-card__eyebrow">Sales Trainer</span>
-          <h1>Start a training session.</h1>
-          <p>Ask questions, qualify the client, and uncover the role, pain, constraints, and buying criteria.</p>
-          <p className="account-line">
-            {user.email} · {user.client_account.name}
-          </p>
-          {error ? <div className="error-banner">{error}</div> : null}
-          <div className="welcome-card__actions">
-            <button
-              type="button"
-              className="primary-button primary-button--large"
-              onClick={startNewSession}
-              disabled={loading}
-            >
-              Start training
-            </button>
-            <button type="button" className="secondary-button secondary-button--large" onClick={handleLogout} disabled={loading}>
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-shell">
-      <main className="layout">
-        <div className="side-panels">
-          <MetricsPanel session={session} />
-          <FactsPanel state={factsState} />
-          {report ? (
-            <section className="panel-card">
-              <div className="panel-card__header">
-                <h2>Final report</h2>
-              </div>
-              <pre className="report-block">{report}</pre>
-            </section>
-          ) : null}
-        </div>
-
-        <PhoneShell>
-          <SessionHeader
-            busy={loading}
-            canFinish={session.status === "active"}
-            onNewSession={startNewSession}
-            onFinish={handleFinish}
-            onLogout={handleLogout}
-          />
-          {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
-          <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
-          <Composer
-            value={inputValue}
-            onChange={setInputValue}
-            onSend={handleSend}
-            disabled={!canSend}
-            loading={isSending}
-          />
-        </PhoneShell>
-      </main>
-    </div>
-  );
+  return <ClientApp user={user} path={path} onNavigate={navigate} onLogout={handleLogout} onUserUpdated={setUser} />;
 }

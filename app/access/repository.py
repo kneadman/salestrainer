@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.access.models import (
     AuditLog,
     ClientTrainingConfig,
+    LLMProviderConfig,
     RuntimeTrainingConfig,
     TrainingSessionOwnership,
     UserTrainingConfig,
@@ -28,6 +29,7 @@ class AccessRepository:
         persona_policy: dict[str, object] | None = None,
         ui_config: dict[str, object] | None = None,
         limits: dict[str, object] | None = None,
+        llm_provider_config_id: UUID | None = None,
         is_active: bool = True,
         training_config_id: UUID | None = None,
     ) -> ClientTrainingConfig:
@@ -40,6 +42,7 @@ class AccessRepository:
             ui_config=ui_config or {},
             limits=limits or {},
             is_active=is_active,
+            llm_provider_config_id=llm_provider_config_id,
         )
         if training_config_id is not None:
             training_config_kwargs["id"] = training_config_id
@@ -105,6 +108,7 @@ class AccessRepository:
                 "persona_policy": training_config.persona_policy,
                 "ui_config": training_config.ui_config,
                 "limits": training_config.limits,
+                "llm_provider_config_id": training_config.llm_provider_config_id,
             }
         )
 
@@ -128,6 +132,9 @@ class AccessRepository:
         default_scenario_id: str | None = None,
         product_line: str | None = None,
         persona_policy: dict[str, object] | None = None,
+        ui_config: dict[str, object] | None = None,
+        limits: dict[str, object] | None = None,
+        llm_provider_config_id: UUID | None = None,
     ) -> ClientTrainingConfig | None:
         training_config = self._session.get(ClientTrainingConfig, training_config_id)
         if training_config is None:
@@ -141,10 +148,22 @@ class AccessRepository:
             training_config.product_line = product_line
         if persona_policy is not None:
             training_config.persona_policy = persona_policy
+        if ui_config is not None:
+            training_config.ui_config = ui_config
+        if limits is not None:
+            training_config.limits = limits
+        if llm_provider_config_id is not None:
+            training_config.llm_provider_config_id = llm_provider_config_id
 
         self._session.commit()
         self._session.refresh(training_config)
         return training_config
+
+    def get_training_config_by_id(self, training_config_id: UUID) -> ClientTrainingConfig | None:
+        return self._session.get(ClientTrainingConfig, training_config_id)
+
+    def get_llm_provider_config_by_id(self, config_id: UUID) -> LLMProviderConfig | None:
+        return self._session.get(LLMProviderConfig, config_id)
 
     def create_training_session_ownership(
         self,
@@ -180,6 +199,17 @@ class AccessRepository:
             statement = statement.where(TrainingSessionOwnership.client_account_id == client_account_id)
 
         return self._session.scalar(statement) is not None
+
+    def get_session_ownership(self, session_id: UUID) -> TrainingSessionOwnership | None:
+        """Load ownership metadata needed by API-side history writes."""
+        return self._session.get(TrainingSessionOwnership, session_id)
+
+    def delete_training_session_ownership(self, session_id: UUID) -> None:
+        """Delete ownership metadata when runtime session creation is compensated."""
+        ownership = self._session.get(TrainingSessionOwnership, session_id)
+        if ownership is not None:
+            self._session.delete(ownership)
+            self._session.commit()
 
     def create_audit_log_record(
         self,

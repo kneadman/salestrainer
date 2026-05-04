@@ -13,6 +13,7 @@ from app.admin.cli import (
     _assign_config,
     _cleanup_expired_sessions,
     _create_config,
+    _create_internal_admin,
     _create_user,
     _disable_user,
     _reset_password,
@@ -60,6 +61,44 @@ def test_create_user_stores_hash_not_raw_password() -> None:
     assert created_user is not None
     assert created_user.password_hash != "temporary-password"
     assert verify_password("temporary-password", created_user.password_hash)
+    session.close()
+
+
+def test_create_internal_admin_bootstraps_first_admin_only() -> None:
+    session = _create_session()
+    identity_repository = IdentityRepository(session)
+    access_repository = AccessRepository(session)
+
+    message = _create_internal_admin(
+        identity_repository=identity_repository,
+        access_repository=access_repository,
+        client_name="Platform",
+        client_slug="platform",
+        email="admin@example.test",
+        password="temporary-password",
+    )
+    created_user = identity_repository.get_user_by_email("admin@example.test")
+
+    assert "created internal admin" in message
+    assert created_user is not None
+    assert created_user.role == "internal_admin"
+    audit_record = session.scalar(select(AuditLog).where(AuditLog.action == "internal_admin_bootstrapped"))
+    assert audit_record is not None
+    assert audit_record.payload["client_account_id"] == str(created_user.client_account_id)
+
+    try:
+        _create_internal_admin(
+            identity_repository=identity_repository,
+            access_repository=access_repository,
+            client_name="Platform",
+            client_slug="platform",
+            email="other-admin@example.test",
+            password="temporary-password",
+        )
+    except Exception as error:
+        assert "internal admin already exists" in str(error)
+    else:
+        raise AssertionError("second internal admin bootstrap should fail")
     session.close()
 
 

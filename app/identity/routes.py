@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.identity.dependencies import get_auth_service, get_auth_settings, get_current_session
 from app.identity.csrf import clear_csrf_cookie, generate_csrf_token, set_csrf_cookie
 from app.identity.models import User
+from app.identity.roles import role_value
 from app.identity.rate_limit import LoginRateLimitExceeded
 from app.identity.service import AuthService, AuthenticationError, CurrentSession
 from app.infrastructure.config import Settings
@@ -30,6 +31,7 @@ class AuthUserDTO(BaseModel):
     id: UUID
     email: str
     role: str
+    must_change_password: bool
     client_account: ClientAccountDTO
 
 
@@ -39,6 +41,11 @@ class AuthUserResponse(BaseModel):
 
 class CsrfResponse(BaseModel):
     csrf_token: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 @router.post("/login", response_model=AuthUserResponse)
@@ -112,6 +119,26 @@ def logout(
     return response
 
 
+@router.post("/change-password", response_model=AuthUserResponse)
+def change_password(
+    request_body: ChangePasswordRequest,
+    request: Request,
+    current_session: CurrentSession = Depends(get_current_session),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> AuthUserResponse:
+    try:
+        user = auth_service.change_password(
+            current_session=current_session,
+            current_password=request_body.current_password,
+            new_password=request_body.new_password,
+            ip_address=_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except AuthenticationError as error:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(error)) from error
+    return AuthUserResponse(user=_user_dto(user))
+
+
 @router.get("/me", response_model=AuthUserResponse)
 def me(current_session: CurrentSession = Depends(get_current_session)) -> AuthUserResponse:
     return AuthUserResponse(user=_user_dto(current_session.user))
@@ -121,7 +148,8 @@ def _user_dto(user: User) -> AuthUserDTO:
     return AuthUserDTO(
         id=user.id,
         email=user.email,
-        role=user.role,
+        role=role_value(user.role),
+        must_change_password=user.must_change_password,
         client_account=ClientAccountDTO(
             id=user.client_account.id,
             name=user.client_account.name,

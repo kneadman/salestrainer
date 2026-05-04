@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from app.access.repository import AccessRepository
 from app.identity.models import LoginSession, User
 from app.identity.repository import IdentityRepository
-from app.identity.security import generate_secure_token, hash_token, verify_password
+from app.identity.security import generate_secure_token, hash_password, hash_token, verify_password
 from app.infrastructure.config import Settings
 
 
@@ -49,7 +49,12 @@ class AuthService:
     ) -> LoginResult:
         normalized_email = email.strip().lower()
         user = self._identity_repository.get_user_by_email(normalized_email)
-        if user is None or not user.is_active or not verify_password(password, user.password_hash):
+        if (
+            user is None
+            or not user.is_active
+            or not user.client_account.is_active
+            or not verify_password(password, user.password_hash)
+        ):
             self._access_repository.create_audit_log_record(
                 action="login_failed",
                 entity_type="user",
@@ -90,6 +95,7 @@ class AuthService:
             or login_session.revoked_at is not None
             or _as_utc(login_session.expires_at) <= now
             or not login_session.user.is_active
+            or not login_session.user.client_account.is_active
         ):
             raise AuthenticationError("Not authenticated.")
 
@@ -114,6 +120,35 @@ class AuthService:
             ip_address=ip_address,
             user_agent=user_agent,
         )
+
+    def change_password(
+        self,
+        *,
+        current_session: CurrentSession,
+        current_password: str,
+        new_password: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> User:
+        user = current_session.user
+        if not verify_password(current_password, user.password_hash):
+            raise AuthenticationError("Invalid current password.")
+        updated_user = self._identity_repository.update_user_password(
+            user_id=user.id,
+            password_hash=hash_password(new_password),
+            must_change_password=False,
+        )
+        if updated_user is None:
+            raise AuthenticationError("Not authenticated.")
+        self._access_repository.create_audit_log_record(
+            action="password_changed",
+            entity_type="user",
+            actor_user_id=updated_user.id,
+            entity_id=updated_user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        return updated_user
 
 
 def _as_utc(value: datetime) -> datetime:

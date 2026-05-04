@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
 
-from app.api.dependencies import get_report_service, get_session_service, get_turn_service
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.access.models import LandingLead
+from app.api.dependencies import get_persona_generation_service, get_report_service, get_session_service, get_turn_service
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
 from app.api.schemas import (
@@ -20,11 +24,14 @@ from app.api.schemas import (
     TurnResponse,
 )
 from app.application.projections import build_session_public_dto, build_turn_public_dto
+from app.application.persona_generation_service import PersonaGenerationService
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
 from app.domain.errors import (
     SalesTrainerError,
+    LLMProviderConfigurationError,
+    PersonaGenerationError,
     SessionNotActiveError,
     SessionNotFoundError,
     StateVersionConflictError,
@@ -39,8 +46,14 @@ from app.identity.dependencies import (
     require_internal_admin,
 )
 from app.identity.service import CurrentSession
+from app.identity.roles import is_internal_admin
+from app.history.dependencies import get_history_service
+from app.history.events import UsageEventType
+from app.history.service import HistoryService
+from app.infrastructure.db import get_db_session
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 ERROR_RESPONSES = {
@@ -55,6 +68,10 @@ def raise_api_error(error: SalesTrainerError) -> None:
         raise not_found(str(error)) from error
     if isinstance(error, (SessionNotActiveError, StateVersionConflictError)):
         raise conflict(str(error)) from error
+    if isinstance(error, LLMProviderConfigurationError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    if isinstance(error, PersonaGenerationError):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
     raise error
 
 
@@ -64,13 +81,32 @@ def healthcheck() -> dict[str, str]:
 
 
 @router.post("/leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
-def submit_landing_lead(request: LandingLeadRequest) -> LandingSubmitResponse:
+def submit_landing_lead(
+    request: LandingLeadRequest,
+    db_session: Session = Depends(get_db_session),
+) -> LandingSubmitResponse:
     if request.consent_personal_data is not True:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="consent_personal_data must be true.",
         )
-    # TODO: Persist leads or send them to CRM once the integration target is chosen.
+    lead = LandingLead(
+        name=request.name,
+        email=str(request.email),
+        phone=request.phone,
+        company=request.company,
+        role=request.role,
+        sales_team_size=request.sales_team_size,
+        consent_personal_data=request.consent_personal_data,
+        consent_marketing=request.consent_marketing,
+        comment=request.comment,
+        query_params=dict(request.query_params),
+        page=request.page,
+        form_id=request.form_id,
+        is_spam=bool(request.website and request.website.strip()),
+    )
+    db_session.add(lead)
+    db_session.commit()
     return LandingSubmitResponse(status="accepted")
 
 
@@ -80,7 +116,7 @@ def get_scenarios(
     current_session: CurrentSession = Depends(require_current_user),
 ) -> list[ScenarioOptionDTO]:
     scenarios = list_scenarios()
-    if current_session.user.role != "internal_admin":
+    if not is_internal_admin(current_session.user.role):
         try:
             training_config = access_service.get_default_training_config_for_user(current_session.user.id)
         except LookupError as error:
@@ -125,26 +161,42 @@ def create_session(
     request: SessionCreateRequest,
     session_service: TrainingSessionService = Depends(get_session_service),
     access_service: AccessService = Depends(get_access_service),
+    history_service: HistoryService = Depends(get_history_service),
+    persona_generation_service: PersonaGenerationService = Depends(get_persona_generation_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> SessionStateResponse:
     try:
         user_role = current_session.user.role
-        if user_role != "internal_admin" and request.persona_id is not None:
+        if not is_internal_admin(user_role) and request.persona_id is not None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="persona_id is not allowed for client_user sessions.",
+                detail="persona_id is not allowed for client sessions.",
             )
 
-        training_config = access_service.get_default_training_config_for_user(current_session.user.id)
-        if user_role == "internal_admin" and request.persona_id is not None:
+        try:
+            training_config = access_service.get_default_training_config_for_user(current_session.user.id)
+        except LookupError as error:
+            if is_internal_admin(user_role) and request.persona_id is not None:
+                raise not_found(
+                    "Default training config is required for internal admin debug sessions."
+                ) from error
+            raise
+
+        session = None
+        if is_internal_admin(user_role) and request.persona_id is not None:
             session = session_service.start_session(
                 scenario_id=request.scenario_id,
                 persona_id=request.persona_id,
             )
         else:
+            persona = persona_generation_service.generate_for_training_config(
+                training_config=training_config,
+                scenario_id=request.scenario_id,
+            )
             session = session_service.start_session(
                 scenario_id=request.scenario_id,
                 training_config=training_config,
+                persona_override=persona,
             )
         access_service.bind_session_to_user(
             session.session_id,
@@ -152,6 +204,18 @@ def create_session(
             training_config.client_account_id,
             training_config.id,
         )
+        try:
+            history_service.record_session_started(
+                session=session,
+                client_account_id=training_config.client_account_id,
+                user_id=current_session.user.id,
+                training_config_id=training_config.id,
+            )
+        except Exception:
+            logger.critical("history_session_start_failed session_id=%s", session.session_id, exc_info=True)
+            access_service.delete_session_ownership(session.session_id)
+            session_service.delete_session(str(session.session_id))
+            raise
     except SalesTrainerError as error:
         raise_api_error(error)
     except LookupError as error:
@@ -164,15 +228,24 @@ def get_session(
     session_id: str,
     session_service: TrainingSessionService = Depends(get_session_service),
     access_service: AccessService = Depends(get_access_service),
+    history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> SessionDetailResponse:
     try:
         access_service.require_session_access(session_id, current_session.user.id)
+        ownership = access_service.get_session_ownership(session_id)
     except LookupError as error:
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found.")
+    history_service.record_usage_event(
+        event_type=UsageEventType.SESSION_VIEWED.value,
+        client_account_id=ownership.client_account_id,
+        user_id=current_session.user.id,
+        training_config_id=ownership.training_config_id,
+        session_id=session.session_id,
+    )
     return SessionDetailResponse(
         session=build_session_public_dto(session),
         turns=build_turn_public_dto(session),
@@ -184,11 +257,20 @@ def resume_session(
     session_id: str,
     session_service: TrainingSessionService = Depends(get_session_service),
     access_service: AccessService = Depends(get_access_service),
+    history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> SessionStateResponse:
     try:
         access_service.require_session_access(session_id, current_session.user.id)
+        ownership = access_service.get_session_ownership(session_id)
         session = session_service.resume_session(session_id)
+        history_service.record_usage_event(
+            event_type=UsageEventType.SESSION_RESUMED.value,
+            client_account_id=ownership.client_account_id,
+            user_id=current_session.user.id,
+            training_config_id=ownership.training_config_id,
+            session_id=session.session_id,
+        )
     except SalesTrainerError as error:
         raise_api_error(error)
     except LookupError as error:
@@ -203,10 +285,12 @@ def post_manager_message(
     turn_service: TurnService = Depends(get_turn_service),
     session_service: TrainingSessionService = Depends(get_session_service),
     access_service: AccessService = Depends(get_access_service),
+    history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> TurnResponse:
     try:
         access_service.require_session_access(session_id, current_session.user.id)
+        ownership = access_service.get_session_ownership(session_id)
         turn_result = turn_service.process_message(session_id, request.manager_message)
     except SalesTrainerError as error:
         raise_api_error(error)
@@ -215,6 +299,17 @@ def post_manager_message(
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after turn.")
+    try:
+        history_service.record_turn_processed(
+            session=session,
+            turn_result=turn_result,
+            user_id=current_session.user.id,
+            client_account_id=ownership.client_account_id,
+            training_config_id=ownership.training_config_id,
+        )
+    except Exception:
+        logger.critical("history_turn_write_failed session_id=%s", session.session_id, exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Training turn was processed but history write failed.") from None
     return TurnResponse(
         session=build_session_public_dto(session),
         turns=build_turn_public_dto(session),
@@ -234,10 +329,12 @@ def finish_session(
     report_service: ReportService = Depends(get_report_service),
     session_service: TrainingSessionService = Depends(get_session_service),
     access_service: AccessService = Depends(get_access_service),
+    history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> FinishSessionResponse:
     try:
         access_service.require_session_access(session_id, current_session.user.id)
+        ownership = access_service.get_session_ownership(session_id)
         report_text = report_service.finish_session(session_id)
     except SalesTrainerError as error:
         raise_api_error(error)
@@ -246,6 +343,13 @@ def finish_session(
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after finish.")
+    history_service.record_session_finished_with_report(
+        session=session,
+        report_text=report_text,
+        user_id=current_session.user.id,
+        client_account_id=ownership.client_account_id,
+        training_config_id=ownership.training_config_id,
+    )
     return FinishSessionResponse(
         session=build_session_public_dto(session),
         report=report_text,
@@ -258,10 +362,12 @@ def get_report(
     report_service: ReportService = Depends(get_report_service),
     session_service: TrainingSessionService = Depends(get_session_service),
     access_service: AccessService = Depends(get_access_service),
+    history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> SessionReportResponse:
     try:
         access_service.require_session_access(session_id, current_session.user.id)
+        ownership = access_service.get_session_ownership(session_id)
     except LookupError as error:
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
@@ -273,6 +379,13 @@ def get_report(
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after report.")
+    history_service.record_report_generated(
+        session=session,
+        report_text=report_text,
+        user_id=current_session.user.id,
+        client_account_id=ownership.client_account_id,
+        training_config_id=ownership.training_config_id,
+    )
     return SessionReportResponse(
         session=build_session_public_dto(session),
         report=report_text,

@@ -1479,6 +1479,160 @@ Acceptance criteria:
 
 ## 24. Milestones
 
+### Milestone: New LLM Persona Generation Flow
+
+Status: done on 2026-05-03.
+
+Implemented a separate hidden-persona generation flow for authenticated API sessions:
+
+- `PersonaGenerationInput` normalizes `client_training_configs.persona_policy`, product line, scenario, target action, allowed roles/product lines, training goal, difficulty, seed, organization context, and constraints;
+- `PersonaGenerationOutput` validates provider output around the existing `PersonaProfile` contract;
+- `PersonaGenerationService` resolves organization LLM provider config per request and generates a persona before `TrainingSessionService.start_session(...)`;
+- `TrainingSessionService.start_session(...)` accepts `persona_override` so API can inject an LLM-generated persona while CLI/debug flows keep the legacy Python generator;
+- `FakePersonaGeneratorClient` preserves the existing Python generator as local/fake fallback;
+- `StructuredPersonaGeneratorClient` supports `yandex_compatible` and `openai_compatible` provider configs through structured JSON responses;
+- API session creation stores the generated hidden persona in Redis runtime state and persistent history continues to snapshot it server-side;
+- client-facing DTOs still do not expose hidden persona, raw prompts, raw LLM payloads, raw LLM responses, or provider secrets.
+
+Accepted architecture decisions:
+
+- Persona Generator LLM and Dialogue Simulator LLM are separate responsibilities;
+- Redis remains the active runtime state store;
+- PostgreSQL remains the source of training config, LLM provider config, history, reports, and snapshots;
+- missing persona provider config falls back to the legacy generator only in local/fake-fallback-compatible environments;
+- runtime dialogue turns still use the global dialogue LLM client until a separate per-client dialogue resolver stage.
+
+Open questions:
+
+- verify the persona generator against live Yandex/OpenAI-compatible providers;
+- add prompt/schema version fields to saved history snapshots;
+- decide whether admin should expose protected persona-generation diagnostics without raw payload leakage;
+- harden provider retry/backoff and observability around persona generation.
+
+### Milestone: Internal Admin Foundation
+
+Status: done on 2026-05-02.
+
+Implemented backend foundation for platform owner administration:
+
+- explicit roles: `internal_admin`, `client_lead`, `client_manager`; legacy `client_user` maps to `client_manager`;
+- isolated internal admin API under `/api/internal/*`, protected by `internal_admin`;
+- organization management on top of `client_accounts`;
+- organization user management with temporary passwords, disable/enable, reset password;
+- enforced password-change API: `/auth/change-password`, `must_change_password` in `/auth/login` and `/auth/me`;
+- organization training config management and user config assignment/default selection;
+- organization-scoped LLM provider config storage with encrypted API key and masked API responses;
+- `llm_provider_config_id` is stored and assignable on training configs, but runtime training turns still use the global LLM client from environment settings;
+- audit log records for internal admin mutations.
+
+Accepted architecture decisions:
+
+- runtime training state stays in Redis;
+- PostgreSQL stores identity/access/config/admin metadata;
+- LLM provider configs are not wired into runtime LLM execution yet;
+- internal admin API foundation is backend-only, no React admin UI in this stage;
+- plaintext provider secrets must not appear in DB, responses, logs, or audit payloads.
+
+Open questions:
+
+- replace MVP stdlib secret codec with a reviewed KMS/Fernet-style mechanism before production secret storage;
+- add stronger audit filtering by organization once audit payload querying is standardized per database;
+- decide UX and policy for forced password change in the frontend.
+
+Next stage: Client analytics hardening + billing/limits design.
+
+Goal: add focused frontend tests, richer analytics filters/charts, safe evaluation aggregates, and a reviewed billing/limits model without payment processing shortcuts.
+
+### Milestone: Client UI Analytics
+
+Status: done on 2026-05-03.
+
+Implemented client cabinet foundation:
+
+- `/app` became a client dashboard instead of only the trainer screen;
+- `/app/trainer` preserves the existing Redis-backed trainer flow;
+- `/app/history` and `/app/history/{session_id}` use client-facing persistent history endpoints;
+- `/app/analytics` shows personal persistent-history analytics;
+- `/app/team`, `/app/team/{user_id}`, and `/app/team-analytics` are available to `client_lead`;
+- `/app/balance` shows honest usage/billing placeholder without payment processing;
+- `/app/settings` shows profile fields and supports `/auth/change-password`;
+- client navigation is role-aware and hides team sections from `client_manager`;
+- new client-facing backend endpoints under `/api/client/*` and `/api/team/*` avoid using `/api/internal/*` in client UI.
+
+Accepted architecture decisions:
+
+- existing path-based frontend routing remains; no React Router dependency added;
+- no fake analytics or fake billing data;
+- team APIs are read-only and scoped to the lead's own `client_account_id`;
+- Redis runtime flow and per-client LLM runtime selection remain unchanged.
+
+Open questions:
+
+- add frontend tests for client role navigation and password form;
+- add date-range filters and richer trend aggregation in backend;
+- expose safe evaluation/skill aggregates for analytics;
+- design real billing/limits model separately.
+
+### Milestone: Internal Admin UI
+
+Status: done on 2026-05-03.
+
+Implemented production-oriented frontend foundation for platform owner administration:
+
+- protected `/admin` route for `internal_admin`;
+- no-access screen for `client_lead` and `client_manager`;
+- redirect unauthenticated admin visits through `/login`;
+- shared frontend API client for credentials, CSRF, and normalized errors;
+- admin dashboard with organization, config, LLM, usage, and audit overview;
+- organizations list/search/create/edit/enable/disable;
+- organization detail workspace with users, training configs, LLM settings, history, usage, and audit sections;
+- user create/update/reset-password/enable/disable and training config assignment actions;
+- training config forms with client-side JSON validation;
+- LLM provider config forms that never display full API keys and omit blank API key on update;
+- persistent history and usage views backed by Stage 2 endpoints;
+- audit log page with filters and compact JSON payload rendering.
+
+Accepted architecture decisions:
+
+- no new frontend routing dependency; existing path-based router was extended;
+- no fake analytics or fake history data;
+- no frontend UI library added;
+- no billing, client cabinet, Redis flow changes, or per-client LLM runtime resolver in this stage.
+
+Open questions:
+
+- add frontend component/integration tests for admin flows;
+- improve organization-level history filters with date range support when backend supports it;
+- decide which internal-only hidden snapshots, if any, should get protected admin views.
+
+### Milestone: Persistent Training History
+
+Status: done on 2026-05-03.
+
+Implemented backend foundation for durable training history while keeping Redis as the active runtime state store:
+
+- new PostgreSQL tables: `training_sessions`, `training_turns`, `training_reports`, `usage_events`;
+- authenticated `/api/sessions/*` flow records session start, turns, finish, report generation, and usage events;
+- client-facing history API under `/api/history/*`;
+- internal admin history and usage summary endpoints under `/api/internal/*`;
+- access rules: `client_manager` sees own history, `client_lead` sees same-organization history, `internal_admin` uses internal endpoints;
+- public history DTOs exclude hidden persona snapshots, raw LLM payloads, raw LLM responses, and secrets;
+- integration tests cover persistence, access control, saved reports, internal history, and usage summary.
+
+Accepted architecture decisions:
+
+- Redis remains canonical for active runtime training state;
+- PostgreSQL is canonical for durable history, reports, usage events, and future analytics;
+- API history writes are fail-fast for authenticated SaaS flow;
+- CLI local flow is not wired to PostgreSQL history in this stage;
+- old Redis-only sessions are not backfilled.
+
+Open questions:
+
+- add retention/cleanup policy for old history and Redis sessions;
+- decide whether hidden server-side snapshots need internal admin read endpoints;
+- harden internal usage filters before building analytics UI.
+
 ### Milestone 0. Skeleton
 
 Цель: проект запускается, Redis работает, структура готова.
@@ -1658,4 +1812,3 @@ MVP считается готовым, если:
 Нужно разработать CLI MVP тренажера продаж, где пользователь ведет переписку с симулированным B2B-клиентом. Система хранит состояние сессии в Redis, передает в LLM текущий snapshot состояния и сообщение менеджера, получает JSON с репликой клиента, изменением интереса и patch состояния, валидирует ответ, обновляет state и показывает клиентскую реплику пользователю.
 
 Архитектура должна быть слоистой: CLI как тонкий адаптер, application services как ядро, domain layer для бизнес-правил, infrastructure layer для Redis и LLM. Это позволит позже добавить frontend через API без переписывания основной логики.
-

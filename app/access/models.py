@@ -42,6 +42,11 @@ class ClientTrainingConfig(Base):
         default=dict,
         server_default=text("'{}'"),
     )
+    llm_provider_config_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("llm_provider_configs.id"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -65,6 +70,46 @@ class UserTrainingConfig(Base):
         primary_key=True,
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+
+
+class LLMProviderConfig(Base):
+    __tablename__ = "llm_provider_configs"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    client_account_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("client_accounts.id"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    folder_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_or_agent_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    persona_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    persona_agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    persona_folder_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    persona_master_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    persona_json_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dialogue_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dialogue_agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dialogue_folder_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dialogue_master_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dialogue_json_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 class TrainingSessionOwnership(Base):
@@ -112,6 +157,26 @@ class AuditLog(Base):
     )
 
 
+class LandingLead(Base):
+    __tablename__ = "landing_leads"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    phone: Mapped[str] = mapped_column(Text, nullable=False)
+    company: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    sales_team_size: Mapped[str] = mapped_column(Text, nullable=False)
+    consent_personal_data: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    consent_marketing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    query_params: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
+    page: Mapped[str | None] = mapped_column(Text, nullable=True)
+    form_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_spam: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class RuntimeTrainingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -124,6 +189,7 @@ class RuntimeTrainingConfig(BaseModel):
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
     limits: dict[str, object] = Field(default_factory=dict)
+    llm_provider_config_id: UUID | None = None
 
     def allowed_scenario_ids(self) -> list[str]:
         if self.allowed_scenarios:
