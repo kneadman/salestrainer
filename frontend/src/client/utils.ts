@@ -1,4 +1,5 @@
 import { ApiError } from "../apiClient";
+import { formatDate } from "../labels";
 import type { ClientRouteState } from "./types";
 
 export function parseClientPath(path: string): ClientRouteState {
@@ -45,18 +46,12 @@ export function getClientErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unexpected error.";
+  return "Неожиданная ошибка.";
 }
 
 export function formatClientDate(value: string | null | undefined): string {
   /** Format dates consistently in the client cabinet. */
-  if (!value) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return formatDate(value);
 }
 
 export function percent(value: number): string {

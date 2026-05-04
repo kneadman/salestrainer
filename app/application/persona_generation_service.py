@@ -51,7 +51,7 @@ class PersonaGenerationService:
             output = client.generate_persona(input_payload)
         except LLMClientError as error:
             raise PersonaGenerationError("Persona generator failed to produce a valid profile.") from error
-        persona = validate_generated_persona(output)
+        persona = validate_generated_persona(output, input_payload)
         logger.info(
             "persona_generated training_config_id=%s client_account_id=%s provider=%s persona_id=%s",
             training_config.id,
@@ -176,19 +176,22 @@ class PersonaGeneratorClientFactory:
         fallback_generator: PersonaGenerator,
     ) -> StructuredPersonaGeneratorClient:
         """Create an OpenAI/Yandex-compatible persona generator without logging secrets."""
-        if provider_config.encrypted_api_key is None:
+        encrypted_api_key = provider_config.persona_api_key_encrypted or provider_config.encrypted_api_key
+        if encrypted_api_key is None:
             if self._allow_local_fallback():
                 logger.warning("persona_generator_missing_api_key provider=%s fallback=local", provider)
                 return FakePersonaGeneratorClient(fallback_generator)
             raise LLMProviderConfigurationError("Persona generator provider config does not have an API key.")
-        api_key = decrypt_secret(provider_config.encrypted_api_key, self._settings)
+        api_key = decrypt_secret(encrypted_api_key, self._settings)
         return StructuredPersonaGeneratorClient(
             provider=provider,
-            base_url=provider_config.base_url or self._default_base_url(provider),
+            base_url=self._default_base_url(provider),
             api_key=api_key,
-            folder_id=provider_config.folder_id,
-            agent_id=provider_config.agent_id,
+            folder_id=provider_config.persona_folder_id or provider_config.folder_id,
+            agent_id=provider_config.persona_agent_id or provider_config.agent_id,
             model_or_agent_label=provider_config.model_or_agent_label,
+            master_prompt=provider_config.persona_master_prompt,
+            json_template=provider_config.persona_json_template,
             timeout_seconds=self._settings.llm_request_timeout_seconds,
             fallback_client=FakePersonaGeneratorClient(fallback_generator) if self._allow_local_fallback() else None,
             debug_payload_logging=self._settings.debug_llm_payload,

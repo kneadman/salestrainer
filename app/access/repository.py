@@ -204,6 +204,13 @@ class AccessRepository:
         """Load ownership metadata needed by API-side history writes."""
         return self._session.get(TrainingSessionOwnership, session_id)
 
+    def delete_training_session_ownership(self, session_id: UUID) -> None:
+        """Delete ownership metadata when runtime session creation is compensated."""
+        ownership = self._session.get(TrainingSessionOwnership, session_id)
+        if ownership is not None:
+            self._session.delete(ownership)
+            self._session.commit()
+
     def create_audit_log_record(
         self,
         *,

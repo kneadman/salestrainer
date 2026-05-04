@@ -15,7 +15,7 @@ export function AdminApp({ user, path, onNavigate, onLogout }: AdminAppProps) {
     return (
       <div className="admin-denied">
         <section className="admin-panel admin-denied__card">
-          <span className="admin-kicker">No access</span>
+          <span className="admin-kicker">Нет доступа</span>
           <h1>Нет доступа</h1>
           <p>Внутренний кабинет доступен только владельцу платформы с ролью internal_admin.</p>
           <div className="admin-actions">
@@ -23,7 +23,7 @@ export function AdminApp({ user, path, onNavigate, onLogout }: AdminAppProps) {
               Перейти в тренажер
             </button>
             <button type="button" className="admin-button" onClick={() => void onLogout()}>
-              Logout
+              Выйти
             </button>
           </div>
         </section>

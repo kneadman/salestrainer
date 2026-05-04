@@ -211,6 +211,88 @@ class HistoryRepository:
         self._session.refresh(record)
         return record
 
+    def create_session_with_event(
+        self,
+        *,
+        session_kwargs: dict[str, object],
+        event_kwargs: dict[str, object],
+    ) -> TrainingSessionRecord:
+        """Create a history session and its usage event in one database commit."""
+        record = TrainingSessionRecord(**session_kwargs)
+        event = UsageEventRecord(**event_kwargs)
+        self._session.add_all([record, event])
+        try:
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+        self._session.refresh(record)
+        return record
+
+    def record_turn_with_rollup_and_event(
+        self,
+        *,
+        turn_kwargs: dict[str, object],
+        session_id: UUID,
+        rollup: dict[str, object],
+        event_kwargs: dict[str, object],
+    ) -> TrainingTurnRecord:
+        """Append a turn, update session rollup, and write usage in one commit."""
+        session_record = self.get_session(session_id)
+        if session_record is None:
+            raise LookupError("History session not found.")
+        turn = TrainingTurnRecord(**turn_kwargs)
+        for field, value in rollup.items():
+            setattr(session_record, field, value)
+        event = UsageEventRecord(**event_kwargs)
+        self._session.add_all([turn, event])
+        try:
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+        self._session.refresh(turn)
+        return turn
+
+    def finish_session_with_report_and_events(
+        self,
+        *,
+        session_id: UUID,
+        finish: dict[str, object],
+        report_text: str,
+        report_payload: dict[str, object],
+        finish_event_kwargs: dict[str, object],
+        report_event_kwargs: dict[str, object],
+        report_version: int = 1,
+    ) -> TrainingReportRecord:
+        """Mark a session finished, upsert report, and write finish/report events in one commit."""
+        session_record = self.get_session(session_id)
+        if session_record is None:
+            raise LookupError("History session not found.")
+        for field, value in finish.items():
+            setattr(session_record, field, value)
+        report = self.get_report(session_id)
+        if report is None:
+            report = TrainingReportRecord(
+                session_id=session_id,
+                report_text=report_text,
+                report_payload=report_payload,
+                report_version=report_version,
+            )
+            self._session.add(report)
+        else:
+            report.report_text = report_text
+            report.report_payload = report_payload
+            report.report_version = report_version
+        self._session.add_all([UsageEventRecord(**finish_event_kwargs), UsageEventRecord(**report_event_kwargs)])
+        try:
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+        self._session.refresh(report)
+        return report
+
     def list_sessions_for_user(
         self,
         *,

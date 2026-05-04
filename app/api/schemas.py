@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class InterestDTO(BaseModel):
@@ -58,7 +58,7 @@ class SessionCreateRequest(BaseModel):
 
 class LandingLeadRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    email: str = Field(min_length=1, max_length=320)
+    email: EmailStr
     phone: str = Field(min_length=1, max_length=80)
     company: str = Field(min_length=1, max_length=200)
     role: str = Field(min_length=1, max_length=200)
@@ -69,6 +69,14 @@ class LandingLeadRequest(BaseModel):
     query_params: dict[str, str] = Field(default_factory=dict)
     page: str | None = Field(default=None, max_length=80)
     form_id: str | None = Field(default=None, max_length=120)
+    website: str | None = Field(default=None, max_length=500)
+
+    @field_validator("query_params")
+    @classmethod
+    def whitelist_query_params(cls, value: dict[str, str]) -> dict[str, str]:
+        """Keep only known attribution keys from the public landing form."""
+        allowed_keys = {"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref"}
+        return {key: str(item)[:300] for key, item in value.items() if key in allowed_keys}
 
 
 class LandingSubmitResponse(BaseModel):

@@ -1,5 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  productLineLabel,
+  providerLabel,
+  roleLabel,
+  scenarioLabel,
+  statusLabel as entityStatusLabel,
+} from "../labels";
+import {
   assignTrainingConfig,
   createLLMProviderConfig,
   createTrainingConfig,
@@ -70,11 +77,16 @@ type LLMForm = {
   id?: string;
   name: string;
   provider: "yandex_compatible" | "openai_compatible" | "fake";
-  api_key: string;
-  folder_id: string;
-  agent_id: string;
-  base_url: string;
-  model_or_agent_label: string;
+  persona_api_key: string;
+  persona_folder_id: string;
+  persona_agent_id: string;
+  persona_master_prompt: string;
+  persona_json_template: string;
+  dialogue_api_key: string;
+  dialogue_folder_id: string;
+  dialogue_agent_id: string;
+  dialogue_master_prompt: string;
+  dialogue_json_template: string;
 };
 
 const DEFAULT_CONFIG_FORM: ConfigForm = {
@@ -90,11 +102,16 @@ const DEFAULT_CONFIG_FORM: ConfigForm = {
 const DEFAULT_LLM_FORM: LLMForm = {
   name: "",
   provider: "yandex_compatible",
-  api_key: "",
-  folder_id: "",
-  agent_id: "",
-  base_url: "",
-  model_or_agent_label: "",
+  persona_api_key: "",
+  persona_folder_id: "",
+  persona_agent_id: "",
+  persona_master_prompt: "",
+  persona_json_template: "",
+  dialogue_api_key: "",
+  dialogue_folder_id: "",
+  dialogue_agent_id: "",
+  dialogue_master_prompt: "",
+  dialogue_json_template: "",
 };
 
 export function OrganizationDetailPage({ organizationId, onNavigate }: OrganizationDetailPageProps) {
@@ -300,13 +317,20 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
     const payload: LLMProviderConfigPayload = {
       name: llmForm.name,
       provider: llmForm.provider,
-      folder_id: llmForm.folder_id || null,
-      agent_id: llmForm.agent_id || null,
-      base_url: llmForm.base_url || null,
-      model_or_agent_label: llmForm.model_or_agent_label || null,
+      persona_folder_id: llmForm.persona_folder_id || null,
+      persona_agent_id: llmForm.persona_agent_id || null,
+      persona_master_prompt: llmForm.persona_master_prompt || null,
+      persona_json_template: llmForm.persona_json_template || null,
+      dialogue_folder_id: llmForm.dialogue_folder_id || null,
+      dialogue_agent_id: llmForm.dialogue_agent_id || null,
+      dialogue_master_prompt: llmForm.dialogue_master_prompt || null,
+      dialogue_json_template: llmForm.dialogue_json_template || null,
     };
-    if (llmForm.api_key.trim()) {
-      payload.api_key = llmForm.api_key;
+    if (llmForm.persona_api_key.trim()) {
+      payload.persona_api_key = llmForm.persona_api_key;
+    }
+    if (llmForm.dialogue_api_key.trim()) {
+      payload.dialogue_api_key = llmForm.dialogue_api_key;
     }
     try {
       if (llmForm.id) {
@@ -395,7 +419,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
             {organization.slug} · created {formatDate(organization.created_at)} · updated {formatDate(organization.updated_at)}
           </p>
         </div>
-        <Badge tone={organization.is_active ? "good" : "danger"}>{statusLabel(organization.is_active)}</Badge>
+        <Badge tone={organization.is_active ? "good" : "danger"}>{entityStatusLabel(organization.is_active)}</Badge>
       </div>
       {error ? <div className="admin-alert admin-alert--error">{error}</div> : null}
       {success ? <div className="admin-alert">{success}</div> : null}
@@ -513,7 +537,7 @@ function UsersSection(props: {
                 return (
                   <tr key={user.id}>
                     <td>{user.email}</td>
-                    <td><Badge>{user.role}</Badge></td>
+                    <td><Badge>{roleLabel(user.role)}</Badge></td>
                     <td>
                       <Badge tone={user.is_active ? "good" : "danger"}>{statusLabel(user.is_active)}</Badge>
                       {user.must_change_password ? <Badge tone="warning">must change</Badge> : null}
@@ -602,7 +626,7 @@ function ConfigsSection(props: {
             <tbody>
               {props.configs.map((config) => (
                 <tr key={config.id}>
-                  <td>{config.name}</td><td>{config.default_scenario_id}</td><td>{config.product_line}</td>
+                  <td>{config.name}</td><td>{scenarioLabel(config.default_scenario_id)}</td><td>{productLineLabel(config.product_line)}</td>
                   <td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td>
                   <td>{props.llmConfigs.find((item) => item.id === config.llm_provider_config_id)?.name ?? "—"}</td>
                   <td><div className="admin-row-actions">
@@ -630,23 +654,37 @@ function LLMSection(props: {
   /** Render LLM provider config form and secret-safe config list. */
   return (
     <section className="admin-panel">
-      <div className="admin-panel__header"><h2>LLM Settings</h2></div>
+      <div className="admin-panel__header"><h2>LLM-настройки</h2></div>
       <form className="admin-form admin-form--stacked" onSubmit={props.onSubmit}>
-        <p className="admin-muted">New API key will be stored encrypted. The current key is never displayed in full.</p>
+        <p className="admin-muted">Base URL Yandex задается глобально и одинаков для всех клиентов.</p>
+        <p className="admin-muted">API key хранится зашифрованно и полностью не отображается. Пустое поле API key при сохранении не меняет текущий ключ.</p>
         <div className="admin-form-grid">
-          <label><span>Name</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
-          <label><span>Provider</span><select value={props.form.provider} onChange={(event) => props.setForm({ ...props.form, provider: event.target.value as LLMForm["provider"] })}><option value="yandex_compatible">yandex_compatible</option><option value="openai_compatible">openai_compatible</option><option value="fake">fake</option></select></label>
-          <label><span>API key</span><input type="password" value={props.form.api_key} onChange={(event) => props.setForm({ ...props.form, api_key: event.target.value })} /></label>
-          <label><span>Folder ID</span><input value={props.form.folder_id} onChange={(event) => props.setForm({ ...props.form, folder_id: event.target.value })} /></label>
-          <label><span>Agent ID</span><input value={props.form.agent_id} onChange={(event) => props.setForm({ ...props.form, agent_id: event.target.value })} /></label>
-          <label><span>Base URL</span><input value={props.form.base_url} onChange={(event) => props.setForm({ ...props.form, base_url: event.target.value })} /></label>
-          <label><span>Model/agent label</span><input value={props.form.model_or_agent_label} onChange={(event) => props.setForm({ ...props.form, model_or_agent_label: event.target.value })} /></label>
+          <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
+          <label><span>Провайдер</span><select value={props.form.provider} onChange={(event) => props.setForm({ ...props.form, provider: event.target.value as LLMForm["provider"] })}><option value="yandex_compatible">Yandex AI Studio</option><option value="openai_compatible">OpenAI-compatible</option><option value="fake">Локальная тестовая модель</option></select></label>
         </div>
-        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Update LLM config" : "Create LLM config"}</button>
+        <div className="admin-json-grid">
+          <fieldset className="admin-fieldset">
+            <legend>Генерация личности</legend>
+            <label><span>API key</span><input type="password" value={props.form.persona_api_key} onChange={(event) => props.setForm({ ...props.form, persona_api_key: event.target.value })} /></label>
+            <label><span>Agent ID</span><input value={props.form.persona_agent_id} onChange={(event) => props.setForm({ ...props.form, persona_agent_id: event.target.value })} /></label>
+            <label><span>Folder ID</span><input value={props.form.persona_folder_id} onChange={(event) => props.setForm({ ...props.form, persona_folder_id: event.target.value })} /></label>
+            <label><span>Master prompt</span><textarea value={props.form.persona_master_prompt} onChange={(event) => props.setForm({ ...props.form, persona_master_prompt: event.target.value })} /></label>
+            <label><span>JSON template</span><textarea value={props.form.persona_json_template} onChange={(event) => props.setForm({ ...props.form, persona_json_template: event.target.value })} /></label>
+          </fieldset>
+          <fieldset className="admin-fieldset">
+            <legend>Диалоговая модель</legend>
+            <label><span>API key</span><input type="password" value={props.form.dialogue_api_key} onChange={(event) => props.setForm({ ...props.form, dialogue_api_key: event.target.value })} /></label>
+            <label><span>Agent ID</span><input value={props.form.dialogue_agent_id} onChange={(event) => props.setForm({ ...props.form, dialogue_agent_id: event.target.value })} /></label>
+            <label><span>Folder ID</span><input value={props.form.dialogue_folder_id} onChange={(event) => props.setForm({ ...props.form, dialogue_folder_id: event.target.value })} /></label>
+            <label><span>Master prompt</span><textarea value={props.form.dialogue_master_prompt} onChange={(event) => props.setForm({ ...props.form, dialogue_master_prompt: event.target.value })} /></label>
+            <label><span>JSON template</span><textarea value={props.form.dialogue_json_template} onChange={(event) => props.setForm({ ...props.form, dialogue_json_template: event.target.value })} /></label>
+          </fieldset>
+        </div>
+        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Сохранить LLM-настройки" : "Создать LLM-настройки"}</button>
       </form>
-      {props.configs.length === 0 ? <EmptyState title="No LLM provider configs" /> : (
-        <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Name</th><th>Provider</th><th>Status</th><th>Key</th><th>Folder</th><th>Agent</th><th>Actions</th></tr></thead><tbody>{props.configs.map((config) => (
-          <tr key={config.id}><td>{config.name}</td><td>{config.provider}</td><td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td><td>{config.has_api_key ? config.api_key_preview ?? "masked" : "none"}</td><td>{config.folder_id ?? "—"}</td><td>{config.agent_id ?? "—"}</td><td><div className="admin-row-actions"><button type="button" className="admin-link-button" onClick={() => props.setForm({ id: config.id, name: config.name, provider: config.provider === "openai_compatible" || config.provider === "fake" ? config.provider : "yandex_compatible", api_key: "", folder_id: config.folder_id ?? "", agent_id: config.agent_id ?? "", base_url: config.base_url ?? "", model_or_agent_label: config.model_or_agent_label ?? "" })}>Edit</button><button type="button" className="admin-link-button" onClick={() => props.onToggle(config)}>{config.is_active ? "Disable" : "Enable"}</button></div></td></tr>
+      {props.configs.length === 0 ? <EmptyState title="LLM-настройки не созданы" /> : (
+        <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Название</th><th>Провайдер</th><th>Статус</th><th>Генерация личности</th><th>Диалоговая модель</th><th>Действия</th></tr></thead><tbody>{props.configs.map((config) => (
+          <tr key={config.id}><td>{config.name}</td><td>{providerLabel(config.provider)}</td><td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td><td>{config.has_persona_api_key ? config.persona_api_key_preview ?? "ключ скрыт" : "не настроено"}<br />{config.persona_folder_id ?? "Folder ID не настроен"}<br />{config.persona_agent_id ?? "Agent ID не настроен"}</td><td>{config.has_dialogue_api_key ? config.dialogue_api_key_preview ?? "ключ скрыт" : "не настроено"}<br />{config.dialogue_folder_id ?? "Folder ID не настроен"}<br />{config.dialogue_agent_id ?? "Agent ID не настроен"}</td><td><div className="admin-row-actions"><button type="button" className="admin-link-button" onClick={() => props.setForm({ id: config.id, name: config.name, provider: config.provider === "openai_compatible" || config.provider === "fake" ? config.provider : "yandex_compatible", persona_api_key: "", persona_folder_id: config.persona_folder_id ?? "", persona_agent_id: config.persona_agent_id ?? "", persona_master_prompt: config.persona_master_prompt ?? "", persona_json_template: config.persona_json_template ?? "", dialogue_api_key: "", dialogue_folder_id: config.dialogue_folder_id ?? "", dialogue_agent_id: config.dialogue_agent_id ?? "", dialogue_master_prompt: config.dialogue_master_prompt ?? "", dialogue_json_template: config.dialogue_json_template ?? "" })}>Изменить</button><button type="button" className="admin-link-button" onClick={() => props.onToggle(config)}>{config.is_active ? "Отключить" : "Включить"}</button></div></td></tr>
         ))}</tbody></table></div>
       )}
     </section>
@@ -656,9 +694,9 @@ function LLMSection(props: {
 function HistorySection({ history, onNavigate }: { history: HistorySessionSummaryDTO[]; onNavigate: (path: string) => void }) {
   /** Render persistent training history rows without hidden snapshots. */
   if (history.length === 0) {
-    return <EmptyState title="No training history" detail="History appears for sessions created after Persistent Training History migration." />;
+    return <EmptyState title="История тренировок пуста" detail="История появится после первых сохраненных тренировок." />;
   }
-  return <section className="admin-panel"><div className="admin-panel__header"><h2>Training History</h2></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Session</th><th>User</th><th>Status</th><th>Scenario</th><th>Turns</th><th>Interest</th><th>Started</th><th>Actions</th></tr></thead><tbody>{history.map((session) => <tr key={session.session_id}><td>{session.session_id.slice(0, 8)}</td><td>{session.user_email}</td><td><Badge>{session.status}</Badge></td><td>{session.scenario_id}</td><td>{session.turn_count}</td><td>{session.final_interest_score ?? "—"}</td><td>{formatDate(session.started_at)}</td><td><button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/history/sessions/${session.session_id}`)}>Open</button></td></tr>)}</tbody></table></div></section>;
+  return <section className="admin-panel"><div className="admin-panel__header"><h2>История тренировок</h2></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>ID сессии</th><th>Пользователь</th><th>Статус</th><th>Сценарий</th><th>Сообщения</th><th>Интерес</th><th>Начало</th><th>Действия</th></tr></thead><tbody>{history.map((session) => <tr key={session.session_id}><td>{session.session_id.slice(0, 8)}</td><td>{session.user_email}</td><td><Badge>{entityStatusLabel(session.status)}</Badge></td><td>{scenarioLabel(session.scenario_id)}</td><td>{session.turn_count}</td><td>{session.final_interest_score ?? "—"}</td><td>{formatDate(session.started_at)}</td><td><button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/history/sessions/${session.session_id}`)}>Открыть</button></td></tr>)}</tbody></table></div></section>;
 }
 
 function UsageSection({ usage }: { usage: UsageSummaryDTO | null }) {

@@ -1,4 +1,5 @@
 import type { AuthUser } from "../types";
+import { roleLabel } from "../labels";
 
 type AdminLayoutProps = {
   user: AuthUser;
@@ -9,14 +10,14 @@ type AdminLayoutProps = {
 };
 
 const NAV_ITEMS = [
-  { label: "Dashboard", path: "/admin" },
-  { label: "Organizations", path: "/admin/organizations" },
-  { label: "Users / Team", path: "/admin/organizations" },
-  { label: "Training Configs", path: "/admin/organizations" },
-  { label: "LLM Settings", path: "/admin/organizations" },
-  { label: "Training History", path: "/admin/history" },
-  { label: "Usage Analytics", path: "/admin/organizations" },
-  { label: "Audit Log", path: "/admin/audit-log" },
+  { label: "Обзор", path: "/admin" },
+  { label: "Организации", path: "/admin/organizations" },
+  { label: "Пользователи", path: "/admin/organizations" },
+  { label: "Тренировочные конфиги", path: "/admin/organizations" },
+  { label: "LLM-настройки", path: "/admin/organizations" },
+  { label: "История тренировок", path: "/admin/history" },
+  { label: "Аналитика", path: "/admin/organizations" },
+  { label: "Аудит", path: "/admin/audit-log" },
 ];
 
 export function AdminLayout({ user, activePath, children, onNavigate, onLogout }: AdminLayoutProps) {
@@ -27,11 +28,11 @@ export function AdminLayout({ user, activePath, children, onNavigate, onLogout }
         <div className="admin-sidebar__brand">
           <span>ST</span>
           <div>
-            <strong>Platform Admin</strong>
-            <small>Internal workspace</small>
+            <strong>Администрирование</strong>
+            <small>Внутренний кабинет</small>
           </div>
         </div>
-        <nav className="admin-nav" aria-label="Admin navigation">
+        <nav className="admin-nav" aria-label="Навигация администратора">
           {NAV_ITEMS.map((item) => (
             <button
               key={`${item.label}-${item.path}`}
@@ -48,17 +49,17 @@ export function AdminLayout({ user, activePath, children, onNavigate, onLogout }
         <header className="admin-topbar">
           <div>
             <strong>{user.email}</strong>
-            <span>{user.role}</span>
+            <span>{roleLabel(user.role)}</span>
           </div>
           <div className="admin-topbar__actions">
             <button type="button" className="admin-button admin-button--ghost" onClick={() => onNavigate("/app")}>
-              Back to app
+              В кабинет
             </button>
             <button type="button" className="admin-button admin-button--ghost" onClick={() => onNavigate("/")}>
-              Landing
+              Лендинг
             </button>
             <button type="button" className="admin-button" onClick={() => void onLogout()}>
-              Logout
+              Выйти
             </button>
           </div>
         </header>

@@ -1,4 +1,5 @@
 import type { AuthUser } from "../types";
+import { roleLabel } from "../labels";
 import { ClientBadge } from "./components/ClientPrimitives";
 
 type ClientLayoutProps = {
@@ -34,11 +35,11 @@ export function ClientLayout({ user, path, children, onNavigate, onLogout }: Cli
         <div className="client-brand">
           <span>ST</span>
           <div>
-            <strong>Sales Trainer</strong>
+            <strong>Тренажер продаж</strong>
             <small>{user.client_account.name}</small>
           </div>
         </div>
-        <nav className="client-nav" aria-label="Client cabinet navigation">
+        <nav className="client-nav" aria-label="Навигация клиентского кабинета">
           {nav.map((item) => (
             <button
               key={item.path}
@@ -58,9 +59,9 @@ export function ClientLayout({ user, path, children, onNavigate, onLogout }: Cli
             <span>{user.client_account.name}</span>
           </div>
           <div className="client-topbar__actions">
-            <ClientBadge tone={user.role === "client_lead" ? "good" : "neutral"}>{user.role}</ClientBadge>
-            {user.must_change_password ? <ClientBadge tone="warning">must change password</ClientBadge> : null}
-            <button type="button" className="client-button" onClick={() => void onLogout()}>Logout</button>
+            <ClientBadge tone={user.role === "client_lead" ? "good" : "neutral"}>{roleLabel(user.role)}</ClientBadge>
+            {user.must_change_password ? <ClientBadge tone="warning">Нужно сменить пароль</ClientBadge> : null}
+            <button type="button" className="client-button" onClick={() => void onLogout()}>Выйти</button>
           </div>
         </header>
         <main className="client-content">{children}</main>

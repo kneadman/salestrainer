@@ -9,14 +9,14 @@ type LoginPageProps = {
 function getLoginErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401) {
-      return "Invalid email or password.";
+      return "Неверный email или пароль.";
     }
     return error.message;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unexpected login error.";
+  return "Неожиданная ошибка входа.";
 }
 
 export function LoginPage({ onAuthenticated }: LoginPageProps) {
@@ -52,7 +52,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     <div className="app-shell">
       <form className="login-card" onSubmit={handleSubmit}>
         <span className="welcome-card__eyebrow">Sales Trainer</span>
-        <h1>Sign in</h1>
+        <h1>Вход</h1>
         <label className="field">
           <span>Email</span>
           <input
@@ -65,7 +65,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           />
         </label>
         <label className="field">
-          <span>Password</span>
+          <span>Пароль</span>
           <input
             type="password"
             autoComplete="current-password"
@@ -77,7 +77,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
         </label>
         {error ? <div className="error-banner">{error}</div> : null}
         <button type="submit" className="primary-button primary-button--large" disabled={loading}>
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? "Входим..." : "Войти"}
         </button>
       </form>
     </div>

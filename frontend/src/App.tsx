@@ -16,7 +16,7 @@ function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unexpected error.";
+  return "Неожиданная ошибка.";
 }
 
 function getCurrentPath(): string {
@@ -130,7 +130,7 @@ export default function App() {
   };
 
   if (authBootstrapping) {
-    return <div className="app-shell">Loading...</div>;
+    return <div className="app-shell">Загрузка...</div>;
   }
 
   if (path === "/") {

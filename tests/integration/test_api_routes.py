@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.access.models import TrainingSessionOwnership
+from app.access.models import LandingLead, TrainingSessionOwnership
 from app.access.repository import AccessRepository
 from app.api.dependencies import get_persona_generation_service
 from app.api.main import create_app
@@ -462,7 +462,7 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
 
     app.dependency_overrides[get_db_session] = override_get_db_session
     app.dependency_overrides[get_persona_generation_service] = lambda: StubPersonaGenerationService()
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
     _login(client)
 
     response = client.post("/api/sessions", json={})
@@ -475,6 +475,75 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert saved_session.persona.role == "cfo"
     assert saved_session.interest_score == 31
     assert "llm_generated_cfo_cash_gap" not in response.text
+
+    db_session.close()
+
+
+def test_api_leads_persist_whitelisted_query_params_and_honeypot() -> None:
+    db_session = _create_db_session()
+    client = _create_client(db_session)
+
+    response = client.post(
+        "/api/leads",
+        json={
+            "name": "Иван",
+            "email": "ivan@example.com",
+            "phone": "+79990000000",
+            "company": "ООО Ромашка",
+            "role": "Руководитель",
+            "sales_team_size": "5-10",
+            "consent_personal_data": True,
+            "consent_marketing": False,
+            "comment": "Хочу демо",
+            "query_params": {"utm_source": "direct", "unknown": "drop"},
+            "page": "landing",
+            "form_id": "demo",
+            "website": "bot-filled",
+        },
+    )
+    lead = db_session.scalar(select(LandingLead))
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "accepted"}
+    assert lead is not None
+    assert lead.email == "ivan@example.com"
+    assert lead.query_params == {"utm_source": "direct"}
+    assert lead.is_spam is True
+
+    db_session.close()
+
+
+def test_api_create_session_compensates_runtime_and_ownership_when_history_fails() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    class FailingHistoryService:
+        def record_session_started(self, **_: object) -> None:
+            """Simulate a persistent history outage after runtime creation."""
+            raise RuntimeError("history down")
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    from app.history.dependencies import get_history_service
+
+    app.dependency_overrides[get_history_service] = lambda: FailingHistoryService()
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+
+    response = client.post("/api/sessions", json={})
+    ownership_count = db_session.scalar(select(TrainingSessionOwnership))
+
+    assert response.status_code == 500
+    assert repository._store == {}
+    assert ownership_count is None
 
     db_session.close()
 
@@ -602,6 +671,30 @@ def test_api_create_session_allows_request_persona_id_for_internal_admin() -> No
     assert saved_session is not None
     assert saved_session.persona.id == "purchase_manager"
     assert saved_session.scenario_id == "accounting_outsource_cold_outreach"
+
+
+def test_api_internal_admin_persona_id_without_default_config_returns_clear_error() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    identity_repository = IdentityRepository(db_session)
+    client_account = identity_repository.create_client_account(name="Platform", slug="platform-debug")
+    identity_repository.create_user(
+        client_account_id=client_account.id,
+        email="admin@example.com",
+        password_hash=hash_password("password"),
+        role="internal_admin",
+        must_change_password=False,
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client, email="admin@example.com")
+
+    response = client.post("/api/sessions", json={"persona_id": "owner"})
+
+    assert response.status_code == 404
+    assert "Default training config" in response.json()["error"]["message"]
+    assert repository._store == {}
+
+    db_session.close()
 
 
 def test_api_returns_404_for_missing_session() -> None:

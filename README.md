@@ -249,6 +249,13 @@ Organization-level LLM provider configs are stored in PostgreSQL in `llm_provide
 
 `llm_provider_config_id` can be stored on a training config and managed through internal admin API. It is now used by the persona generation flow when a client starts a new authenticated API training session. Runtime dialogue turns still use the globally configured dialogue LLM client from environment settings; per-organization/per-config dialogue LLM selection is not wired into the simulator flow yet.
 
+For demo-ready Yandex setup, one LLM config contains two Yandex AI Studio sets:
+
+- Persona generation: API key, Agent ID, Folder ID, master prompt, JSON template.
+- Dialogue model: API key, Agent ID, Folder ID, master prompt, JSON template.
+
+`YANDEX_BASE_URL` is global and is not edited per client in the admin UI. Provider defaults to `yandex_compatible`. API keys are encrypted at rest with `SECRET_ENCRYPTION_KEY`; responses expose only `has_persona_api_key`, `persona_api_key_preview`, `has_dialogue_api_key`, and `dialogue_api_key_preview`. Blank API key fields on update keep the existing keys. The persona set is already used for LLM persona generation. The dialogue set is saved and visible for the configured training flow; runtime dialogue still uses the global dialogue resolver until the per-client resolver is implemented.
+
 Responses expose only:
 
 ```json
@@ -330,8 +337,40 @@ Public vs hidden state:
 Prompt ownership:
 
 - `app/prompts/client_simulator.md` is a local reference prompt used for documentation and prompt iteration
+- `app/prompts/persona_generator.md` is the reference/default master prompt for persona generation
 - The `yandex_compatible` runtime path currently uses the configured Yandex AI Studio agent via `YANDEX_AGENT_ID`
 - If you update local prompt text, it does not automatically change the remote runtime agent behavior
+
+## Demo run checklist
+
+1. Start the production-like local stack:
+
+```bash
+docker compose up --build
+```
+
+2. Migrations are run by the `migrate` compose service. For manual local backend runs, use:
+
+```bash
+alembic upgrade head
+```
+
+3. Create the first internal admin:
+
+```bash
+python -m app.admin.cli create-internal-admin --client-name "Platform" --client-slug platform --email admin@example.com --password "temporary-password"
+```
+
+4. Open `http://localhost:8080/login`, sign in, then open `/admin`.
+5. Create an organization.
+6. Create LLM settings with two Yandex sets: persona generation and dialogue model.
+7. Create a training config and attach the LLM settings.
+8. Create a client manager or lead user.
+9. Assign the training config to the user and mark it as default.
+10. Sign in as the client user and open `/app/trainer`.
+11. Start a training, send at least one manager message, finish the session, and open history/report.
+
+If real Yandex credentials are unavailable, keep `APP_ENV=local` and use fake/local fallback for a presentation of the product flow. For staging/prod, configure real secrets and disable fake fallback.
 
 ## Run tests
 

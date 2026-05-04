@@ -46,6 +46,11 @@ class AccessService:
             raise LookupError("Session not found.")
         return ownership
 
+    def delete_session_ownership(self, session_id: str | UUID) -> None:
+        """Remove session ownership during compensated API session creation."""
+        normalized_session_id = session_id if isinstance(session_id, UUID) else self._parse_session_id(session_id)
+        self._repository.delete_training_session_ownership(normalized_session_id)
+
     @staticmethod
     def _parse_session_id(session_id: str) -> UUID:
         try:

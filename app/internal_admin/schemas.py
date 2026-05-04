@@ -175,12 +175,20 @@ class LLMProviderConfigDTO(BaseModel):
     name: str
     provider: str
     is_active: bool
-    has_api_key: bool
-    api_key_preview: str | None
-    folder_id: str | None
-    agent_id: str | None
-    base_url: str | None
-    model_or_agent_label: str | None
+    has_api_key: bool = False
+    api_key_preview: str | None = None
+    has_persona_api_key: bool
+    persona_api_key_preview: str | None
+    persona_folder_id: str | None
+    persona_agent_id: str | None
+    persona_master_prompt: str | None
+    persona_json_template: str | None
+    has_dialogue_api_key: bool
+    dialogue_api_key_preview: str | None
+    dialogue_folder_id: str | None
+    dialogue_agent_id: str | None
+    dialogue_master_prompt: str | None
+    dialogue_json_template: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -190,11 +198,43 @@ class LLMProviderConfigCreateRequest(BaseModel):
 
     name: NameStr
     provider: LLMProvider = LLMProvider.YANDEX_COMPATIBLE
-    api_key: Annotated[str, StringConstraints(min_length=1, max_length=4096)] | None = None
-    folder_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)] | None = None
-    agent_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)] | None = None
-    base_url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)] | None = None
-    model_or_agent_label: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)] | None = None
+    persona_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
+    persona_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    persona_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    persona_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    persona_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    dialogue_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
+    dialogue_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    dialogue_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    dialogue_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    dialogue_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
+    folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    base_url: Annotated[str, StringConstraints(strip_whitespace=True, max_length=512)] | None = None
+    model_or_agent_label: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+
+    @field_validator(
+        "persona_api_key",
+        "persona_folder_id",
+        "persona_agent_id",
+        "persona_master_prompt",
+        "persona_json_template",
+        "dialogue_api_key",
+        "dialogue_folder_id",
+        "dialogue_agent_id",
+        "dialogue_master_prompt",
+        "dialogue_json_template",
+        "api_key",
+        "folder_id",
+        "agent_id",
+        "base_url",
+        "model_or_agent_label",
+        mode="before",
+    )
+    @classmethod
+    def blank_strings_to_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
 
 class LLMProviderConfigUpdateRequest(BaseModel):
@@ -202,11 +242,40 @@ class LLMProviderConfigUpdateRequest(BaseModel):
 
     name: NameStr | None = None
     provider: LLMProvider | None = None
-    api_key: Annotated[str, StringConstraints(min_length=1, max_length=4096)] | None = None
-    folder_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)] | None = None
-    agent_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)] | None = None
-    base_url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)] | None = None
-    model_or_agent_label: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)] | None = None
+    persona_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
+    persona_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    persona_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    persona_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    persona_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    dialogue_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
+    dialogue_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    dialogue_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    dialogue_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    dialogue_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
+    folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+    base_url: Annotated[str, StringConstraints(strip_whitespace=True, max_length=512)] | None = None
+    model_or_agent_label: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
+
+    _blank_strings_to_none = field_validator(
+        "persona_api_key",
+        "persona_folder_id",
+        "persona_agent_id",
+        "persona_master_prompt",
+        "persona_json_template",
+        "dialogue_api_key",
+        "dialogue_folder_id",
+        "dialogue_agent_id",
+        "dialogue_master_prompt",
+        "dialogue_json_template",
+        "api_key",
+        "folder_id",
+        "agent_id",
+        "base_url",
+        "model_or_agent_label",
+        mode="before",
+    )(LLMProviderConfigCreateRequest.blank_strings_to_none)
 
 
 class AuditLogDTO(BaseModel):

@@ -1,7 +1,7 @@
 import type { ErrorResponse } from "./types";
 
 const BACKEND_UNAVAILABLE_MESSAGE =
-  "Backend is unavailable. Check that FastAPI is running on localhost:8000.";
+  "Backend недоступен. Проверьте, что FastAPI запущен на localhost:8000.";
 const CSRF_HEADER = "X-CSRF-Token";
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -37,7 +37,7 @@ async function ensureCsrfToken(): Promise<string> {
     },
   });
   if (!response.ok) {
-    throw new ApiError(`CSRF request failed: ${response.status} ${response.statusText}`.trim());
+    throw new ApiError(`Не удалось получить CSRF-токен: ${response.status} ${response.statusText}`.trim());
   }
   const payload = (await response.json()) as { csrf_token: string };
   csrfToken = payload.csrf_token;
@@ -77,7 +77,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const errorPayload = payload as ErrorResponse | null;
     const message =
-      errorPayload?.error?.message || `Request failed: ${response.status} ${response.statusText}`.trim();
+      errorPayload?.error?.message || `Запрос завершился ошибкой: ${response.status} ${response.statusText}`.trim();
     throw new ApiError(message, errorPayload?.error?.code, response.status);
   }
 

@@ -696,6 +696,22 @@ button:disabled {
   color: #cbd8e7;
 }
 
+.admin-fieldset {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+}
+
+.admin-fieldset legend {
+  padding: 0 6px;
+  color: #e6edf7;
+  font-weight: 800;
+}
+
 .admin-form input,
 .admin-form select,
 .admin-form textarea,

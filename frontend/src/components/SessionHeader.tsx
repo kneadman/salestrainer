@@ -11,13 +11,13 @@ export function SessionHeader({ busy, canFinish, onNewSession, onFinish, onLogou
     <header className="session-header">
       <div className="session-header__actions">
         <button type="button" className="secondary-button" onClick={onNewSession} disabled={busy}>
-          New session
+          Новая тренировка
         </button>
         <button type="button" className="primary-button" onClick={onFinish} disabled={busy || !canFinish}>
-          Finish
+          Завершить
         </button>
         <button type="button" className="secondary-button" onClick={onLogout} disabled={busy}>
-          Logout
+          Выйти
         </button>
       </div>
     </header>

@@ -39,27 +39,29 @@ class HistoryService:
         training_config_id: UUID | None,
     ) -> None:
         """Persist the initial history row and usage event for a new API session."""
-        self._repository.create_session(
-            session_id=session.session_id,
-            client_account_id=client_account_id,
-            user_id=user_id,
-            training_config_id=training_config_id,
-            scenario_id=session.scenario_id,
-            status=session.status,
-            started_at=session.created_at,
-            last_activity_at=session.updated_at,
-            persona_snapshot=session.persona.model_dump(mode="json"),
-            initial_state_snapshot=self._session_snapshot(session),
-            public_brief=session.public_brief,
-            summary=session.summary,
-        )
-        self.record_usage_event(
-            event_type=UsageEventType.SESSION_STARTED.value,
-            client_account_id=client_account_id,
-            user_id=user_id,
-            training_config_id=training_config_id,
-            session_id=session.session_id,
-            event_payload={"scenario_id": session.scenario_id},
+        self._repository.create_session_with_event(
+            session_kwargs={
+                "id": session.session_id,
+                "client_account_id": client_account_id,
+                "user_id": user_id,
+                "training_config_id": training_config_id,
+                "scenario_id": session.scenario_id,
+                "status": session.status,
+                "started_at": session.created_at,
+                "last_activity_at": session.updated_at,
+                "persona_snapshot": session.persona.model_dump(mode="json"),
+                "initial_state_snapshot": self._session_snapshot(session),
+                "public_brief": session.public_brief,
+                "summary": session.summary,
+            },
+            event_kwargs=self._usage_event_kwargs(
+                event_type=UsageEventType.SESSION_STARTED.value,
+                client_account_id=client_account_id,
+                user_id=user_id,
+                training_config_id=training_config_id,
+                session_id=session.session_id,
+                event_payload={"scenario_id": session.scenario_id},
+            ),
         )
 
     def record_turn_processed(
@@ -74,38 +76,40 @@ class HistoryService:
         """Persist one processed turn and update the durable session rollup fields."""
         turn = session.turns[-1]
         evaluation = session.turn_evaluations[-1] if session.turn_evaluations else None
-        self._repository.append_turn(
+        self._repository.record_turn_with_rollup_and_event(
             session_id=session.session_id,
-            turn_index=turn.index,
-            manager_message=turn.manager_message,
-            client_answer=turn.client_answer,
-            interest_before=turn.interest_before,
-            interest_delta=turn.interest_delta,
-            interest_after=turn.interest_after,
-            stage_before=turn.stage_before,
-            stage_after=turn.stage_after,
-            client_state_snapshot=session.client_state.model_dump(mode="json"),
-            llm_payload_snapshot=self._safe_payload_snapshot(turn_result.llm_payload),
-            llm_response_snapshot=self._safe_response_snapshot(turn_result.llm_response),
-            evaluation_snapshot=evaluation.model_dump(mode="json") if evaluation is not None else None,
-            created_at=turn.created_at,
-        )
-        self._repository.update_session_after_turn(
-            session_id=session.session_id,
-            turn_count=session.turn_count,
-            last_activity_at=session.updated_at,
-            summary=session.summary,
-            final_interest_score=session.interest_score,
-            final_stage=session.stage,
-            final_state_snapshot=self._session_snapshot(session),
-        )
-        self.record_usage_event(
-            event_type=UsageEventType.TURN_PROCESSED.value,
-            client_account_id=client_account_id,
-            user_id=user_id,
-            training_config_id=training_config_id,
-            session_id=session.session_id,
-            event_payload={"turn_index": turn.index, "interest_after": turn.interest_after, "stage_after": turn.stage_after},
+            turn_kwargs={
+                "session_id": session.session_id,
+                "turn_index": turn.index,
+                "manager_message": turn.manager_message,
+                "client_answer": turn.client_answer,
+                "interest_before": turn.interest_before,
+                "interest_delta": turn.interest_delta,
+                "interest_after": turn.interest_after,
+                "stage_before": turn.stage_before,
+                "stage_after": turn.stage_after,
+                "client_state_snapshot": session.client_state.model_dump(mode="json"),
+                "llm_payload_snapshot": self._safe_payload_snapshot(turn_result.llm_payload),
+                "llm_response_snapshot": self._safe_response_snapshot(turn_result.llm_response),
+                "evaluation_snapshot": evaluation.model_dump(mode="json") if evaluation is not None else None,
+                "created_at": turn.created_at,
+            },
+            rollup={
+                "turn_count": session.turn_count,
+                "last_activity_at": session.updated_at,
+                "summary": session.summary,
+                "final_interest_score": session.interest_score,
+                "final_stage": session.stage,
+                "final_state_snapshot": self._session_snapshot(session),
+            },
+            event_kwargs=self._usage_event_kwargs(
+                event_type=UsageEventType.TURN_PROCESSED.value,
+                client_account_id=client_account_id,
+                user_id=user_id,
+                training_config_id=training_config_id,
+                session_id=session.session_id,
+                event_payload={"turn_index": turn.index, "interest_after": turn.interest_after, "stage_after": turn.stage_after},
+            ),
         )
 
     def record_session_finished(
@@ -185,6 +189,75 @@ class HistoryService:
             session_id=session_id,
             event_payload=event_payload or {},
         )
+
+    def record_session_finished_with_report(
+        self,
+        *,
+        session: TrainingSessionState,
+        report_text: str,
+        user_id: UUID,
+        client_account_id: UUID,
+        training_config_id: UUID | None,
+    ) -> HistoryReportDTO:
+        """Persist finish state, final report, and usage events in one commit."""
+        finished_at = session.updated_at or datetime.now(tz=UTC)
+        report = self._repository.finish_session_with_report_and_events(
+            session_id=session.session_id,
+            finish={
+                "status": "finished",
+                "finished_at": finished_at,
+                "last_activity_at": finished_at,
+                "final_interest_score": session.interest_score,
+                "final_stage": session.stage,
+                "final_state_snapshot": self._session_snapshot(session),
+                "summary": session.summary,
+                "turn_count": session.turn_count,
+            },
+            report_text=report_text,
+            report_payload={
+                "status": session.status,
+                "turn_count": session.turn_count,
+                "final_interest_score": session.interest_score,
+                "final_stage": session.stage,
+            },
+            finish_event_kwargs=self._usage_event_kwargs(
+                event_type=UsageEventType.SESSION_FINISHED.value,
+                client_account_id=client_account_id,
+                user_id=user_id,
+                training_config_id=training_config_id,
+                session_id=session.session_id,
+                event_payload={"turn_count": session.turn_count, "final_interest_score": session.interest_score, "final_stage": session.stage},
+            ),
+            report_event_kwargs=self._usage_event_kwargs(
+                event_type=UsageEventType.REPORT_GENERATED.value,
+                client_account_id=client_account_id,
+                user_id=user_id,
+                training_config_id=training_config_id,
+                session_id=session.session_id,
+                event_payload={"report_version": 1},
+            ),
+        )
+        return report_dto(report)
+
+    def _usage_event_kwargs(
+        self,
+        *,
+        event_type: str,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+        training_config_id: UUID | None = None,
+        session_id: UUID | None = None,
+        event_payload: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        """Build UsageEventRecord kwargs without committing separately."""
+        return {
+            "event_type": event_type,
+            "client_account_id": client_account_id,
+            "user_id": user_id,
+            "training_config_id": training_config_id,
+            "session_id": session_id,
+            "event_payload": event_payload or {},
+        }
 
     def get_user_history(
         self,

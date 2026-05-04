@@ -366,11 +366,16 @@ def create_llm_provider_config(
             organization_id=organization_id,
             name=request.name,
             provider=request.provider,
-            api_key=request.api_key,
-            folder_id=request.folder_id,
-            agent_id=request.agent_id,
-            base_url=request.base_url,
-            model_or_agent_label=request.model_or_agent_label,
+            persona_api_key=request.persona_api_key or request.api_key,
+            persona_folder_id=request.persona_folder_id or request.folder_id,
+            persona_agent_id=request.persona_agent_id or request.agent_id,
+            persona_master_prompt=request.persona_master_prompt,
+            persona_json_template=request.persona_json_template,
+            dialogue_api_key=request.dialogue_api_key,
+            dialogue_folder_id=request.dialogue_folder_id,
+            dialogue_agent_id=request.dialogue_agent_id,
+            dialogue_master_prompt=request.dialogue_master_prompt,
+            dialogue_json_template=request.dialogue_json_template,
         )
     except Exception as error:
         _handle_error(error)

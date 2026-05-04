@@ -1,4 +1,5 @@
 import { ApiError } from "../apiClient";
+import { formatDate as formatSharedDate, statusLabel as sharedStatusLabel } from "../labels";
 import type { AdminRouteState, JsonObject } from "./types";
 
 export const FALLBACK_SCENARIOS = [
@@ -39,25 +40,19 @@ export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unexpected error.";
+  return "Неожиданная ошибка.";
 }
 
 export function formatDate(value: string | null | undefined): string {
   /** Format an ISO date for compact admin tables. */
-  if (!value) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return formatSharedDate(value);
 }
 
 export function parseJsonObject(value: string, fieldName: string): JsonObject {
   /** Parse a textarea JSON value and require an object payload. */
   const parsed = JSON.parse(value) as unknown;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${fieldName}: JSON must be an object.`);
+    throw new Error(`${fieldName}: JSON должен быть объектом.`);
   }
   return parsed as JsonObject;
 }
@@ -74,5 +69,5 @@ export function compactJson(value: JsonObject): string {
 
 export function statusLabel(active: boolean): string {
   /** Map active flags to a short admin badge label. */
-  return active ? "active" : "disabled";
+  return sharedStatusLabel(active);
 }

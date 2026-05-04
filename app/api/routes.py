@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.access.models import LandingLead
 from app.api.dependencies import get_persona_generation_service, get_report_service, get_session_service, get_turn_service
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
@@ -46,8 +50,10 @@ from app.identity.roles import is_internal_admin
 from app.history.dependencies import get_history_service
 from app.history.events import UsageEventType
 from app.history.service import HistoryService
+from app.infrastructure.db import get_db_session
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 ERROR_RESPONSES = {
@@ -75,13 +81,32 @@ def healthcheck() -> dict[str, str]:
 
 
 @router.post("/leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
-def submit_landing_lead(request: LandingLeadRequest) -> LandingSubmitResponse:
+def submit_landing_lead(
+    request: LandingLeadRequest,
+    db_session: Session = Depends(get_db_session),
+) -> LandingSubmitResponse:
     if request.consent_personal_data is not True:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="consent_personal_data must be true.",
         )
-    # TODO: Persist leads or send them to CRM once the integration target is chosen.
+    lead = LandingLead(
+        name=request.name,
+        email=str(request.email),
+        phone=request.phone,
+        company=request.company,
+        role=request.role,
+        sales_team_size=request.sales_team_size,
+        consent_personal_data=request.consent_personal_data,
+        consent_marketing=request.consent_marketing,
+        comment=request.comment,
+        query_params=dict(request.query_params),
+        page=request.page,
+        form_id=request.form_id,
+        is_spam=bool(request.website and request.website.strip()),
+    )
+    db_session.add(lead)
+    db_session.commit()
     return LandingSubmitResponse(status="accepted")
 
 
@@ -149,6 +174,7 @@ def create_session(
             )
 
         training_config = access_service.get_default_training_config_for_user(current_session.user.id)
+        session = None
         if is_internal_admin(user_role) and request.persona_id is not None:
             session = session_service.start_session(
                 scenario_id=request.scenario_id,
@@ -170,12 +196,18 @@ def create_session(
             training_config.client_account_id,
             training_config.id,
         )
-        history_service.record_session_started(
-            session=session,
-            client_account_id=training_config.client_account_id,
-            user_id=current_session.user.id,
-            training_config_id=training_config.id,
-        )
+        try:
+            history_service.record_session_started(
+                session=session,
+                client_account_id=training_config.client_account_id,
+                user_id=current_session.user.id,
+                training_config_id=training_config.id,
+            )
+        except Exception:
+            logger.critical("history_session_start_failed session_id=%s", session.session_id, exc_info=True)
+            access_service.delete_session_ownership(session.session_id)
+            session_service.delete_session(str(session.session_id))
+            raise
     except SalesTrainerError as error:
         raise_api_error(error)
     except LookupError as error:
@@ -259,13 +291,17 @@ def post_manager_message(
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after turn.")
-    history_service.record_turn_processed(
-        session=session,
-        turn_result=turn_result,
-        user_id=current_session.user.id,
-        client_account_id=ownership.client_account_id,
-        training_config_id=ownership.training_config_id,
-    )
+    try:
+        history_service.record_turn_processed(
+            session=session,
+            turn_result=turn_result,
+            user_id=current_session.user.id,
+            client_account_id=ownership.client_account_id,
+            training_config_id=ownership.training_config_id,
+        )
+    except Exception:
+        logger.critical("history_turn_write_failed session_id=%s", session.session_id, exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Training turn was processed but history write failed.") from None
     return TurnResponse(
         session=build_session_public_dto(session),
         turns=build_turn_public_dto(session),
@@ -299,13 +335,7 @@ def finish_session(
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after finish.")
-    history_service.record_session_finished(
-        session=session,
-        user_id=current_session.user.id,
-        client_account_id=ownership.client_account_id,
-        training_config_id=ownership.training_config_id,
-    )
-    history_service.record_report_generated(
+    history_service.record_session_finished_with_report(
         session=session,
         report_text=report_text,
         user_id=current_session.user.id,

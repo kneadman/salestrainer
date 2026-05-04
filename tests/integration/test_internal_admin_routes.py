@@ -276,6 +276,58 @@ def test_llm_provider_config_secret_masking_storage_update_disable() -> None:
     session.close()
 
 
+def test_llm_provider_config_two_yandex_sets_and_blank_key_update() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+
+    create_response = client.post(
+        f"/api/internal/organizations/{organization['id']}/llm-provider-configs",
+        json={
+            "name": "Yandex demo",
+            "provider": "yandex_compatible",
+            "persona_api_key": "persona-secret-key",
+            "persona_folder_id": "persona-folder",
+            "persona_agent_id": "persona-agent",
+            "persona_master_prompt": "persona prompt",
+            "persona_json_template": "{\"persona\": {}}",
+            "dialogue_api_key": "dialogue-secret-key",
+            "dialogue_folder_id": "dialogue-folder",
+            "dialogue_agent_id": "dialogue-agent",
+            "dialogue_master_prompt": "dialogue prompt",
+            "dialogue_json_template": "{\"answer\": \"\"}",
+        },
+    )
+    payload = create_response.json()
+    stored = session.get(LLMProviderConfig, UUID(payload["id"]))
+    update_response = client.patch(
+        f"/api/internal/llm-provider-configs/{payload['id']}",
+        json={"persona_api_key": "", "dialogue_api_key": "", "name": "Yandex demo updated"},
+    )
+    updated = session.get(LLMProviderConfig, UUID(payload["id"]))
+    audit_payloads = [record.payload for record in session.scalars(select(AuditLog))]
+
+    assert create_response.status_code == 201
+    assert payload["has_persona_api_key"] is True
+    assert payload["persona_api_key_preview"] == "pers...ey"
+    assert payload["has_dialogue_api_key"] is True
+    assert payload["dialogue_api_key_preview"] == "dial...ey"
+    assert "persona_api_key" not in payload
+    assert "dialogue_api_key" not in payload
+    assert stored is not None
+    assert stored.persona_api_key_encrypted != "persona-secret-key"
+    assert stored.dialogue_api_key_encrypted != "dialogue-secret-key"
+    assert decrypt_secret(stored.persona_api_key_encrypted, Settings(secret_encryption_key="test-secret-key")) == "persona-secret-key"
+    assert decrypt_secret(stored.dialogue_api_key_encrypted, Settings(secret_encryption_key="test-secret-key")) == "dialogue-secret-key"
+    assert update_response.status_code == 200
+    assert updated is not None
+    assert decrypt_secret(updated.persona_api_key_encrypted, Settings(secret_encryption_key="test-secret-key")) == "persona-secret-key"
+    assert decrypt_secret(updated.dialogue_api_key_encrypted, Settings(secret_encryption_key="test-secret-key")) == "dialogue-secret-key"
+    assert "persona-secret-key" not in str(audit_payloads)
+    assert "dialogue-secret-key" not in str(audit_payloads)
+    session.close()
+
+
 def test_internal_admin_schema_validation_rejects_invalid_inputs() -> None:
     session = _create_session()
     client = _admin_client(session)

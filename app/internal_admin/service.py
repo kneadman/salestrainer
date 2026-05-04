@@ -402,22 +402,35 @@ class InternalAdminService:
         organization_id: UUID,
         name: str,
         provider: str,
-        api_key: str | None,
-        folder_id: str | None,
-        agent_id: str | None,
-        base_url: str | None,
-        model_or_agent_label: str | None,
+        persona_api_key: str | None,
+        persona_folder_id: str | None,
+        persona_agent_id: str | None,
+        persona_master_prompt: str | None,
+        persona_json_template: str | None,
+        dialogue_api_key: str | None,
+        dialogue_folder_id: str | None,
+        dialogue_agent_id: str | None,
+        dialogue_master_prompt: str | None,
+        dialogue_json_template: str | None,
     ) -> LLMProviderConfigDTO:
         self._get_account(organization_id)
         config = LLMProviderConfig(
             client_account_id=organization_id,
             name=name,
             provider=str(provider),
-            encrypted_api_key=encrypt_secret(api_key, self._settings) if api_key else None,
-            folder_id=folder_id,
-            agent_id=agent_id,
-            base_url=base_url,
-            model_or_agent_label=model_or_agent_label,
+            encrypted_api_key=encrypt_secret(persona_api_key, self._settings) if persona_api_key else None,
+            folder_id=persona_folder_id,
+            agent_id=persona_agent_id,
+            persona_api_key_encrypted=encrypt_secret(persona_api_key, self._settings) if persona_api_key else None,
+            persona_folder_id=persona_folder_id,
+            persona_agent_id=persona_agent_id,
+            persona_master_prompt=persona_master_prompt,
+            persona_json_template=persona_json_template,
+            dialogue_api_key_encrypted=encrypt_secret(dialogue_api_key, self._settings) if dialogue_api_key else None,
+            dialogue_folder_id=dialogue_folder_id,
+            dialogue_agent_id=dialogue_agent_id,
+            dialogue_master_prompt=dialogue_master_prompt,
+            dialogue_json_template=dialogue_json_template,
             is_active=True,
         )
         self._session.add(config)
@@ -438,10 +451,33 @@ class InternalAdminService:
 
     def update_llm_provider_config(self, *, actor_user_id: UUID, config_id: UUID, **updates: object) -> LLMProviderConfigDTO:
         config = self._get_llm_provider_config(config_id)
-        api_key = updates.pop("api_key", None)
-        if api_key is not None:
-            config.encrypted_api_key = encrypt_secret(str(api_key), self._settings)
-        for field in ("name", "provider", "folder_id", "agent_id", "base_url", "model_or_agent_label"):
+        persona_api_key = updates.pop("persona_api_key", None)
+        dialogue_api_key = updates.pop("dialogue_api_key", None)
+        legacy_api_key = updates.pop("api_key", None)
+        if persona_api_key is None:
+            persona_api_key = legacy_api_key
+        if persona_api_key is not None:
+            config.persona_api_key_encrypted = encrypt_secret(str(persona_api_key), self._settings)
+            config.encrypted_api_key = config.persona_api_key_encrypted
+        if dialogue_api_key is not None:
+            config.dialogue_api_key_encrypted = encrypt_secret(str(dialogue_api_key), self._settings)
+        field_map = {
+            "persona_folder_id": "persona_folder_id",
+            "persona_agent_id": "persona_agent_id",
+            "persona_master_prompt": "persona_master_prompt",
+            "persona_json_template": "persona_json_template",
+            "dialogue_folder_id": "dialogue_folder_id",
+            "dialogue_agent_id": "dialogue_agent_id",
+            "dialogue_master_prompt": "dialogue_master_prompt",
+            "dialogue_json_template": "dialogue_json_template",
+        }
+        if "folder_id" in updates and "persona_folder_id" not in updates:
+            updates["persona_folder_id"] = updates.pop("folder_id")
+        if "agent_id" in updates and "persona_agent_id" not in updates:
+            updates["persona_agent_id"] = updates.pop("agent_id")
+        updates.pop("base_url", None)
+        updates.pop("model_or_agent_label", None)
+        for field in ("name", "provider", *field_map):
             if field in updates:
                 setattr(config, field, str(updates[field]) if field == "provider" else updates[field])
         self._audit(
@@ -639,7 +675,9 @@ class InternalAdminService:
         )
 
     def _llm_provider_config_dto(self, config: LLMProviderConfig) -> LLMProviderConfigDTO:
-        preview = preview_encrypted_secret(config.encrypted_api_key, self._settings)
+        legacy_preview = preview_encrypted_secret(config.encrypted_api_key, self._settings)
+        persona_preview = preview_encrypted_secret(config.persona_api_key_encrypted or config.encrypted_api_key, self._settings)
+        dialogue_preview = preview_encrypted_secret(config.dialogue_api_key_encrypted, self._settings)
         return LLMProviderConfigDTO(
             id=config.id,
             client_account_id=config.client_account_id,
@@ -647,11 +685,19 @@ class InternalAdminService:
             provider=config.provider,
             is_active=config.is_active,
             has_api_key=config.encrypted_api_key is not None,
-            api_key_preview=preview,
-            folder_id=config.folder_id,
-            agent_id=config.agent_id,
-            base_url=config.base_url,
-            model_or_agent_label=config.model_or_agent_label,
+            api_key_preview=legacy_preview,
+            has_persona_api_key=(config.persona_api_key_encrypted or config.encrypted_api_key) is not None,
+            persona_api_key_preview=persona_preview,
+            persona_folder_id=config.persona_folder_id or config.folder_id,
+            persona_agent_id=config.persona_agent_id or config.agent_id,
+            persona_master_prompt=config.persona_master_prompt,
+            persona_json_template=config.persona_json_template,
+            has_dialogue_api_key=config.dialogue_api_key_encrypted is not None,
+            dialogue_api_key_preview=dialogue_preview,
+            dialogue_folder_id=config.dialogue_folder_id,
+            dialogue_agent_id=config.dialogue_agent_id,
+            dialogue_master_prompt=config.dialogue_master_prompt,
+            dialogue_json_template=config.dialogue_json_template,
             created_at=config.created_at,
             updated_at=config.updated_at,
         )

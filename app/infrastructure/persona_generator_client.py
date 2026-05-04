@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from json import JSONDecodeError
+from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from pydantic import ValidationError
@@ -56,6 +57,10 @@ class FakePersonaGeneratorClient:
 Transport = Callable[[dict[str, Any]], Any]
 
 
+class PersonaGenerationBusinessValidationError(ValueError):
+    """Raised when provider JSON is valid but violates product business rules."""
+
+
 class StructuredPersonaGeneratorClient:
     def __init__(
         self,
@@ -66,6 +71,8 @@ class StructuredPersonaGeneratorClient:
         folder_id: str | None = None,
         agent_id: str | None = None,
         model_or_agent_label: str | None = None,
+        master_prompt: str | None = None,
+        json_template: str | None = None,
         timeout_seconds: int = 30,
         max_retries: int = 1,
         fallback_client: PersonaGeneratorClient | None = None,
@@ -79,6 +86,8 @@ class StructuredPersonaGeneratorClient:
         self._folder_id = folder_id
         self._agent_id = agent_id
         self._model_or_agent_label = model_or_agent_label
+        self._master_prompt = master_prompt
+        self._json_template = json_template
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
         self._fallback_client = fallback_client
@@ -97,8 +106,10 @@ class StructuredPersonaGeneratorClient:
                 logger.debug("persona_generator_request_payload %s", request_payload)
             try:
                 raw_response = _response_to_payload(self._transport(request_payload))
-                return parse_persona_generation_response(raw_response)
-            except (LLMClientError, ValidationError, JSONDecodeError, TimeoutError) as error:
+                output = parse_persona_generation_response(raw_response)
+                validate_generated_persona(output, payload)
+                return output
+            except (LLMClientError, ValidationError, JSONDecodeError, TimeoutError, PersonaGenerationBusinessValidationError) as error:
                 last_error = error
                 logger.warning("persona_generator_request_failed attempt=%s error=%s", attempt + 1, error)
             except Exception as error:
@@ -122,8 +133,9 @@ class StructuredPersonaGeneratorClient:
         request_payload: dict[str, Any] = {
             "input": json.dumps(
                 {
-                    "instructions": _persona_generator_instructions(),
+                    "instructions": self._master_prompt or _persona_generator_instructions(),
                     "payload": snapshot,
+                    "json_template": self._json_template,
                 },
                 ensure_ascii=False,
             ),
@@ -211,13 +223,37 @@ def parse_persona_generation_response(raw_payload: dict[str, Any] | str) -> Pers
     return parse_persona_generation_response(decoded)
 
 
-def validate_generated_persona(output: PersonaGenerationOutput) -> PersonaProfile:
-    """Return the validated PersonaProfile and keep the validation point explicit for callers."""
-    return output.persona
+def validate_generated_persona(
+    output: PersonaGenerationOutput,
+    input_payload: PersonaGenerationInput | None = None,
+) -> PersonaProfile:
+    """Return a generated persona only after Pydantic and business-rule validation."""
+    persona = output.persona
+    if persona.authority_level != "final_decider":
+        raise PersonaGenerationBusinessValidationError("Generated persona must be a final_decider.")
+    if input_payload is not None:
+        if input_payload.allowed_roles and persona.role not in set(input_payload.allowed_roles):
+            raise PersonaGenerationBusinessValidationError("Generated persona role is outside allowed_roles.")
+        allowed_product_lines = set(input_payload.allowed_product_lines or [])
+        compatible_product_lines = allowed_product_lines or {input_payload.product_line}
+        if persona.product_line not in compatible_product_lines:
+            raise PersonaGenerationBusinessValidationError("Generated persona product_line is not compatible with training config.")
+    if not persona.latent_pains:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include latent_pains.")
+    if not persona.typical_objections:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include typical_objections.")
+    if not persona.decision_criteria:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include decision_criteria.")
+    if not persona.current_business_context.strip():
+        raise PersonaGenerationBusinessValidationError("Generated persona must include current_business_context.")
+    return persona
 
 
 def _persona_generator_instructions() -> str:
     """Keep persona-generator responsibilities separate from dialogue simulation."""
+    prompt_path = Path(__file__).resolve().parents[1] / "prompts" / "persona_generator.md"
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
     return (
         "Generate a hidden B2B client PersonaProfile for a sales training simulator. "
         "Use only the provided organization/training policy and scenario context. "

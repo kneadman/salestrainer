@@ -107,10 +107,18 @@ export type LLMProviderConfigDTO = {
   is_active: boolean;
   has_api_key: boolean;
   api_key_preview: string | null;
-  folder_id: string | null;
-  agent_id: string | null;
-  base_url: string | null;
-  model_or_agent_label: string | null;
+  has_persona_api_key: boolean;
+  persona_api_key_preview: string | null;
+  persona_folder_id: string | null;
+  persona_agent_id: string | null;
+  persona_master_prompt: string | null;
+  persona_json_template: string | null;
+  has_dialogue_api_key: boolean;
+  dialogue_api_key_preview: string | null;
+  dialogue_folder_id: string | null;
+  dialogue_agent_id: string | null;
+  dialogue_master_prompt: string | null;
+  dialogue_json_template: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -118,11 +126,16 @@ export type LLMProviderConfigDTO = {
 export type LLMProviderConfigPayload = {
   name?: string;
   provider?: "yandex_compatible" | "openai_compatible" | "fake";
-  api_key?: string;
-  folder_id?: string | null;
-  agent_id?: string | null;
-  base_url?: string | null;
-  model_or_agent_label?: string | null;
+  persona_api_key?: string;
+  persona_folder_id?: string | null;
+  persona_agent_id?: string | null;
+  persona_master_prompt?: string | null;
+  persona_json_template?: string | null;
+  dialogue_api_key?: string;
+  dialogue_folder_id?: string | null;
+  dialogue_agent_id?: string | null;
+  dialogue_master_prompt?: string | null;
+  dialogue_json_template?: string | null;
 };
 
 export type AuditLogDTO = {
