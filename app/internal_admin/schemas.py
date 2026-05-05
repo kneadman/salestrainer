@@ -14,9 +14,6 @@ NameStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, 
 PasswordStr = Annotated[str, StringConstraints(min_length=8, max_length=256)]
 SlugStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=80, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 ScenarioIdStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
-ProductLineStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
-
-ALLOWED_PRODUCT_LINES = frozenset({"accounting_outsourcing", "outsourced_cfo"})
 
 
 class ClientUserRole(StrEnum):
@@ -101,7 +98,6 @@ class TrainingConfigDTO(BaseModel):
     name: str
     is_active: bool
     default_scenario_id: str
-    product_line: str
     persona_generation_prompt: str
     persona_policy: dict[str, object]
     ui_config: dict[str, object]
@@ -116,7 +112,6 @@ class TrainingConfigCreateRequest(BaseModel):
 
     name: NameStr
     default_scenario_id: ScenarioIdStr
-    product_line: ProductLineStr
     persona_generation_prompt: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
@@ -130,20 +125,12 @@ class TrainingConfigCreateRequest(BaseModel):
             raise ValueError("Unknown scenario_id.")
         return value
 
-    @field_validator("product_line")
-    @classmethod
-    def validate_product_line(cls, value: str) -> str:
-        if value not in ALLOWED_PRODUCT_LINES:
-            raise ValueError("Unsupported product_line.")
-        return value
-
 
 class TrainingConfigUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: NameStr | None = None
     default_scenario_id: ScenarioIdStr | None = None
-    product_line: ProductLineStr | None = None
     persona_generation_prompt: str | None = None
     persona_policy: dict[str, object] | None = None
     ui_config: dict[str, object] | None = None
@@ -155,13 +142,6 @@ class TrainingConfigUpdateRequest(BaseModel):
     def validate_scenario_id(cls, value: str | None) -> str | None:
         if value is not None and value not in SCENARIOS:
             raise ValueError("Unknown scenario_id.")
-        return value
-
-    @field_validator("product_line")
-    @classmethod
-    def validate_product_line(cls, value: str | None) -> str | None:
-        if value is not None and value not in ALLOWED_PRODUCT_LINES:
-            raise ValueError("Unsupported product_line.")
         return value
 
 

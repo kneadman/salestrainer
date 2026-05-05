@@ -123,7 +123,6 @@ def _create_config(
     access_repository: AccessRepository,
     client_slug: str,
     name: str,
-    product_line: str,
     scenario_id: str,
     persona_policy_file: str,
 ) -> str:
@@ -143,7 +142,6 @@ def _create_config(
         client_account_id=client.id,
         name=name,
         default_scenario_id=scenario_id,
-        product_line=product_line,
         persona_policy=persona_policy,
     )
     access_repository.create_audit_log_record(
@@ -201,7 +199,6 @@ def _update_config(
     client_slug: str,
     config_name: str,
     new_name: str | None = None,
-    product_line: str | None = None,
     scenario_id: str | None = None,
     persona_policy_file: str | None = None,
 ) -> str:
@@ -223,7 +220,6 @@ def _update_config(
         training_config_id=matching_configs[0].id,
         name=new_name,
         default_scenario_id=scenario_id,
-        product_line=product_line,
         persona_policy=persona_policy,
     )
     if config is None:
@@ -320,7 +316,6 @@ def _build_parser() -> argparse.ArgumentParser:
     create_config_parser = subparsers.add_parser("create-config")
     create_config_parser.add_argument("--client", required=True)
     create_config_parser.add_argument("--name", required=True)
-    create_config_parser.add_argument("--product-line", required=True)
     create_config_parser.add_argument("--scenario", required=True)
     create_config_parser.add_argument("--persona-policy-file", required=True)
 
@@ -333,7 +328,6 @@ def _build_parser() -> argparse.ArgumentParser:
     update_config_parser.add_argument("--client", required=True)
     update_config_parser.add_argument("--config", required=True)
     update_config_parser.add_argument("--name")
-    update_config_parser.add_argument("--product-line")
     update_config_parser.add_argument("--scenario")
     update_config_parser.add_argument("--persona-policy-file")
 
@@ -389,7 +383,6 @@ def run_cli(argv: list[str] | None = None) -> int:
                     access_repository=access_repository,
                     client_slug=args.client,
                     name=args.name,
-                    product_line=args.product_line,
                     scenario_id=args.scenario,
                     persona_policy_file=args.persona_policy_file,
                 )
@@ -408,7 +401,6 @@ def run_cli(argv: list[str] | None = None) -> int:
                     client_slug=args.client,
                     config_name=args.config,
                     new_name=args.name,
-                    product_line=args.product_line,
                     scenario_id=args.scenario,
                     persona_policy_file=args.persona_policy_file,
                 )

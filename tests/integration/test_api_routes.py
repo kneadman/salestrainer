@@ -61,8 +61,7 @@ def _seed_authenticated_user(
     role: str = "client_user",
     client_account_name: str = "Acme",
     client_account_slug: str = "acme",
-    default_scenario_id: str = "generic_b2b_first_contact",
-    product_line: str = "accounting_outsourcing",
+    default_scenario_id: str = "first_contact_discovery",
     persona_policy: dict[str, object] | None = None,
     ui_config: dict[str, object] | None = None,
 ) -> tuple[object, object]:
@@ -83,7 +82,6 @@ def _seed_authenticated_user(
         client_account_id=client_account.id,
         name="Default config",
         default_scenario_id=default_scenario_id,
-        product_line=product_line,
         persona_policy=persona_policy or {},
         ui_config=ui_config or {},
     )
@@ -154,7 +152,7 @@ def test_api_session_flow() -> None:
     session_id = session_payload["session_id"]
     assert session_payload["status"] == "active"
     assert session_payload["persona_name"] == "Unknown B2B contact"
-    assert session_payload["scenario_id"] == "generic_b2b_first_contact"
+    assert session_payload["scenario_id"] == "first_contact_discovery"
     assert "public_brief" in session_payload
 
     resume_response = client.post(f"/api/sessions/{session_id}/resume")
@@ -402,11 +400,10 @@ def test_api_create_session_uses_users_default_training_config_and_creates_owner
     repository = InMemorySessionRepository()
     user, training_config = _seed_authenticated_user(
         db_session,
-        default_scenario_id="sales_audit_cold_outreach",
-        product_line="outsourced_cfo",
+        default_scenario_id="qualification_and_authority",
         persona_policy={
             "allowed_roles": ["owner"],
-            "target_action": "book_financial_diagnostic",
+            "target_action": "confirm_decision_process",
         },
     )
     client = _create_client(db_session, repository=repository)
@@ -418,8 +415,8 @@ def test_api_create_session_uses_users_default_training_config_and_creates_owner
     session_id = response.json()["session"]["session_id"]
     saved_session = repository.get(session_id)
     assert saved_session is not None
-    assert saved_session.scenario_id == "sales_audit_cold_outreach"
-    assert saved_session.persona.product_line == "outsourced_cfo"
+    assert saved_session.scenario_id == "qualification_and_authority"
+    assert "product_line" not in saved_session.persona.model_dump()
     assert saved_session.persona.authority_level == "final_decider"
     ownership = db_session.scalar(select(TrainingSessionOwnership).where(TrainingSessionOwnership.session_id == saved_session.session_id))
     assert ownership is not None
@@ -435,15 +432,14 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     repository = InMemorySessionRepository()
     _, training_config = _seed_authenticated_user(
         db_session,
-        default_scenario_id="sales_audit_cold_outreach",
-        product_line="outsourced_cfo",
-        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_financial_diagnostic"},
+        default_scenario_id="needs_diagnosis",
+        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_diagnostic_call"},
     )
     access_repository = AccessRepository(db_session)
     access_repository.update_training_config(
         training_config_id=training_config.id,
-        persona_generation_prompt="CFO persona for a company with cash-gap risk and messy reporting.",
-        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_financial_diagnostic"},
+        persona_generation_prompt="Buyer for a cosmetics retail business with low repeat sales and poor diagnostics.",
+        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_diagnostic_call"},
     )
     app = create_app(
         settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
@@ -467,8 +463,7 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
                 company_size="30-100",
                 authority_level="final_decider",
                 behavior_model="analytical_and_cautious",
-                product_line=training_config.product_line,
-                target_action="book_financial_diagnostic",
+                target_action="book_diagnostic_call",
                 current_business_context="Company is growing but cash planning is unclear.",
                 latent_pains=["Cash gaps are hard to forecast."],
                 typical_objections=["We already track this in spreadsheets."],
@@ -504,7 +499,7 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert saved_session.persona.id == "llm_generated_cfo_cash_gap"
     assert saved_session.persona.role == "cfo"
     assert saved_session.interest_score == 31
-    assert captured["persona_generation_prompt"] == "CFO persona for a company with cash-gap risk and messy reporting."
+    assert captured["persona_generation_prompt"] == "Buyer for a cosmetics retail business with low repeat sales and poor diagnostics."
     assert captured["llm_provider_config_id"] is None
     assert captured["scenario_id"] is None
     assert "llm_generated_cfo_cash_gap" not in response.text
@@ -693,7 +688,7 @@ def test_api_scenarios_for_client_user_returns_default_scenario_when_allowed_sce
     db_session = _create_db_session()
     _seed_authenticated_user(
         db_session,
-        default_scenario_id="sales_audit_cold_outreach",
+        default_scenario_id="qualification_and_authority",
     )
     client = _create_client(db_session)
     _login(client)
@@ -701,7 +696,7 @@ def test_api_scenarios_for_client_user_returns_default_scenario_when_allowed_sce
     response = client.get("/api/scenarios")
 
     assert response.status_code == 200
-    assert [scenario["scenario_id"] for scenario in response.json()] == ["sales_audit_cold_outreach"]
+    assert [scenario["scenario_id"] for scenario in response.json()] == ["qualification_and_authority"]
 
     db_session.close()
 
@@ -710,11 +705,11 @@ def test_api_scenarios_for_client_user_returns_allowed_scenarios() -> None:
     db_session = _create_db_session()
     _seed_authenticated_user(
         db_session,
-        default_scenario_id="sales_audit_cold_outreach",
+        default_scenario_id="qualification_and_authority",
         ui_config={
             "allowed_scenarios": [
-                "sales_audit_cold_outreach",
-                "accounting_outsource_cold_outreach",
+                "qualification_and_authority",
+                "objection_handling",
             ]
         },
     )
@@ -725,8 +720,8 @@ def test_api_scenarios_for_client_user_returns_allowed_scenarios() -> None:
 
     assert response.status_code == 200
     assert [scenario["scenario_id"] for scenario in response.json()] == [
-        "sales_audit_cold_outreach",
-        "accounting_outsource_cold_outreach",
+        "qualification_and_authority",
+        "objection_handling",
     ]
 
     db_session.close()
@@ -737,10 +732,9 @@ def test_api_create_session_rejects_request_persona_id_in_client_auth_mode() -> 
     repository = InMemorySessionRepository()
     _seed_authenticated_user(
         db_session,
-        product_line="accounting_outsourcing",
         persona_policy={
             "allowed_roles": ["owner"],
-            "target_action": "book_express_audit",
+            "target_action": "book_intro_call",
         },
     )
     client = _create_client(db_session, repository=repository)
@@ -764,10 +758,9 @@ def test_api_create_session_allows_request_persona_id_for_internal_admin() -> No
     _seed_authenticated_user(
         db_session,
         role="internal_admin",
-        product_line="accounting_outsourcing",
         persona_policy={
             "allowed_roles": ["owner"],
-            "target_action": "book_express_audit",
+            "target_action": "book_intro_call",
         },
     )
     app = create_app(
@@ -792,7 +785,7 @@ def test_api_create_session_allows_request_persona_id_for_internal_admin() -> No
 
     response = client.post(
         "/api/sessions",
-        json={"scenario_id": "accounting_outsource_cold_outreach", "persona_id": "purchase_manager"},
+        json={"scenario_id": "objection_handling", "persona_id": "purchase_manager"},
     )
 
     assert response.status_code == 201
@@ -800,7 +793,7 @@ def test_api_create_session_allows_request_persona_id_for_internal_admin() -> No
     saved_session = repository.get(session_id)
     assert saved_session is not None
     assert saved_session.persona.id == "purchase_manager"
-    assert saved_session.scenario_id == "accounting_outsource_cold_outreach"
+    assert saved_session.scenario_id == "objection_handling"
 
     db_session.close()
 

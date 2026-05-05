@@ -73,7 +73,6 @@ export type TrainingConfigDTO = {
   name: string;
   is_active: boolean;
   default_scenario_id: string;
-  product_line: string;
   persona_generation_prompt: string;
   persona_policy: JsonObject;
   ui_config: JsonObject;
@@ -86,7 +85,6 @@ export type TrainingConfigDTO = {
 export type TrainingConfigPayload = {
   name: string;
   default_scenario_id: string;
-  product_line: string;
   persona_generation_prompt: string;
   persona_policy: JsonObject;
   ui_config: JsonObject;
@@ -153,8 +151,14 @@ export type AuditLogDTO = {
 export type ScenarioOptionDTO = {
   scenario_id: string;
   name: string;
-  offer: string;
-  target_audience: string;
+  training_format: string;
+  default_starting_interest: number;
+  default_stage: string;
+  manager_goal: string;
+  success_condition: string;
+  failure_condition: string;
+  evaluation_focus: string[];
+  client_behavior_hint: string;
 };
 
 export type HistorySessionSummaryDTO = {

@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     yandex_base_url: str = "https://ai.api.cloud.yandex.net/v1"
     recent_turn_limit: int = Field(default=6, ge=1, le=20)
     persona_random_seed: int | None = None
-    default_training_scenario_id: str = "generic_b2b_first_contact"
+    default_training_scenario_id: str = "first_contact_discovery"
     auth_cookie_name: str = "salestrainer_session"
     auth_session_ttl_seconds: int = 1209600
     auth_cookie_secure: bool = True

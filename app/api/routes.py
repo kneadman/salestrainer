@@ -39,7 +39,7 @@ from app.domain.errors import (
     UnknownScenarioError,
 )
 from app.domain.personas import list_personas
-from app.domain.scenarios import list_scenarios
+from app.domain.scenarios import list_scenarios, normalize_scenario_id
 from app.identity.dependencies import (
     get_access_service,
     require_current_user,
@@ -121,15 +121,21 @@ def get_scenarios(
             training_config = access_service.get_default_training_config_for_user(current_session.user.id)
         except LookupError as error:
             raise not_found(str(error)) from error
-        allowed_ids = set(training_config.allowed_scenario_ids())
+        allowed_ids = {normalize_scenario_id(scenario_id) for scenario_id in training_config.allowed_scenario_ids()}
         scenarios = [scenario for scenario in scenarios if scenario.id in allowed_ids]
 
     return [
         ScenarioOptionDTO(
             scenario_id=scenario.id,
             name=scenario.name,
-            offer=scenario.offer,
-            target_audience=scenario.target_audience,
+            training_format=scenario.training_format,
+            default_starting_interest=scenario.default_starting_interest,
+            default_stage=scenario.default_stage,
+            manager_goal=scenario.manager_goal,
+            success_condition=scenario.success_condition,
+            failure_condition=scenario.failure_condition,
+            evaluation_focus=scenario.evaluation_focus,
+            client_behavior_hint=scenario.client_behavior_hint,
         )
         for scenario in scenarios
     ]

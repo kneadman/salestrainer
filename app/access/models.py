@@ -23,7 +23,6 @@ class ClientTrainingConfig(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
     default_scenario_id: Mapped[str] = mapped_column(Text, nullable=False)
-    product_line: Mapped[str] = mapped_column(Text, nullable=False)
     persona_generation_prompt: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -191,7 +190,6 @@ class RuntimeTrainingConfig(BaseModel):
     name: str
     default_scenario_id: str
     allowed_scenarios: list[str] | None = None
-    product_line: str
     persona_generation_prompt: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)

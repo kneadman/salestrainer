@@ -3,9 +3,14 @@ import { formatDate as formatSharedDate, statusLabel as sharedStatusLabel } from
 import type { AdminRouteState, JsonObject } from "./types";
 
 export const FALLBACK_SCENARIOS = [
-  "generic_b2b_first_contact",
-  "sales_audit_cold_outreach",
-  "accounting_outsource_cold_outreach",
+  "first_contact_discovery",
+  "qualification_and_authority",
+  "needs_diagnosis",
+  "objection_handling",
+  "price_and_value",
+  "bad_experience_recovery",
+  "next_step_booking",
+  "follow_up_after_pause",
 ];
 
 export function parseAdminPath(path: string): AdminRouteState {
