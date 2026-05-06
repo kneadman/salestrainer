@@ -117,11 +117,13 @@ class TurnResponse(BaseModel):
 class FinishSessionResponse(BaseModel):
     session: SessionPublicDTO
     report: str
+    report_payload: dict[str, object] | None = None
 
 
 class SessionReportResponse(BaseModel):
     session: SessionPublicDTO
     report: str
+    report_payload: dict[str, object] | None = None
 
 
 class ErrorBody(BaseModel):

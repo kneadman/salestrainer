@@ -35,7 +35,12 @@ export function TeamAnalyticsPage() {
   }
   return (
     <div className="client-page">
-      <div className="client-page__header"><div><span className="client-kicker">Команда</span><h1>Аналитика команды</h1></div></div>
+      <div className="client-page__header">
+        <div>
+          <span className="client-kicker">Команда</span>
+          <h1>Аналитика команды</h1>
+        </div>
+      </div>
       <section className="client-stats-grid">
         <ClientStat label="Всего тренировок" value={summary.total_sessions} />
         <ClientStat label="Завершено" value={summary.finished_sessions} />
@@ -43,10 +48,42 @@ export function TeamAnalyticsPage() {
         <ClientStat label="Пользователей" value={summary.unique_users} />
         <ClientStat label="Всего ходов" value={summary.total_turns} />
         <ClientStat label="Средний интерес" value={summary.avg_final_interest_score?.toFixed(1) ?? "—"} />
+        <ClientStat label="Средняя judge-оценка" value={summary.avg_judgement_score?.toFixed(1) ?? "—"} />
+        <ClientStat label="С judge-оценкой" value={summary.sessions_with_judgement} />
       </section>
-      <section className="client-panel"><h2>По менеджерам</h2><div className="client-table-wrap"><table className="client-table"><thead><tr><th>Email</th><th>Всего</th><th>Завершено</th><th>Средний интерес</th></tr></thead><tbody>{summary.users.map((user) => <tr key={user.id}><td>{user.email}</td><td>{user.total_sessions}</td><td>{user.finished_sessions}</td><td>{user.avg_final_interest_score?.toFixed(1) ?? "—"}</td></tr>)}</tbody></table></div></section>
-      <section className="client-panel"><h2>По статусам</h2><SimpleBars values={summary.sessions_by_status} /></section>
-      <section className="client-panel"><h2>По сценариям</h2><SimpleBars values={summary.sessions_by_scenario} /></section>
+      <section className="client-panel">
+        <h2>По менеджерам</h2>
+        <div className="client-table-wrap">
+          <table className="client-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Всего</th>
+                <th>Завершено</th>
+                <th>Средний интерес</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.users.map((user) => (
+                <tr key={user.id}>
+                  <td>{user.email}</td>
+                  <td>{user.total_sessions}</td>
+                  <td>{user.finished_sessions}</td>
+                  <td>{user.avg_final_interest_score?.toFixed(1) ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="client-panel">
+        <h2>По статусам</h2>
+        <SimpleBars values={summary.sessions_by_status} />
+      </section>
+      <section className="client-panel">
+        <h2>По сценариям</h2>
+        <SimpleBars values={summary.sessions_by_scenario} />
+      </section>
     </div>
   );
 }
