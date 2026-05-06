@@ -364,12 +364,14 @@ Training goal: manager should discover role, current accounting process, pain, d
 ## Judgement Layer contract
 
 - Judge runs only after finish.
-- PR1 adds the strict Pydantic contract, PR2 adds `FakeJudgeClient` plus `JudgementService`, PR3 adds the reference judge prompt plus `StructuredJudgeClient`, and PR4 wires `build_judge_client(settings)` into runtime.
+- PR1 adds the strict Pydantic contract, PR2 adds `FakeJudgeClient` plus `JudgementService`, PR3 adds the reference judge prompt plus `StructuredJudgeClient`, PR4 wires `build_judge_client(settings)` into runtime, and PR5 makes judge payload generation fail-open while exposing minimal `report_payload` support in API/history/frontend.
 - Runtime dialogue flow does not change.
 - Judge still runs only after finish/report generation.
-- `JudgeSessionOutput` is persisted into `training_reports.report_payload` without changing the current frontend/API response shape.
+- `JudgeSessionOutput` is persisted into `training_reports.report_payload`.
 - `GET /report` reuses saved `report_payload` when available instead of regenerating it.
-- Frontend bento UI is not implemented in this repository state yet.
+- If judge payload generation fails, `/finish` and `/report` still return the plain text report instead of failing the core flow.
+- API finish/report responses and history report DTOs now include optional `report_payload`.
+- Frontend shows only a compact structured summary card next to the text report; full bento UI is still not implemented.
 - Judge uses shared `YANDEX_API_KEY` and `YANDEX_BASE_URL`.
 - Optional judge routing env vars:
   - `YANDEX_JUDGE_FOLDER_ID`

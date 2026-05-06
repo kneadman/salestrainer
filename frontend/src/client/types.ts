@@ -66,6 +66,7 @@ export type HistoryTurnDTO = {
 export type HistoryReportDTO = {
   session_id: string;
   report: string;
+  report_payload?: JsonObject | null;
   report_version: number;
   created_at: string;
   updated_at: string;

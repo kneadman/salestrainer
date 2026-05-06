@@ -133,14 +133,14 @@ class FakeJudgeClient:
     def _build_skill_scores(self, payload: JudgeSessionInput) -> list[SkillScore]:
         """Project current heuristic dimensions into normalized 0..100 skill scores."""
         skill_definitions = [
-            ("discovery_quality", "Discovery quality", "discovery_quality_score"),
-            ("role_identification", "Role identification", "role_identification_score"),
-            ("pain_identification", "Pain identification", "pain_identification_score"),
-            ("relevance", "Relevance", "relevance_score"),
-            ("pressure_control", "Pressure control", "pressure_score"),
-            ("objection_handling", "Objection handling", "objection_handling_score"),
-            ("next_step_timing", "Next-step timing", "next_step_timing_score"),
-            ("conversation_control", "Conversation control", "conversation_control_score"),
+            ("discovery_quality", "Качество диагностики", "discovery_quality_score"),
+            ("role_identification", "Выявление роли", "role_identification_score"),
+            ("pain_identification", "Выявление боли", "pain_identification_score"),
+            ("relevance", "Релевантность", "relevance_score"),
+            ("pressure_control", "Контроль давления", "pressure_score"),
+            ("objection_handling", "Работа с возражениями", "objection_handling_score"),
+            ("next_step_timing", "Тайминг следующего шага", "next_step_timing_score"),
+            ("conversation_control", "Контроль диалога", "conversation_control_score"),
         ]
         evidence_indexes = self._evaluation_evidence_indexes(payload)
         skill_scores: list[SkillScore] = []
@@ -158,7 +158,7 @@ class FakeJudgeClient:
                     title=title,
                     score=score,
                     severity=self._severity_for_score(score),
-                    explanation=f"{title} is estimated from heuristic turn evaluations.",
+                    explanation=f"{title} оценено по эвристическим оценкам отдельных ходов.",
                     evidence_turn_indexes=evidence_indexes,
                 )
             )
@@ -180,20 +180,20 @@ class FakeJudgeClient:
         blocks = [
             BentoReportBlock(
                 id="summary",
-                title="Session summary",
+                title="Итог сессии",
                 type="summary",
                 severity="neutral",
-                short_text=f"Finished at stage '{payload.final_stage}' after {payload.turn_count} turns.",
-                detail=payload.conversation_summary or "Conversation summary is not available.",
+                short_text=f"Сессия завершилась на этапе «{payload.final_stage}» после {payload.turn_count} ходов.",
+                detail=payload.conversation_summary or "Краткая сводка по разговору недоступна.",
                 evidence_turn_indexes=evidence_indexes,
             ),
             BentoReportBlock(
                 id="overall-score",
-                title="Overall score",
+                title="Общая оценка",
                 type="score",
                 severity=overall_severity,
                 score=overall_score,
-                short_text=f"Overall result: {overall_score}/100.",
+                short_text=f"Итоговый результат: {overall_score}/100.",
                 detail=self._build_executive_summary(payload, overall_score, overall_grade),
                 evidence_turn_indexes=evidence_indexes,
             ),
@@ -213,8 +213,8 @@ class FakeJudgeClient:
             )
         else:
             weakness = key_weaknesses[0] if key_weaknesses else ReportFinding(
-                title="Baseline weakness",
-                description="The session needs more explicit evidence before a stronger verdict is possible.",
+                title="Зона для усиления",
+                description="Для более сильного вердикта в сессии не хватило убедительных подтверждений.",
                 evidence_turn_indexes=evidence_indexes,
                 impact="medium",
             )
@@ -254,7 +254,7 @@ class FakeJudgeClient:
         strengths = [
             ReportFinding(
                 title=skill.title,
-                description=f"{skill.title} stayed above the expected baseline in this session.",
+                description=f"По этой сессии навык «{skill.title}» оказался выше ожидаемого базового уровня.",
                 evidence_turn_indexes=skill.evidence_turn_indexes,
                 impact="medium",
             )
@@ -266,8 +266,8 @@ class FakeJudgeClient:
         if overall_score >= 70:
             return [
                 ReportFinding(
-                    title="Constructive session control",
-                    description="The conversation ended with a generally constructive trajectory.",
+                    title="Конструктивный ход разговора",
+                    description="Разговор завершился по в целом конструктивной траектории.",
                     evidence_turn_indexes=evidence_indexes,
                     impact="medium",
                 )
@@ -285,7 +285,7 @@ class FakeJudgeClient:
         weaknesses = [
             ReportFinding(
                 title=skill.title,
-                description=f"{skill.title} stayed below the expected baseline in this session.",
+                description=f"По этой сессии навык «{skill.title}» оказался ниже ожидаемого базового уровня.",
                 evidence_turn_indexes=skill.evidence_turn_indexes,
                 impact="high" if skill.score < 35 else "medium",
             )
@@ -297,8 +297,8 @@ class FakeJudgeClient:
         if overall_score < 50:
             return [
                 ReportFinding(
-                    title="Low overall session quality",
-                    description="The final session outcome remained below the expected baseline.",
+                    title="Низкое итоговое качество сессии",
+                    description="Финальный результат сессии остался ниже ожидаемого базового уровня.",
                     evidence_turn_indexes=evidence_indexes,
                     impact="high",
                 )
@@ -318,8 +318,8 @@ class FakeJudgeClient:
         if discovery is not None and discovery.score < 60:
             missed.append(
                 ReportFinding(
-                    title="Deeper discovery was available",
-                    description="The manager could have explored the client's context more deeply before advancing.",
+                    title="Можно было углубить диагностику",
+                    description="Перед продвижением разговора менеджер мог глубже раскрыть контекст клиента.",
                     evidence_turn_indexes=evidence_indexes,
                     impact="medium",
                 )
@@ -328,8 +328,8 @@ class FakeJudgeClient:
         if next_step is not None and next_step.score < 60:
             missed.append(
                 ReportFinding(
-                    title="Next step was not fully earned",
-                    description="The conversation left room for a more clearly justified next step.",
+                    title="Следующий шаг был подготовлен не полностью",
+                    description="В разговоре осталось пространство для более обоснованного следующего шага.",
                     evidence_turn_indexes=evidence_indexes,
                     impact="medium",
                 )
@@ -342,9 +342,9 @@ class FakeJudgeClient:
         if not weakest:
             return [
                 ReportRecommendation(
-                    title="Clarify the next question earlier",
-                    description="Use the next turn to narrow the client's current process and pain more explicitly.",
-                    example_phrase="How is this handled today, and where does it usually break first?",
+                    title="Быстрее уточнить следующий вопрос",
+                    description="В следующем ходе стоит точнее сузить текущий процесс клиента и его боль.",
+                    example_phrase="Как это устроено у вас сейчас и где обычно возникает первый сбой?",
                     priority="medium",
                 )
             ]
@@ -353,44 +353,44 @@ class FakeJudgeClient:
             if skill.id == "discovery_quality":
                 recommendations.append(
                     ReportRecommendation(
-                        title="Ask narrower discovery questions",
-                        description="Move from generic questions to concrete process and pain discovery.",
-                        example_phrase="What part of the current process costs you the most time each month?",
+                        title="Задавать более точные диагностические вопросы",
+                        description="Нужно перейти от общих вопросов к конкретике по процессу и боли клиента.",
+                        example_phrase="Какой участок текущего процесса забирает у вас больше всего времени каждый месяц?",
                         priority="high",
                     )
                 )
             elif skill.id == "role_identification":
                 recommendations.append(
                     ReportRecommendation(
-                        title="Clarify decision ownership",
-                        description="Establish who owns the decision and who influences the next step.",
-                        example_phrase="Who else is usually involved when you evaluate a change like this?",
+                        title="Уточнить владельца решения",
+                        description="Нужно понять, кто принимает решение и кто влияет на следующий шаг.",
+                        example_phrase="Кто ещё обычно участвует у вас в оценке такого изменения?",
                         priority="high",
                     )
                 )
             elif skill.id == "pain_identification":
                 recommendations.append(
                     ReportRecommendation(
-                        title="Diagnose the pain before pitching",
-                        description="Anchor the conversation in a concrete operational or business pain.",
-                        example_phrase="What is the business impact when this issue happens?",
+                        title="Сначала диагностировать боль, потом предлагать",
+                        description="Разговор стоит опереть на конкретную операционную или бизнес-боль клиента.",
+                        example_phrase="Во что для бизнеса выливается эта проблема, когда она возникает?",
                         priority="high",
                     )
                 )
             elif skill.id == "next_step_timing":
                 recommendations.append(
                     ReportRecommendation(
-                        title="Earn the next step later",
-                        description="Advance only after the client context and decision criteria are clear enough.",
-                        example_phrase="Before we discuss a next step, what would you need to see to consider it relevant?",
+                        title="Чуть позже переходить к следующему шагу",
+                        description="К следующему шагу лучше переходить после прояснения контекста и критериев решения.",
+                        example_phrase="Прежде чем обсуждать следующий шаг, что вам нужно понять, чтобы он был уместен?",
                         priority="medium",
                     )
                 )
             else:
                 recommendations.append(
                     ReportRecommendation(
-                        title=f"Improve {skill.title.lower()}",
-                        description=f"Raise {skill.title.lower()} with a more specific and contextual follow-up.",
+                        title=f"Усилить навык «{skill.title.lower()}»",
+                        description=f"Этот навык можно поднять более точным и контекстным уточняющим вопросом.",
                         example_phrase=None,
                         priority="medium",
                     )
@@ -400,8 +400,8 @@ class FakeJudgeClient:
     def _build_outcome(self, payload: JudgeSessionInput, overall_grade: JudgementGrade) -> str:
         """Summarize the session outcome in one bounded sentence."""
         return (
-            f"Session ended at stage '{payload.final_stage}' after {payload.turn_count} turns "
-            f"with a {overall_grade} judgement."
+            f"Сессия завершилась на этапе «{payload.final_stage}» после {payload.turn_count} ходов "
+            f"с итоговой оценкой уровня «{overall_grade}»."
         )
 
     def _build_executive_summary(
@@ -412,8 +412,8 @@ class FakeJudgeClient:
     ) -> str:
         """Build a deterministic human-readable summary for the future bento report."""
         return (
-            f"The session finished at stage '{payload.final_stage}' with overall score {overall_score}/100 "
-            f"and grade '{overall_grade}'. Final client interest reached {payload.final_interest_score}/100."
+            f"Сессия завершилась на этапе «{payload.final_stage}» с общей оценкой {overall_score}/100 "
+            f"и уровнем «{overall_grade}». Финальный интерес клиента составил {payload.final_interest_score}/100."
         )
 
     def _build_final_verdict(
@@ -424,8 +424,8 @@ class FakeJudgeClient:
     ) -> str:
         """Produce a stable final verdict string."""
         return (
-            f"Deterministic fake judgement: {overall_grade} result, score {overall_score}/100, "
-            f"final stage '{payload.final_stage}', {payload.turn_count} turns processed."
+            f"Детерминированный итог fake judge: уровень «{overall_grade}», оценка {overall_score}/100, "
+            f"финальный этап «{payload.final_stage}», обработано ходов: {payload.turn_count}."
         )
 
     def _build_risk_flags(self, payload: JudgeSessionInput, skill_scores: list[SkillScore]) -> list[str]:

@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.application.judgement_service import JudgementService
 from app.application.report_service import ReportService
+from app.domain.judgement_models import JudgeSessionOutput
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
 from app.infrastructure.judge_client import FakeJudgeClient
 from app.infrastructure.session_repository import InMemorySessionRepository
@@ -75,3 +76,23 @@ def test_report_service_with_judgement_service_returns_report_payload() -> None:
     assert "overall_score" in payload
     assert payload["bento_blocks"]
     assert payload["skill_scores"]
+
+
+class CrashingJudgementService:
+    def judge_session(self, session: TrainingSessionState) -> JudgeSessionOutput:
+        """Raise a deterministic error to verify the fail-open wrapper."""
+        raise RuntimeError("judge exploded")
+
+
+def test_report_service_generate_report_payload_safely_returns_none_on_judge_error() -> None:
+    """Safe payload generation should not propagate judge failures into the caller."""
+    repository = InMemorySessionRepository()
+    session_id = _create_finished_session(repository)
+    service = ReportService(
+        repository,
+        judgement_service=CrashingJudgementService(),
+    )
+
+    payload = service.generate_report_payload_safely(session_id)
+
+    assert payload is None

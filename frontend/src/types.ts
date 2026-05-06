@@ -28,6 +28,8 @@ export type TurnPublicDTO = {
   created_at: string;
 };
 
+export type ReportPayload = Record<string, unknown>;
+
 export type SessionPublicDTO = {
   session_id: string;
   scenario_id: string;
@@ -66,11 +68,13 @@ export type TurnResponse = {
 export type FinishSessionResponse = {
   session: SessionPublicDTO;
   report: string;
+  report_payload?: ReportPayload | null;
 };
 
 export type SessionReportResponse = {
   session: SessionPublicDTO;
   report: string;
+  report_payload?: ReportPayload | null;
 };
 
 export type ClientAccount = {

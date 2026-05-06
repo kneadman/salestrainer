@@ -194,6 +194,15 @@ def test_fake_judge_client_uses_one_based_evidence_indexes() -> None:
         assert set(block.evidence_turn_indexes).issubset(existing_indexes)
 
 
+def test_fake_judge_client_uses_russian_user_facing_text() -> None:
+    """Fake judge text should stay Russian for the default Russian runtime contract."""
+    result = FakeJudgeClient().judge_session(_build_payload())
+
+    assert result.bento_blocks[0].title == "Итог сессии"
+    assert "Сессия завершилась" in result.outcome
+    assert "Детерминированный итог fake judge" in result.final_verdict
+
+
 def test_parse_judge_session_output_accepts_direct_output_dict() -> None:
     """Parser should accept a direct JudgeSessionOutput-like dictionary."""
     result = parse_judge_session_output(

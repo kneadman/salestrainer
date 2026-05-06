@@ -51,10 +51,16 @@ class ReportService:
         """Return an optional structured judge payload for persistence or future consumers."""
         if self._judgement_service is None:
             return None
-        # Real Judge Agent flow should avoid re-running on every GET /report once report_payload is saved.
-        # Future report flow should reuse saved report_payload when available.
         session = self._repository.get(session_id)
         if session is None:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")
         judgement = self._judgement_service.judge_session(session)
         return judgement.model_dump(mode="json")
+
+    def generate_report_payload_safely(self, session_id: str) -> dict[str, object] | None:
+        """Generate optional judge payload without breaking the core finish/report flow on provider errors."""
+        try:
+            return self.generate_report_payload(session_id)
+        except Exception:
+            logger.warning("judge_payload_generation_failed session_id=%s", session_id, exc_info=True)
+            return None

@@ -6,6 +6,7 @@ import { FactsPanel } from "../components/FactsPanel";
 import { MetricsPanel } from "../components/MetricsPanel";
 import { PhoneShell } from "../components/PhoneShell";
 import { SessionHeader } from "../components/SessionHeader";
+import { StructuredReportSummary } from "../components/StructuredReportSummary";
 import type { SessionPublicDTO, TurnPublicDTO } from "../types";
 import { getClientErrorMessage } from "./utils";
 
@@ -23,6 +24,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [busyAction, setBusyAction] = useState<"boot" | "create" | "send" | "finish" | null>("boot");
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
+  const [reportPayload, setReportPayload] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity. */
@@ -40,8 +42,10 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
           try {
             const reportResponse = await getReport(sessionId);
             setReport(reportResponse.report);
+            setReportPayload(reportResponse.report_payload ?? null);
           } catch {
             setReport(null);
+            setReportPayload(null);
           }
         }
       } catch (restoreError) {
@@ -67,6 +71,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     setBusyAction("create");
     setError(null);
     setReport(null);
+    setReportPayload(null);
     setTurns([]);
     setInputValue("");
     try {
@@ -114,6 +119,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
       const response = await finishSession(session.session_id);
       setSession(response.session);
       setReport(response.report);
+      setReportPayload(response.report_payload ?? null);
     } catch (finishError) {
       setError(getClientErrorMessage(finishError));
     } finally {
@@ -147,6 +153,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
         {report ? (
           <section className="panel-card">
             <div className="panel-card__header"><h2>Итоговый отчёт</h2></div>
+            <StructuredReportSummary payload={reportPayload} />
             <pre className="report-block">{report}</pre>
           </section>
         ) : null}

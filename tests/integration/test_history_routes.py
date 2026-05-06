@@ -103,6 +103,12 @@ class CountingJudgementService:
         )
 
 
+class CrashingJudgementService:
+    def judge_session(self, session: TrainingSessionState) -> JudgeSessionOutput:
+        """Raise a deterministic error to verify fail-open API behavior."""
+        raise RuntimeError("judge exploded")
+
+
 def _seed_account_with_users(
     db_session: Session,
     *,
@@ -210,6 +216,8 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert "llm_response_snapshot" not in history_response.text
     assert report_response.status_code == 200
     assert report_response.json()["report"] == report.report_text
+    assert "report_payload" in report_response.json()
+    assert report_response.json()["report_payload"] == report.report_payload
     db_session.close()
 
 
@@ -380,4 +388,71 @@ def test_get_report_reuses_saved_report_payload_without_regenerating_judge() -> 
 
     assert report_response.status_code == 200
     assert counting_judgement_service.calls == 1
+    assert "report_payload" in report_response.json()
+    assert report_response.json()["report_payload"] == first_report.report_payload
+    db_session.close()
+
+
+def test_finish_session_stays_successful_when_judge_generation_fails() -> None:
+    """POST /finish should keep the core report flow alive even if judge payload generation crashes."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-judge-fail-open",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    client.app.state.services.report_service = ReportService(
+        repository,
+        judgement_service=CrashingJudgementService(),
+    )
+    _login(client, "manager@example.com")
+
+    create_response = client.post("/api/sessions", json={})
+    assert create_response.status_code == 201
+    session_id = create_response.json()["session"]["session_id"]
+    turn_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you solve this process today?"},
+    )
+    assert turn_response.status_code == 200
+
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+    report_record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+
+    assert finish_response.status_code == 200
+    assert finish_response.json()["report"]
+    assert "report_payload" in finish_response.json()
+    assert finish_response.json()["report_payload"] is None
+    assert report_record is not None
+    assert report_record.report_text
+    assert report_record.report_payload is not None
+    db_session.close()
+
+
+def test_history_report_response_exposes_saved_report_payload() -> None:
+    """Persistent history report DTO should include the saved structured judge payload."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-history-payload",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    counting_judgement_service = CountingJudgementService()
+    client.app.state.services.report_service = ReportService(
+        repository,
+        judgement_service=counting_judgement_service,
+    )
+    _login(client, "manager@example.com")
+
+    session_id = _start_turn_finish(client)
+    report_record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+    history_report_response = client.get(f"/api/history/sessions/{session_id}/report")
+
+    assert history_report_response.status_code == 200
+    assert "report_payload" in history_report_response.json()
+    assert history_report_response.json()["report_payload"] == report_record.report_payload
     db_session.close()

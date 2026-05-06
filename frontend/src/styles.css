@@ -404,6 +404,39 @@ button:disabled {
   color: #e5eefc;
 }
 
+.structured-report-summary {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.structured-report-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.structured-report-summary__metric {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.structured-report-summary__metric span {
+  font-size: 12px;
+  color: var(--client-text-muted);
+}
+
+.structured-report-summary__metric strong {
+  font-size: 16px;
+}
+
 @media (max-width: 940px) {
   .app-shell {
     padding: 16px;
