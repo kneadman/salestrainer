@@ -17,7 +17,7 @@ from app.cli.renderer import (
 from app.domain.errors import SalesTrainerError
 from app.domain.persona_generation import UniversalFakePersonaGenerator as PersonaGenerator
 from app.infrastructure.config import get_settings
-from app.infrastructure.judge_client import FakeJudgeClient
+from app.infrastructure.judge_client import build_judge_client
 from app.infrastructure.llm_client import build_llm_client
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.redis_client import build_repository
@@ -79,7 +79,7 @@ def run_cli(
     )
     report_service = ReportService(
         repository,
-        judgement_service=JudgementService(FakeJudgeClient()),
+        judgement_service=JudgementService(build_judge_client(settings)),
     )
 
     output_fn("Sales Trainer MVP")

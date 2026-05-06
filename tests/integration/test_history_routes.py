@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -10,6 +11,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.access.repository import AccessRepository
 from app.api.main import create_app
+from app.application.report_service import ReportService
+from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, ReportRecommendation, SkillScore
+from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
 from app.history.models import TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
 from app.history.repository import HistoryRepository
 from app.history.service import HistoryService
@@ -21,9 +25,6 @@ from app.infrastructure.config import Settings
 from app.infrastructure.db import Base, import_model_modules
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
-from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
-from datetime import UTC, datetime
-from uuid import uuid4
 
 
 def _create_db_session() -> Session:
@@ -53,6 +54,53 @@ def _create_client(db_session: Session, repository: InMemorySessionRepository) -
 
     app.dependency_overrides[get_db_session] = override_get_db_session
     return TestClient(app)
+
+
+class CountingJudgementService:
+    def __init__(self) -> None:
+        """Count how many times report payload generation actually invokes judge logic."""
+        self.calls = 0
+
+    def judge_session(self, session: TrainingSessionState) -> JudgeSessionOutput:
+        """Return a minimal valid structured judge payload and increment the call counter."""
+        self.calls += 1
+        evidence_indexes = [1] if session.turn_count else []
+        return JudgeSessionOutput(
+            overall_score=70,
+            overall_grade="normal",
+            outcome="Итог нормальный.",
+            executive_summary="Сессия завершена и оценена.",
+            bento_blocks=[
+                BentoReportBlock(
+                    id="summary",
+                    title="Итог",
+                    type="summary",
+                    severity="neutral",
+                    short_text="Краткий итог.",
+                    detail="Подробный итог.",
+                    evidence_turn_indexes=evidence_indexes,
+                )
+            ],
+            skill_scores=[
+                SkillScore(
+                    id="discovery_quality",
+                    title="Discovery quality",
+                    score=70,
+                    severity="yellow",
+                    explanation="Навык проявлен на среднем уровне.",
+                    evidence_turn_indexes=evidence_indexes,
+                )
+            ],
+            recommendations=[
+                ReportRecommendation(
+                    title="Уточнить следующий шаг",
+                    description="Нужно добавить больше конкретики перед следующим шагом.",
+                    example_phrase=None,
+                    priority="medium",
+                )
+            ],
+            final_verdict="Стабильный тестовый вердикт.",
+        )
 
 
 def _seed_account_with_users(
@@ -148,6 +196,7 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert turns[0].client_state_snapshot is not None
     assert report is not None
     assert report.report_text
+    assert report.report_payload is not None
     assert {"session_started", "turn_processed", "session_finished", "report_generated"}.issubset(set(event_types))
 
     history_response = client.get(f"/api/history/sessions/{session_id}")
@@ -299,4 +348,36 @@ def test_history_service_persists_report_payload_without_exposing_it_in_dto() ->
 
     assert record is not None
     assert record.report_payload == payload
+    db_session.close()
+
+
+def test_get_report_reuses_saved_report_payload_without_regenerating_judge() -> None:
+    """GET /report should reuse persisted report_payload instead of re-running judge logic."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-reuse",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    counting_judgement_service = CountingJudgementService()
+    client.app.state.services.report_service = ReportService(
+        repository,
+        judgement_service=counting_judgement_service,
+    )
+    _login(client, "manager@example.com")
+
+    session_id = _start_turn_finish(client)
+
+    assert counting_judgement_service.calls == 1
+
+    first_report = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+    assert first_report is not None
+    assert first_report.report_payload is not None
+
+    report_response = client.get(f"/api/sessions/{session_id}/report")
+
+    assert report_response.status_code == 200
+    assert counting_judgement_service.calls == 1
     db_session.close()

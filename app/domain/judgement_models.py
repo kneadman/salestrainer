@@ -102,8 +102,8 @@ class JudgeSessionOutput(BaseModel):
     overall_grade: JudgementGrade
     outcome: str = Field(min_length=1, max_length=240)
     executive_summary: str = Field(min_length=1, max_length=1200)
-    bento_blocks: list[BentoReportBlock]
-    skill_scores: list[SkillScore]
+    bento_blocks: list[BentoReportBlock] = Field(min_length=1)
+    skill_scores: list[SkillScore] = Field(min_length=1)
     key_strengths: list[ReportFinding] = Field(default_factory=list)
     key_weaknesses: list[ReportFinding] = Field(default_factory=list)
     missed_opportunities: list[ReportFinding] = Field(default_factory=list)

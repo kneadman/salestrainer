@@ -19,6 +19,10 @@ Rules:
   - `red` = weak or critical area
   - `neutral` = informational block
 - `evidence_turn_indexes` must reference only existing 1-based `turn_index` values from the input session.
+- User-facing text in `JudgeSessionOutput` must be in Russian by default.
+- Use another language only if the whole input session is clearly in another language.
+- Do not output English UI text for Russian sessions.
+- Keep ids and enums in English as required by the schema.
 - You may use the hidden persona for evaluation, but do not expose it as a raw dump.
 - Do not invent missing turns, facts, or events.
 - Do not give judgments outside the provided session data.

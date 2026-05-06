@@ -73,3 +73,5 @@ def test_report_service_with_judgement_service_returns_report_payload() -> None:
     assert payload is not None
     assert payload["schema_version"] == 1
     assert "overall_score" in payload
+    assert payload["bento_blocks"]
+    assert payload["skill_scores"]

@@ -8,9 +8,11 @@ from app.domain.models import ClientState, PersonaProfile, Scenario, TurnEvaluat
 from app.infrastructure.config import Settings
 from app.infrastructure.judge_client import (
     FakeJudgeClient,
+    JudgeOutputValidationError,
     StructuredJudgeClient,
     build_judge_client,
     parse_judge_session_output,
+    validate_judge_output,
 )
 
 
@@ -89,6 +91,63 @@ def _build_payload(*, heuristic: bool = True) -> JudgeSessionInput:
     )
 
 
+def _valid_output_dict(
+    *,
+    bento_evidence: list[int] | None = None,
+    skill_evidence: list[int] | None = None,
+    finding_evidence: list[int] | None = None,
+) -> dict[str, object]:
+    """Build one minimal valid structured judge output payload for parser tests."""
+    return {
+        "schema_version": 1,
+        "overall_score": 80,
+        "overall_grade": "good",
+        "outcome": "Итог сессии хороший.",
+        "executive_summary": "Менеджер провёл содержательный разговор и довёл его до понятного этапа.",
+        "bento_blocks": [
+            {
+                "id": "summary",
+                "title": "Итог",
+                "type": "summary",
+                "severity": "neutral",
+                "short_text": "Краткий итог.",
+                "detail": "Подробный итог завершённой тренировки.",
+                "evidence_turn_indexes": bento_evidence if bento_evidence is not None else [1],
+            }
+        ],
+        "skill_scores": [
+            {
+                "id": "discovery_quality",
+                "title": "Discovery quality",
+                "score": 80,
+                "severity": "green",
+                "explanation": "Навык проявлен на хорошем уровне.",
+                "evidence_turn_indexes": skill_evidence if skill_evidence is not None else [1],
+            }
+        ],
+        "key_strengths": [
+            {
+                "title": "Сильная диагностика",
+                "description": "Менеджер задавал вопросы по контексту клиента.",
+                "evidence_turn_indexes": finding_evidence if finding_evidence is not None else [1],
+                "impact": "medium",
+            }
+        ],
+        "key_weaknesses": [],
+        "missed_opportunities": [],
+        "recommendations": [
+            {
+                "title": "Уточнить следующий шаг",
+                "description": "Добавить больше конкретики перед предложением следующего шага.",
+                "example_phrase": "Что для вас было бы следующим логичным шагом после этой диагностики?",
+                "priority": "medium",
+            }
+        ],
+        "final_verdict": "Хорошая сессия с понятной зоной для следующего улучшения.",
+        "risk_flags": [],
+    }
+
+
 def test_fake_judge_client_returns_judge_session_output() -> None:
     """Fake judge client should return the strict domain output model."""
     result = FakeJudgeClient().judge_session(_build_payload())
@@ -138,16 +197,7 @@ def test_fake_judge_client_uses_one_based_evidence_indexes() -> None:
 def test_parse_judge_session_output_accepts_direct_output_dict() -> None:
     """Parser should accept a direct JudgeSessionOutput-like dictionary."""
     result = parse_judge_session_output(
-        {
-            "schema_version": 1,
-            "overall_score": 80,
-            "overall_grade": "good",
-            "outcome": "Outcome",
-            "executive_summary": "Summary",
-            "bento_blocks": [],
-            "skill_scores": [],
-            "final_verdict": "Verdict",
-        }
+        _valid_output_dict()
     )
 
     assert isinstance(result, JudgeSessionOutput)
@@ -160,14 +210,9 @@ def test_parse_judge_session_output_accepts_output_text_json() -> None:
         {
             "output_text": json.dumps(
                 {
-                    "schema_version": 1,
+                    **_valid_output_dict(),
                     "overall_score": 61,
                     "overall_grade": "normal",
-                    "outcome": "Outcome",
-                    "executive_summary": "Summary",
-                    "bento_blocks": [],
-                    "skill_scores": [],
-                    "final_verdict": "Verdict",
                 }
             )
         }
@@ -183,14 +228,9 @@ def test_structured_judge_client_builds_request_with_json_schema_name() -> None:
     def transport(request_payload):
         captured_requests.append(request_payload)
         return {
-            "schema_version": 1,
+            **_valid_output_dict(),
             "overall_score": 70,
             "overall_grade": "normal",
-            "outcome": "Outcome",
-            "executive_summary": "Summary",
-            "bento_blocks": [],
-            "skill_scores": [],
-            "final_verdict": "Verdict",
         }
 
     client = StructuredJudgeClient(
@@ -218,14 +258,9 @@ def test_structured_judge_client_returns_output_on_successful_transport() -> Non
         folder_id="folder-1",
         agent_id="agent-1",
         transport=lambda _: {
-            "schema_version": 1,
+            **_valid_output_dict(),
             "overall_score": 88,
             "overall_grade": "strong",
-            "outcome": "Outcome",
-            "executive_summary": "Summary",
-            "bento_blocks": [],
-            "skill_scores": [],
-            "final_verdict": "Verdict",
         },
     )
 
@@ -244,14 +279,9 @@ def test_structured_judge_client_retries_with_retry_instruction() -> None:
             {
                 "output_text": json.dumps(
                     {
-                        "schema_version": 1,
+                        **_valid_output_dict(),
                         "overall_score": 63,
                         "overall_grade": "normal",
-                        "outcome": "Outcome",
-                        "executive_summary": "Summary",
-                        "bento_blocks": [],
-                        "skill_scores": [],
-                        "final_verdict": "Verdict",
                     }
                 )
             },
@@ -314,6 +344,67 @@ def test_build_judge_client_uses_judge_specific_folder_and_agent_ids() -> None:
     assert isinstance(client, StructuredJudgeClient)
     assert client._folder_id == "judge-folder"
     assert client._agent_id == "judge-agent"
+
+
+def test_validate_judge_output_accepts_valid_indexes() -> None:
+    """Post-validation should accept evidence indexes that point to existing 1-based turns."""
+    payload = _build_payload()
+    output = JudgeSessionOutput.model_validate(_valid_output_dict())
+
+    validated = validate_judge_output(output, payload)
+
+    assert validated == output
+
+
+def test_validate_judge_output_rejects_invalid_bento_evidence_index() -> None:
+    """Bento evidence indexes should be rejected when they point outside the input turns."""
+    payload = _build_payload()
+    output = JudgeSessionOutput.model_validate(_valid_output_dict(bento_evidence=[99]))
+
+    with pytest.raises(JudgeOutputValidationError):
+        validate_judge_output(output, payload)
+
+
+def test_validate_judge_output_rejects_invalid_skill_evidence_index() -> None:
+    """Skill evidence indexes should be rejected when they point outside the input turns."""
+    payload = _build_payload()
+    output = JudgeSessionOutput.model_validate(_valid_output_dict(skill_evidence=[99]))
+
+    with pytest.raises(JudgeOutputValidationError):
+        validate_judge_output(output, payload)
+
+
+def test_validate_judge_output_rejects_invalid_finding_evidence_index() -> None:
+    """Finding evidence indexes should be rejected when they point outside the input turns."""
+    payload = _build_payload()
+    output = JudgeSessionOutput.model_validate(_valid_output_dict(finding_evidence=[99]))
+
+    with pytest.raises(JudgeOutputValidationError):
+        validate_judge_output(output, payload)
+
+
+def test_structured_judge_client_retries_on_invalid_evidence_indexes() -> None:
+    """Structured client should retry when provider output contains invalid evidence indexes."""
+    responses = iter(
+        [
+            {"output_text": json.dumps(_valid_output_dict(bento_evidence=[99]))},
+            {"output_text": json.dumps({**_valid_output_dict(), "overall_score": 66, "overall_grade": "normal"})},
+        ]
+    )
+
+    client = StructuredJudgeClient(
+        provider="yandex_compatible",
+        base_url="https://example.test/v1",
+        api_key="secret-key-value",
+        folder_id="folder-1",
+        agent_id="agent-1",
+        max_retries=1,
+        transport=lambda _: next(responses),
+    )
+
+    result = client.judge_session(_build_payload())
+
+    assert result.overall_score == 66
 
 
 def test_build_judge_client_falls_back_to_legacy_folder_and_agent_ids() -> None:

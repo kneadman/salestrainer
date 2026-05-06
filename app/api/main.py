@@ -15,7 +15,7 @@ from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.infrastructure.config import Settings, get_settings
-from app.infrastructure.judge_client import FakeJudgeClient
+from app.infrastructure.judge_client import build_judge_client
 from app.infrastructure.llm_client import LLMClient, build_llm_client
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.redis_client import build_repository
@@ -111,7 +111,7 @@ def create_app(
     )
     report_service = ReportService(
         resolved_repository,
-        judgement_service=JudgementService(FakeJudgeClient()),
+        judgement_service=JudgementService(build_judge_client(resolved_settings)),
     )
 
     app = FastAPI(title="Sales Trainer MVP API", version="0.1.0")

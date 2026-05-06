@@ -40,6 +40,48 @@ class JudgeClient(Protocol):
 Transport = Callable[[dict[str, Any]], Any]
 
 
+class JudgeOutputValidationError(ValueError):
+    """Raised when a structured judge output violates backend-level contract rules."""
+
+
+def validate_judge_output(output: JudgeSessionOutput, input_payload: JudgeSessionInput) -> JudgeSessionOutput:
+    """Reject judge outputs that reference non-existent 1-based turn indexes."""
+    valid_turn_indexes = {turn.turn_index for turn in input_payload.turns}
+    for block in output.bento_blocks:
+        _validate_evidence_indexes(
+            block.evidence_turn_indexes,
+            valid_turn_indexes,
+            location=f"bento_blocks[{block.id}]",
+        )
+    for skill in output.skill_scores:
+        _validate_evidence_indexes(
+            skill.evidence_turn_indexes,
+            valid_turn_indexes,
+            location=f"skill_scores[{skill.id}]",
+        )
+    for collection_name, findings in [
+        ("key_strengths", output.key_strengths),
+        ("key_weaknesses", output.key_weaknesses),
+        ("missed_opportunities", output.missed_opportunities),
+    ]:
+        for index, finding in enumerate(findings):
+            _validate_evidence_indexes(
+                finding.evidence_turn_indexes,
+                valid_turn_indexes,
+                location=f"{collection_name}[{index}]",
+            )
+    return output
+
+
+def _validate_evidence_indexes(indexes: list[int], valid_turn_indexes: set[int], *, location: str) -> None:
+    """Ensure every evidence turn index points to an existing input turn."""
+    invalid_indexes = [index for index in indexes if index not in valid_turn_indexes]
+    if invalid_indexes:
+        raise JudgeOutputValidationError(
+            f"Invalid evidence_turn_indexes in {location}: {invalid_indexes}"
+        )
+
+
 class FakeJudgeClient:
     def judge_session(self, payload: JudgeSessionInput) -> JudgeSessionOutput:
         """Return a deterministic judgement result without any external LLM dependency."""
@@ -62,7 +104,7 @@ class FakeJudgeClient:
             recommendations=recommendations,
             evidence_indexes=evidence_indexes,
         )
-        return JudgeSessionOutput(
+        output = JudgeSessionOutput(
             overall_score=overall_score,
             overall_grade=overall_grade,
             outcome=self._build_outcome(payload, overall_grade),
@@ -76,6 +118,7 @@ class FakeJudgeClient:
             final_verdict=self._build_final_verdict(payload, overall_score, overall_grade),
             risk_flags=self._build_risk_flags(payload, skill_scores),
         )
+        return validate_judge_output(output, payload)
 
     def _build_overall_score(self, payload: JudgeSessionInput) -> int:
         """Average heuristic scores when available, otherwise fall back to final interest."""
@@ -89,8 +132,6 @@ class FakeJudgeClient:
 
     def _build_skill_scores(self, payload: JudgeSessionInput) -> list[SkillScore]:
         """Project current heuristic dimensions into normalized 0..100 skill scores."""
-        if not payload.heuristic_evaluations:
-            return []
         skill_definitions = [
             ("discovery_quality", "Discovery quality", "discovery_quality_score"),
             ("role_identification", "Role identification", "role_identification_score"),
@@ -104,10 +145,13 @@ class FakeJudgeClient:
         evidence_indexes = self._evaluation_evidence_indexes(payload)
         skill_scores: list[SkillScore] = []
         for skill_id, title, field_name in skill_definitions:
-            raw_average = sum(getattr(item, field_name) for item in payload.heuristic_evaluations) / len(
-                payload.heuristic_evaluations
-            )
-            score = int(round((raw_average / 5) * 100))
+            if payload.heuristic_evaluations:
+                raw_average = sum(getattr(item, field_name) for item in payload.heuristic_evaluations) / len(
+                    payload.heuristic_evaluations
+                )
+                score = int(round((raw_average / 5) * 100))
+            else:
+                score = payload.final_interest_score
             skill_scores.append(
                 SkillScore(
                     id=skill_id,
@@ -489,8 +533,9 @@ class StructuredJudgeClient:
                 logger.debug("judge_request_payload %s", request_payload)
             try:
                 raw_response = _response_to_payload(self._transport(request_payload))
-                return parse_judge_session_output(raw_response)
-            except (LLMClientError, ValidationError, JSONDecodeError, TimeoutError) as error:
+                output = parse_judge_session_output(raw_response)
+                return validate_judge_output(output, payload)
+            except (JudgeOutputValidationError, LLMClientError, ValidationError, JSONDecodeError, TimeoutError) as error:
                 last_error = error
                 logger.warning("judge_request_failed attempt=%s error=%s", attempt + 1, error)
             except Exception as error:

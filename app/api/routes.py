@@ -384,18 +384,23 @@ def get_report(
     if session.status != "finished":
         raise conflict("Session is not finished yet.")
     report_text = report_service.generate_report(session_id)
-    report_payload = report_service.generate_report_payload(session_id)
+    saved_report_payload = history_service.get_saved_report_payload(session.session_id)
+    if saved_report_payload is None:
+        report_payload = report_service.generate_report_payload(session_id)
+    else:
+        report_payload = saved_report_payload
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after report.")
-    history_service.record_report_generated(
-        session=session,
-        report_text=report_text,
-        report_payload=report_payload,
-        user_id=current_session.user.id,
-        client_account_id=ownership.client_account_id,
-        training_config_id=ownership.training_config_id,
-    )
+    if saved_report_payload is None:
+        history_service.record_report_generated(
+            session=session,
+            report_text=report_text,
+            report_payload=report_payload,
+            user_id=current_session.user.id,
+            client_account_id=ownership.client_account_id,
+            training_config_id=ownership.training_config_id,
+        )
     return SessionReportResponse(
         session=build_session_public_dto(session),
         report=report_text,

@@ -355,6 +355,13 @@ class HistoryService:
             raise HistoryNotFoundError("Report not found.")
         return report_dto(report)
 
+    def get_saved_report_payload(self, session_id: UUID) -> dict[str, object] | None:
+        """Return saved structured report payload when it already exists."""
+        report = self._repository.get_report(session_id)
+        if report is None:
+            return None
+        return report.report_payload
+
     def list_organization_history(
         self,
         *,

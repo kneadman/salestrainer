@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.application.judgement_service import JudgementService
-from app.domain.judgement_models import JudgeSessionOutput, build_judge_input_from_session
+from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, SkillScore, build_judge_input_from_session
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, Turn, TurnEvaluation
 
 
@@ -19,8 +19,27 @@ class SpyJudgeClient:
             overall_grade="good",
             outcome="Solid result.",
             executive_summary="The fake spy client received a valid payload.",
-            bento_blocks=[],
-            skill_scores=[],
+            bento_blocks=[
+                BentoReportBlock(
+                    id="summary",
+                    title="Итог",
+                    type="summary",
+                    severity="neutral",
+                    short_text="Краткий итог.",
+                    detail="Подробный итог.",
+                    evidence_turn_indexes=[1],
+                )
+            ],
+            skill_scores=[
+                SkillScore(
+                    id="discovery_quality",
+                    title="Discovery quality",
+                    score=72,
+                    severity="green",
+                    explanation="Навык проявлен на хорошем уровне.",
+                    evidence_turn_indexes=[1],
+                )
+            ],
             final_verdict="Stable test verdict.",
         )
 

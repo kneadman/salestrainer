@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from app.domain.judgement_models import (
     BentoReportBlock,
     JudgeSessionOutput,
+    SkillScore,
     build_judge_input_from_session,
 )
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, Turn, TurnEvaluation
@@ -114,8 +115,8 @@ def test_output_schema_forbids_extra_fields() -> None:
             overall_grade="good",
             outcome="Manager reached a reasonable next step.",
             executive_summary="Strong discovery with incomplete objection handling.",
-            bento_blocks=[],
-            skill_scores=[],
+            bento_blocks=[_minimal_block()],
+            skill_scores=[_minimal_skill_score()],
             final_verdict="Good session overall.",
             unexpected_field=True,
         )
@@ -130,8 +131,8 @@ def test_score_validation_rejects_out_of_range_values(score: int) -> None:
             overall_grade="weak",
             outcome="Outcome",
             executive_summary="Summary",
-            bento_blocks=[],
-            skill_scores=[],
+            bento_blocks=[_minimal_block()],
+            skill_scores=[_minimal_skill_score()],
             final_verdict="Verdict",
         )
 
@@ -179,7 +180,32 @@ def test_output_schema_version_rejects_unknown_version() -> None:
             overall_grade="good",
             outcome="Manager reached a reasonable next step.",
             executive_summary="Strong discovery with incomplete objection handling.",
-            bento_blocks=[],
-            skill_scores=[],
+            bento_blocks=[_minimal_block()],
+            skill_scores=[_minimal_skill_score()],
             final_verdict="Good session overall.",
         )
+
+
+def _minimal_block() -> BentoReportBlock:
+    """Build one minimal valid bento block for output validation tests."""
+    return BentoReportBlock(
+        id="summary",
+        title="Итог",
+        type="summary",
+        severity="neutral",
+        short_text="Краткий итог.",
+        detail="Подробный итог.",
+        evidence_turn_indexes=[1],
+    )
+
+
+def _minimal_skill_score() -> SkillScore:
+    """Build one minimal valid skill score for output validation tests."""
+    return SkillScore(
+        id="discovery_quality",
+        title="Discovery quality",
+        score=80,
+        severity="green",
+        explanation="Навык проявлен на хорошем уровне.",
+        evidence_turn_indexes=[1],
+    )
