@@ -361,6 +361,13 @@ Decision criteria: reliability, relevant cases, clear onboarding, transparent re
 Training goal: manager should discover role, current accounting process, pain, decision criteria, and earn a relevant next step.
 ```
 
+## Judgement Layer contract
+
+- Judge runs only after finish.
+- PR1 adds only the strict Pydantic contract.
+- LLM client, prompt, and UI will be separate PRs.
+- Future `JudgeSessionOutput` will feed `training_reports.report_payload`.
+
 ## Demo run checklist
 
 1. Start the production-like local stack:

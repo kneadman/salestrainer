@@ -1,0 +1,170 @@
+from datetime import UTC, datetime
+from uuid import uuid4
+
+import pytest
+from pydantic import ValidationError
+
+from app.domain.judgement_models import (
+    BentoReportBlock,
+    JudgeSessionOutput,
+    build_judge_input_from_session,
+)
+from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, Turn, TurnEvaluation
+from app.domain.scenarios import get_scenario
+
+
+def _build_session_state() -> TrainingSessionState:
+    """Create a compact session fixture for judgement model tests."""
+    now = datetime.now(tz=UTC)
+    return TrainingSessionState(
+        session_id=uuid4(),
+        scenario_id="sales_audit_cold_outreach",
+        status="finished",
+        persona=PersonaProfile(
+            id="persona-1",
+            display_name="Owner",
+            role="owner",
+            industry="b2b",
+            company_size="30-100",
+            authority_level="final_decider",
+            behavior_model="skeptical_but_rational",
+        ),
+        interest_score=41,
+        stage="needs_analysis",
+        client_state=ClientState(
+            tone="interested",
+            trust=45,
+            irritation=10,
+            urgency=22,
+            price_sensitivity=50,
+            open_objections=["price"],
+            known_pains=["late reports"],
+            buying_signals=["asked for process"],
+        ),
+        summary="Manager clarified current process and surfaced one pain.",
+        turns=[
+            Turn(
+                index=0,
+                manager_message="How do you handle reporting now?",
+                client_answer="Mostly manually and it is slow.",
+                interest_before=25,
+                interest_delta=6,
+                interest_after=31,
+                stage_before="first_contact",
+                stage_after="qualification",
+                created_at=now,
+            ),
+            Turn(
+                index=1,
+                manager_message="What breaks most often in that process?",
+                client_answer="We lose time on reconciliations every month.",
+                interest_before=31,
+                interest_delta=10,
+                interest_after=41,
+                stage_before="qualification",
+                stage_after="needs_analysis",
+                created_at=now,
+            ),
+        ],
+        turn_evaluations=[
+            TurnEvaluation(
+                turn_index=0,
+                discovery_quality_score=4,
+                role_identification_score=2,
+                pain_identification_score=3,
+                relevance_score=4,
+                pressure_score=5,
+                objection_handling_score=3,
+                next_step_timing_score=2,
+                conversation_control_score=4,
+                notes=["Good opening question."],
+            )
+        ],
+        recent_turns=[],
+        turn_count=2,
+        state_version=3,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def test_judge_session_input_builds_from_training_session_state() -> None:
+    """Judge input should be assembled from the canonical session state."""
+    session = _build_session_state()
+
+    judge_input = build_judge_input_from_session(session)
+
+    assert judge_input.task == "judge_training_session"
+    assert judge_input.schema_version == 1
+    assert judge_input.scenario == get_scenario(session.scenario_id)
+    assert judge_input.persona == session.persona
+    assert judge_input.final_client_state == session.client_state
+    assert judge_input.conversation_summary == session.summary
+    assert judge_input.heuristic_evaluations == session.turn_evaluations
+    assert judge_input.final_interest_score == session.interest_score
+    assert judge_input.final_stage == session.stage
+    assert judge_input.turn_count == session.turn_count
+
+
+def test_output_schema_forbids_extra_fields() -> None:
+    """Judge output contract should reject undeclared fields."""
+    with pytest.raises(ValidationError):
+        JudgeSessionOutput(
+            overall_score=82,
+            overall_grade="good",
+            outcome="Manager reached a reasonable next step.",
+            executive_summary="Strong discovery with incomplete objection handling.",
+            bento_blocks=[],
+            skill_scores=[],
+            final_verdict="Good session overall.",
+            unexpected_field=True,
+        )
+
+
+@pytest.mark.parametrize("score", [-1, 101])
+def test_score_validation_rejects_out_of_range_values(score: int) -> None:
+    """Judge output scores should stay within 0..100."""
+    with pytest.raises(ValidationError):
+        JudgeSessionOutput(
+            overall_score=score,
+            overall_grade="weak",
+            outcome="Outcome",
+            executive_summary="Summary",
+            bento_blocks=[],
+            skill_scores=[],
+            final_verdict="Verdict",
+        )
+
+
+def test_bento_report_block_supports_severity_and_evidence_turn_indexes() -> None:
+    """Bento blocks should preserve severity and evidence indexes."""
+    block = BentoReportBlock(
+        id="strength-1",
+        title="Discovery",
+        type="strength",
+        severity="green",
+        score=78,
+        short_text="Good discovery cadence.",
+        detail="The manager asked contextual questions before moving to value.",
+        evidence_turn_indexes=[0, 1],
+    )
+
+    assert block.severity == "green"
+    assert block.evidence_turn_indexes == [0, 1]
+
+
+def test_build_judge_input_from_session_maps_turns_correctly() -> None:
+    """Turn mapping should preserve turn-by-turn conversation transitions."""
+    session = _build_session_state()
+
+    judge_input = build_judge_input_from_session(session)
+
+    assert len(judge_input.turns) == 2
+    assert judge_input.turns[0].turn_index == 0
+    assert judge_input.turns[0].manager_message == session.turns[0].manager_message
+    assert judge_input.turns[0].interest_before == 25
+    assert judge_input.turns[0].stage_after == "qualification"
+    assert judge_input.turns[1].turn_index == 1
+    assert judge_input.turns[1].client_answer == session.turns[1].client_answer
+    assert judge_input.turns[1].interest_delta == 10
+    assert judge_input.turns[1].stage_before == "qualification"
