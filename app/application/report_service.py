@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 
+from app.application.judgement_service import JudgementService
 from app.application.report_formatter import build_human_report
 from app.domain.errors import SessionNotFoundError
 from app.infrastructure.session_repository import SessionRepository
@@ -11,8 +12,14 @@ logger = logging.getLogger(__name__)
 
 
 class ReportService:
-    def __init__(self, repository: SessionRepository) -> None:
+    def __init__(
+        self,
+        repository: SessionRepository,
+        judgement_service: JudgementService | None = None,
+    ) -> None:
+        """Keep runtime session access and an optional post-finish judgement service."""
         self._repository = repository
+        self._judgement_service = judgement_service
 
     def finish_session(self, session_id: str) -> str:
         session = self._repository.get(session_id)
@@ -34,7 +41,18 @@ class ReportService:
         return self.generate_report(session_id)
 
     def generate_report(self, session_id: str) -> str:
+        """Return the current human-readable report text without changing existing flow."""
         session = self._repository.get(session_id)
         if session is None:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")
         return build_human_report(session)
+
+    def generate_report_payload(self, session_id: str) -> dict[str, object] | None:
+        """Return an optional structured judge payload for persistence or future consumers."""
+        if self._judgement_service is None:
+            return None
+        session = self._repository.get(session_id)
+        if session is None:
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
+        judgement = self._judgement_service.judge_session(session)
+        return judgement.model_dump(mode="json")

@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import ServiceContainer
+from app.application.judgement_service import JudgementService
 from app.api.routes import router
 from app.api.schemas import ErrorBody, ErrorResponse
 from app.application.report_service import ReportService
@@ -14,6 +15,7 @@ from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.infrastructure.config import Settings, get_settings
+from app.infrastructure.judge_client import FakeJudgeClient
 from app.infrastructure.llm_client import LLMClient, build_llm_client
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.redis_client import build_repository
@@ -107,7 +109,10 @@ def create_app(
         debug_mode=resolved_settings.debug_cli,
         summary_compressor=build_summary_compressor(resolved_settings),
     )
-    report_service = ReportService(resolved_repository)
+    report_service = ReportService(
+        resolved_repository,
+        judgement_service=JudgementService(FakeJudgeClient()),
+    )
 
     app = FastAPI(title="Sales Trainer MVP API", version="0.1.0")
 

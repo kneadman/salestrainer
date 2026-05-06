@@ -364,9 +364,11 @@ Training goal: manager should discover role, current accounting process, pain, d
 ## Judgement Layer contract
 
 - Judge runs only after finish.
-- PR1 adds only the strict Pydantic contract.
-- LLM client, prompt, and UI will be separate PRs.
-- Future `JudgeSessionOutput` will feed `training_reports.report_payload`.
+- PR1 adds the strict Pydantic contract and PR2 adds `FakeJudgeClient` plus `JudgementService`.
+- Real Judge Agent, prompt wiring, and UI remain separate PRs.
+- Runtime dialogue flow does not change.
+- Judge still runs only after finish/report generation.
+- `JudgeSessionOutput` now can be persisted into `training_reports.report_payload` without changing the current frontend/API response shape.
 
 ## Demo run checklist
 

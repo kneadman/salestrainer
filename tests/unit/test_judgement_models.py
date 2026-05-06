@@ -44,7 +44,7 @@ def _build_session_state() -> TrainingSessionState:
         summary="Manager clarified current process and surfaced one pain.",
         turns=[
             Turn(
-                index=0,
+                index=1,
                 manager_message="How do you handle reporting now?",
                 client_answer="Mostly manually and it is slow.",
                 interest_before=25,
@@ -55,7 +55,7 @@ def _build_session_state() -> TrainingSessionState:
                 created_at=now,
             ),
             Turn(
-                index=1,
+                index=2,
                 manager_message="What breaks most often in that process?",
                 client_answer="We lose time on reconciliations every month.",
                 interest_before=31,
@@ -68,7 +68,7 @@ def _build_session_state() -> TrainingSessionState:
         ],
         turn_evaluations=[
             TurnEvaluation(
-                turn_index=0,
+                turn_index=1,
                 discovery_quality_score=4,
                 role_identification_score=2,
                 pain_identification_score=3,
@@ -146,11 +146,11 @@ def test_bento_report_block_supports_severity_and_evidence_turn_indexes() -> Non
         score=78,
         short_text="Good discovery cadence.",
         detail="The manager asked contextual questions before moving to value.",
-        evidence_turn_indexes=[0, 1],
+        evidence_turn_indexes=[1, 2],
     )
 
     assert block.severity == "green"
-    assert block.evidence_turn_indexes == [0, 1]
+    assert block.evidence_turn_indexes == [1, 2]
 
 
 def test_build_judge_input_from_session_maps_turns_correctly() -> None:
@@ -160,11 +160,26 @@ def test_build_judge_input_from_session_maps_turns_correctly() -> None:
     judge_input = build_judge_input_from_session(session)
 
     assert len(judge_input.turns) == 2
-    assert judge_input.turns[0].turn_index == 0
+    assert judge_input.turns[0].turn_index == 1
     assert judge_input.turns[0].manager_message == session.turns[0].manager_message
     assert judge_input.turns[0].interest_before == 25
     assert judge_input.turns[0].stage_after == "qualification"
-    assert judge_input.turns[1].turn_index == 1
+    assert judge_input.turns[1].turn_index == 2
     assert judge_input.turns[1].client_answer == session.turns[1].client_answer
     assert judge_input.turns[1].interest_delta == 10
     assert judge_input.turns[1].stage_before == "qualification"
+
+
+def test_output_schema_version_rejects_unknown_version() -> None:
+    """Judge output schema version should stay pinned to the first contract version."""
+    with pytest.raises(ValidationError):
+        JudgeSessionOutput(
+            schema_version=2,
+            overall_score=82,
+            overall_grade="good",
+            outcome="Manager reached a reasonable next step.",
+            executive_summary="Strong discovery with incomplete objection handling.",
+            bento_blocks=[],
+            skill_scores=[],
+            final_verdict="Good session overall.",
+        )

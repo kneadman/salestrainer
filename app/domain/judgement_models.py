@@ -26,7 +26,7 @@ BentoBlockType = Literal[
 class JudgeTurnInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    turn_index: int
+    turn_index: int = Field(ge=1)
     manager_message: str
     client_answer: str
     interest_before: int = Field(ge=0, le=100)
@@ -40,7 +40,7 @@ class JudgeSessionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task: Literal["judge_training_session"] = "judge_training_session"
-    schema_version: int = 1
+    schema_version: Literal[1] = 1
     scenario: Scenario
     persona: PersonaProfile
     final_client_state: ClientState
@@ -97,7 +97,7 @@ class ReportRecommendation(BaseModel):
 class JudgeSessionOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: int = 1
+    schema_version: Literal[1] = 1
     overall_score: int = Field(ge=0, le=100)
     overall_grade: JudgementGrade
     outcome: str = Field(min_length=1, max_length=240)

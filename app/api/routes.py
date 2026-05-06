@@ -342,6 +342,7 @@ def finish_session(
         access_service.require_session_access(session_id, current_session.user.id)
         ownership = access_service.get_session_ownership(session_id)
         report_text = report_service.finish_session(session_id)
+        report_payload = report_service.generate_report_payload(session_id)
     except SalesTrainerError as error:
         raise_api_error(error)
     except LookupError as error:
@@ -352,6 +353,7 @@ def finish_session(
     history_service.record_session_finished_with_report(
         session=session,
         report_text=report_text,
+        report_payload=report_payload,
         user_id=current_session.user.id,
         client_account_id=ownership.client_account_id,
         training_config_id=ownership.training_config_id,
@@ -382,12 +384,14 @@ def get_report(
     if session.status != "finished":
         raise conflict("Session is not finished yet.")
     report_text = report_service.generate_report(session_id)
+    report_payload = report_service.generate_report_payload(session_id)
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after report.")
     history_service.record_report_generated(
         session=session,
         report_text=report_text,
+        report_payload=report_payload,
         user_id=current_session.user.id,
         client_account_id=ownership.client_account_id,
         training_config_id=ownership.training_config_id,

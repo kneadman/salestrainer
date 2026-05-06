@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
+from app.application.judgement_service import JudgementService
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
@@ -16,6 +17,7 @@ from app.cli.renderer import (
 from app.domain.errors import SalesTrainerError
 from app.domain.persona_generation import UniversalFakePersonaGenerator as PersonaGenerator
 from app.infrastructure.config import get_settings
+from app.infrastructure.judge_client import FakeJudgeClient
 from app.infrastructure.llm_client import build_llm_client
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.redis_client import build_repository
@@ -75,7 +77,10 @@ def run_cli(
         debug_mode=settings.debug_cli,
         summary_compressor=build_summary_compressor(settings),
     )
-    report_service = ReportService(repository)
+    report_service = ReportService(
+        repository,
+        judgement_service=JudgementService(FakeJudgeClient()),
+    )
 
     output_fn("Sales Trainer MVP")
     output_fn(render_help())
