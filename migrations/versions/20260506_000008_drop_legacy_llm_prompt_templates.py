@@ -1,7 +1,7 @@
 """Drop legacy LLM provider prompt/template fields.
 
-Revision ID: 20260506_000009
-Revises: 20260506_000008
+Revision ID: 20260506_000008
+Revises: 20260506_000007
 Create Date: 2026-05-06 17:10:00
 
 """
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
 
-revision = "20260506_000009"
-down_revision = "20260506_000008"
+revision = "20260506_000008"
+down_revision = "20260506_000007"
 branch_labels = None
 depends_on = None
 
