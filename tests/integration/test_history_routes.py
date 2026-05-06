@@ -393,8 +393,13 @@ def test_get_report_reuses_saved_report_payload_without_regenerating_judge() -> 
     db_session.close()
 
 
-def test_finish_session_stays_successful_when_judge_generation_fails() -> None:
-    """POST /finish should keep the core report flow alive even if judge payload generation crashes."""
+def test_finish_session_returns_null_payload_but_persists_fallback_report_payload_when_judge_fails() -> None:
+    """API returns report_payload=null after judge failure, while HistoryService persists a fallback DB payload by design.
+
+    The response-level null payload is expected because Judge generation crashed in the request flow.
+    The persisted fallback payload is also expected because HistoryService keeps minimal structured report data in DB.
+    That difference is intentional and should not be treated as a contradiction.
+    """
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
     _seed_account_with_users(
@@ -427,7 +432,12 @@ def test_finish_session_stays_successful_when_judge_generation_fails() -> None:
     assert finish_response.json()["report_payload"] is None
     assert report_record is not None
     assert report_record.report_text
-    assert report_record.report_payload is not None
+    assert report_record.report_payload == {
+        "status": "finished",
+        "turn_count": finish_response.json()["session"]["turn_count"],
+        "final_interest_score": finish_response.json()["session"]["interest"]["score"],
+        "final_stage": finish_response.json()["session"]["stage"],
+    }
     db_session.close()
 
 

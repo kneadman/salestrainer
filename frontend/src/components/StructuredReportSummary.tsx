@@ -1,62 +1,46 @@
+import type { ReportPayload } from "../types";
+import { BentoReportGrid } from "./BentoReportGrid";
+import { gradeLabel, isJudgeSessionOutputPayload } from "./reportPayload";
+
 type StructuredReportSummaryProps = {
-  payload: Record<string, unknown> | null;
+  payload: ReportPayload | null;
 };
 
-function readNumber(payload: Record<string, unknown>, key: string): number | null {
-  /** Read one optional numeric field from the generic payload object. */
-  const value = payload[key];
-  return typeof value === "number" ? value : null;
-}
-
-function readString(payload: Record<string, unknown>, key: string): string | null {
-  /** Read one optional string field from the generic payload object. */
-  const value = payload[key];
-  return typeof value === "string" && value.trim() ? value : null;
-}
-
-function readArrayLength(payload: Record<string, unknown>, key: string): number | null {
-  /** Read one optional array length from the generic payload object. */
-  const value = payload[key];
-  return Array.isArray(value) ? value.length : null;
-}
-
 export function StructuredReportSummary({ payload }: StructuredReportSummaryProps) {
-  /** Show a compact structured judge summary without replacing the main text report. */
+  /** Render either a full structured report surface or a small fallback for unknown payload shapes. */
   if (payload === null) {
     return null;
   }
-
-  const overallScore = readNumber(payload, "overall_score");
-  const overallGrade = readString(payload, "overall_grade");
-  const executiveSummary = readString(payload, "executive_summary");
-  const bentoBlockCount = readArrayLength(payload, "bento_blocks");
+  if (!isJudgeSessionOutputPayload(payload)) {
+    return (
+      <section className="structured-report-summary">
+        <div className="structured-report-summary__header">
+          <div>
+            <h2>Структурированная оценка</h2>
+            <p>Структурированная оценка сохранена, но формат не распознан.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="structured-report-summary">
-      <div className="panel-card__header">
-        <h2>Структурированная оценка</h2>
+      <div className="structured-report-summary__header">
+        <div>
+          <h2>Структурированная оценка</h2>
+          <p>{payload.executive_summary}</p>
+        </div>
+        <div className="structured-report-summary__score">
+          <strong>{payload.overall_score}/100</strong>
+          <span>{gradeLabel(payload.overall_grade)}</span>
+        </div>
       </div>
-      <div className="structured-report-summary__grid">
-        {overallScore !== null ? (
-          <div className="structured-report-summary__metric">
-            <span>Общая оценка</span>
-            <strong>{overallScore}/100</strong>
-          </div>
-        ) : null}
-        {overallGrade !== null ? (
-          <div className="structured-report-summary__metric">
-            <span>Уровень</span>
-            <strong>{overallGrade}</strong>
-          </div>
-        ) : null}
-        {bentoBlockCount !== null ? (
-          <div className="structured-report-summary__metric">
-            <span>Блоков</span>
-            <strong>{bentoBlockCount}</strong>
-          </div>
-        ) : null}
-      </div>
-      {executiveSummary ? <p>{executiveSummary}</p> : null}
+      <BentoReportGrid
+        blocks={payload.bento_blocks}
+        skillScores={payload.skill_scores}
+        recommendations={payload.recommendations}
+      />
     </section>
   );
 }

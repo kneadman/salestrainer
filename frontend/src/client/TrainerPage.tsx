@@ -7,7 +7,7 @@ import { MetricsPanel } from "../components/MetricsPanel";
 import { PhoneShell } from "../components/PhoneShell";
 import { SessionHeader } from "../components/SessionHeader";
 import { StructuredReportSummary } from "../components/StructuredReportSummary";
-import type { SessionPublicDTO, TurnPublicDTO } from "../types";
+import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
 import { getClientErrorMessage } from "./utils";
 
 const STORAGE_KEY = "salestrainer.currentSessionId";
@@ -24,7 +24,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [busyAction, setBusyAction] = useState<"boot" | "create" | "send" | "finish" | null>("boot");
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
-  const [reportPayload, setReportPayload] = useState<Record<string, unknown> | null>(null);
+  const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
 
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity. */
