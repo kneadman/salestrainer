@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-from typing import Protocol
+import json
+import logging
+from json import JSONDecodeError
+from typing import Any, Callable, Protocol
 
+from pydantic import ValidationError
+
+from app.domain.errors import LLMProviderConfigurationError
 from app.domain.judgement_models import (
     BentoReportBlock,
     JudgeSessionInput,
@@ -13,11 +19,25 @@ from app.domain.judgement_models import (
     SkillScore,
 )
 from app.domain.models import TurnEvaluation
+from app.infrastructure.config import Settings
+from app.infrastructure.llm_client import (
+    LLMClientError,
+    _extract_json_object,
+    _payload_size,
+    _response_to_payload,
+    _sanitize_api_key,
+    _should_allow_fake_fallback,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class JudgeClient(Protocol):
     def judge_session(self, payload: JudgeSessionInput) -> JudgeSessionOutput:
-        """Build a strict post-session judgement output from a validated payload."""
+        ...
+
+
+Transport = Callable[[dict[str, Any]], Any]
 
 
 class FakeJudgeClient:
@@ -421,3 +441,190 @@ class FakeJudgeClient:
         if score >= 50:
             return "yellow"
         return "red"
+
+
+class StructuredJudgeClient:
+    def __init__(
+        self,
+        *,
+        provider: str,
+        base_url: str,
+        api_key: str,
+        folder_id: str | None,
+        agent_id: str | None,
+        model_or_agent_label: str | None = None,
+        timeout_seconds: int = 30,
+        max_retries: int = 1,
+        fallback_client: JudgeClient | None = None,
+        transport: Transport | None = None,
+        debug_payload_logging: bool = False,
+    ) -> None:
+        """Configure an OpenAI/Yandex-compatible structured judge client."""
+        self._provider = provider
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._folder_id = folder_id
+        self._agent_id = agent_id
+        self._model_or_agent_label = model_or_agent_label
+        self._timeout_seconds = timeout_seconds
+        self._max_retries = max_retries
+        self._fallback_client = fallback_client
+        self._transport = transport or self._default_transport
+        self._debug_payload_logging = debug_payload_logging
+
+    def judge_session(self, payload: JudgeSessionInput) -> JudgeSessionOutput:
+        """Call the provider and validate its response as JudgeSessionOutput."""
+        last_error: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            retry_instruction = ""
+            if attempt > 0:
+                retry_instruction = (
+                    "Previous answer failed backend validation. Return exactly one JudgeSessionOutput JSON object. "
+                    "No markdown. No extra fields. Use existing 1-based turn indexes only."
+                )
+            request_payload = self._build_request_payload(payload, retry_instruction)
+            metadata = self._safe_request_metadata(attempt=attempt + 1, request_payload=request_payload)
+            logger.info("judge_request %s", metadata)
+            if self._debug_payload_logging:
+                logger.debug("judge_request_payload %s", request_payload)
+            try:
+                raw_response = _response_to_payload(self._transport(request_payload))
+                return parse_judge_session_output(raw_response)
+            except (LLMClientError, ValidationError, JSONDecodeError, TimeoutError) as error:
+                last_error = error
+                logger.warning("judge_request_failed attempt=%s error=%s", attempt + 1, error)
+            except Exception as error:
+                last_error = error
+                logger.warning(
+                    "judge_http_error attempt=%s status=%s error=%s",
+                    attempt + 1,
+                    getattr(error, "status_code", None),
+                    error,
+                )
+        if self._fallback_client is not None:
+            logger.warning("judge_fallback_to_fake reason=%s", last_error)
+            return self._fallback_client.judge_session(payload)
+        raise LLMClientError(f"Judge request failed after retries: {last_error}") from last_error
+
+    def _build_request_payload(self, payload: JudgeSessionInput, retry_instruction: str) -> dict[str, Any]:
+        """Build a provider request that carries the strict JudgeSessionOutput schema."""
+        snapshot = payload.model_dump(mode="json")
+        if retry_instruction:
+            snapshot["retry_instruction"] = retry_instruction
+        request_payload: dict[str, Any] = {
+            "input": json.dumps(snapshot, ensure_ascii=False),
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "judge_session_output",
+                    "schema": JudgeSessionOutput.model_json_schema(),
+                    "strict": True,
+                }
+            },
+        }
+        if self._agent_id:
+            request_payload["prompt"] = {"id": self._agent_id}
+        else:
+            request_payload["model"] = self._model_or_agent_label or "gpt-4.1-mini"
+        return request_payload
+
+    def _safe_request_metadata(self, *, attempt: int, request_payload: dict[str, Any]) -> dict[str, object]:
+        """Log only routing metadata and payload sizes, never raw persona data or API keys."""
+        return {
+            "provider": self._provider,
+            "attempt": attempt,
+            "endpoint_url": self.endpoint_url,
+            "api_key": _sanitize_api_key(self._api_key),
+            "folder_id_present": bool(self._folder_id),
+            "agent_id_present": bool(self._agent_id),
+            "payload_size": _payload_size(request_payload),
+        }
+
+    def _default_transport(self, request_payload: dict[str, Any]) -> Any:
+        """Execute the responses API call through the optional OpenAI-compatible SDK."""
+        try:
+            from openai import OpenAI
+        except ImportError as error:
+            raise LLMClientError("openai package is required for judge providers.") from error
+
+        client = OpenAI(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            project=self._folder_id,
+            timeout=self._timeout_seconds,
+        )
+        return client.responses.create(**request_payload)
+
+    @property
+    def endpoint_url(self) -> str:
+        """Return the provider endpoint used for sanitized request metadata."""
+        return f"{self._base_url}/responses"
+
+
+def parse_judge_session_output(raw_payload: dict[str, Any] | str) -> JudgeSessionOutput:
+    """Parse known provider response envelopes into a strict JudgeSessionOutput."""
+    if isinstance(raw_payload, dict) and "overall_score" in raw_payload:
+        return JudgeSessionOutput.model_validate(raw_payload)
+    if isinstance(raw_payload, dict):
+        output_text = raw_payload.get("output_text")
+        if isinstance(output_text, str):
+            return JudgeSessionOutput.model_validate_json(_extract_json_object(output_text))
+        output = raw_payload.get("output")
+        if isinstance(output, list):
+            for item in output:
+                if not isinstance(item, dict):
+                    continue
+                content = item.get("content")
+                if isinstance(content, list):
+                    for chunk in content:
+                        if not isinstance(chunk, dict):
+                            continue
+                        text = chunk.get("text")
+                        if isinstance(text, str):
+                            return JudgeSessionOutput.model_validate_json(_extract_json_object(text))
+        alternatives = raw_payload.get("alternatives")
+        if isinstance(alternatives, list) and alternatives:
+            message = alternatives[0].get("message", {})
+            text = message.get("text")
+            if isinstance(text, str):
+                return JudgeSessionOutput.model_validate_json(_extract_json_object(text))
+        raise LLMClientError("Judge provider response does not contain structured text output.")
+    try:
+        decoded = json.loads(raw_payload)
+    except JSONDecodeError:
+        return JudgeSessionOutput.model_validate_json(_extract_json_object(raw_payload))
+    return parse_judge_session_output(decoded)
+
+
+def build_judge_client(settings: Settings) -> JudgeClient:
+    """Build the configured judge client while preserving fake fallback behavior."""
+    backend = settings.llm_backend.lower().strip()
+    if backend == "fake":
+        return FakeJudgeClient()
+    if backend == "yandex_compatible":
+        folder_id = settings.yandex_judge_folder_id or settings.yandex_folder_id
+        agent_id = settings.yandex_judge_agent_id or settings.yandex_agent_id
+        if not all([settings.yandex_api_key, folder_id, agent_id]):
+            if _should_allow_fake_fallback(settings):
+                logger.warning("judge_backend_incomplete_config backend=%s fallback=fake", backend)
+                return FakeJudgeClient()
+            raise LLMProviderConfigurationError(
+                "Incomplete Yandex judge configuration and fake fallback is disabled."
+            )
+        return StructuredJudgeClient(
+            provider="yandex_compatible",
+            base_url=settings.yandex_base_url,
+            api_key=settings.yandex_api_key,
+            folder_id=folder_id,
+            agent_id=agent_id,
+            timeout_seconds=settings.llm_request_timeout_seconds,
+            max_retries=1,
+            fallback_client=FakeJudgeClient() if _should_allow_fake_fallback(settings) else None,
+            debug_payload_logging=settings.debug_llm_payload,
+        )
+    if _should_allow_fake_fallback(settings):
+        logger.warning("judge_backend_unknown backend=%s fallback=fake", settings.llm_backend)
+        return FakeJudgeClient()
+    raise LLMProviderConfigurationError(
+        f"Unknown llm_backend '{settings.llm_backend}' and fake fallback is disabled."
+    )

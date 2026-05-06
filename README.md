@@ -364,11 +364,15 @@ Training goal: manager should discover role, current accounting process, pain, d
 ## Judgement Layer contract
 
 - Judge runs only after finish.
-- PR1 adds the strict Pydantic contract and PR2 adds `FakeJudgeClient` plus `JudgementService`.
-- Real Judge Agent, prompt wiring, and UI remain separate PRs.
+- PR1 adds the strict Pydantic contract, PR2 adds `FakeJudgeClient` plus `JudgementService`, and PR3 adds the reference judge prompt plus `StructuredJudgeClient`.
+- Real runtime Judge Agent wiring and UI remain separate PRs if not explicitly connected.
 - Runtime dialogue flow does not change.
 - Judge still runs only after finish/report generation.
 - `JudgeSessionOutput` now can be persisted into `training_reports.report_payload` without changing the current frontend/API response shape.
+- Judge uses shared `YANDEX_API_KEY` and `YANDEX_BASE_URL`.
+- Optional judge routing env vars:
+  - `YANDEX_JUDGE_FOLDER_ID`
+  - `YANDEX_JUDGE_AGENT_ID`
 
 ## Demo run checklist
 

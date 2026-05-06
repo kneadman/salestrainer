@@ -11,6 +11,8 @@ from sqlalchemy.pool import StaticPool
 from app.access.repository import AccessRepository
 from app.api.main import create_app
 from app.history.models import TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
+from app.history.repository import HistoryRepository
+from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
 from app.identity.models import User
 from app.identity.repository import IdentityRepository
@@ -19,6 +21,9 @@ from app.infrastructure.config import Settings
 from app.infrastructure.db import Base, import_model_modules
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
+from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
+from datetime import UTC, datetime
+from uuid import uuid4
 
 
 def _create_db_session() -> Session:
@@ -224,4 +229,74 @@ def test_history_access_rules_for_manager_lead_and_internal_admin() -> None:
 
     anonymous_client = _create_client(db_session, repository)
     assert anonymous_client.get("/api/history/sessions").status_code == 401
+    db_session.close()
+
+
+def test_history_service_persists_report_payload_without_exposing_it_in_dto() -> None:
+    """Verify explicit report_payload is saved in the persistent report record."""
+    db_session = _create_db_session()
+    account, training_config, users = _seed_account_with_users(
+        db_session,
+        slug="acme-payload",
+        users=[("manager@example.com", "client_manager")],
+    )
+    history_service = HistoryService(HistoryRepository(db_session))
+    now = datetime.now(tz=UTC)
+    session = TrainingSessionState(
+        session_id=uuid4(),
+        scenario_id="sales_audit_cold_outreach",
+        status="finished",
+        persona=PersonaProfile(
+            id="generated_persona",
+            display_name="Unknown B2B contact",
+            role="owner",
+            industry="professional_services",
+            company_size="20-50",
+            authority_level="final_decider",
+            behavior_model="analytical_and_cautious",
+        ),
+        interest_score=52,
+        stage="need_discovery",
+        client_state=ClientState(
+            tone="neutral",
+            trust=38,
+            irritation=10,
+            urgency=24,
+            price_sensitivity=40,
+        ),
+        summary="Finished session for payload persistence test.",
+        public_brief="Brief",
+        turns=[],
+        turn_evaluations=[],
+        recent_turns=[],
+        turn_count=0,
+        state_version=2,
+        created_at=now,
+        updated_at=now,
+    )
+    history_service.record_session_started(
+        session=session,
+        client_account_id=account.id,
+        user_id=users["manager@example.com"].id,
+        training_config_id=training_config.id,
+    )
+    payload = {
+        "schema_version": 1,
+        "overall_score": 74,
+        "overall_grade": "good",
+    }
+
+    history_service.record_session_finished_with_report(
+        session=session,
+        report_text="Report text",
+        report_payload=payload,
+        user_id=users["manager@example.com"].id,
+        client_account_id=account.id,
+        training_config_id=training_config.id,
+    )
+
+    record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == session.session_id))
+
+    assert record is not None
+    assert record.report_payload == payload
     db_session.close()
