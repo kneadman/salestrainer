@@ -219,8 +219,7 @@ class InternalAdminService:
         organization_id: UUID,
         name: str,
         default_scenario_id: str,
-        product_line: str,
-        persona_generation_prompt: str,
+        persona_generation_context: str,
         persona_policy: dict[str, object],
         ui_config: dict[str, object],
         limits: dict[str, object],
@@ -231,8 +230,7 @@ class InternalAdminService:
             client_account_id=organization_id,
             name=name,
             default_scenario_id=default_scenario_id,
-            product_line=product_line,
-            persona_generation_prompt=persona_generation_prompt,
+            persona_generation_context=persona_generation_context,
             persona_policy=persona_policy,
             ui_config=ui_config,
             limits=limits,
@@ -260,8 +258,7 @@ class InternalAdminService:
         for field in (
             "name",
             "default_scenario_id",
-            "product_line",
-            "persona_generation_prompt",
+            "persona_generation_context",
             "persona_policy",
             "ui_config",
             "limits",
@@ -402,13 +399,11 @@ class InternalAdminService:
         persona_api_key: str | None,
         persona_folder_id: str | None,
         persona_agent_id: str | None,
-        persona_master_prompt: str | None,
-        persona_json_template: str | None,
         dialogue_api_key: str | None,
         dialogue_folder_id: str | None,
         dialogue_agent_id: str | None,
-        dialogue_master_prompt: str | None,
-        dialogue_json_template: str | None,
+        base_url: str | None,
+        model_or_agent_label: str | None,
     ) -> LLMProviderConfigDTO:
         self._get_account(organization_id)
         config = LLMProviderConfig(
@@ -418,16 +413,14 @@ class InternalAdminService:
             encrypted_api_key=encrypt_secret(persona_api_key, self._settings) if persona_api_key else None,
             folder_id=persona_folder_id,
             agent_id=persona_agent_id,
+            base_url=base_url,
+            model_or_agent_label=model_or_agent_label,
             persona_api_key_encrypted=encrypt_secret(persona_api_key, self._settings) if persona_api_key else None,
             persona_folder_id=persona_folder_id,
             persona_agent_id=persona_agent_id,
-            persona_master_prompt=persona_master_prompt,
-            persona_json_template=persona_json_template,
             dialogue_api_key_encrypted=encrypt_secret(dialogue_api_key, self._settings) if dialogue_api_key else None,
             dialogue_folder_id=dialogue_folder_id,
             dialogue_agent_id=dialogue_agent_id,
-            dialogue_master_prompt=dialogue_master_prompt,
-            dialogue_json_template=dialogue_json_template,
             is_active=True,
         )
         self._session.add(config)
@@ -459,21 +452,19 @@ class InternalAdminService:
         if dialogue_api_key is not None:
             config.dialogue_api_key_encrypted = encrypt_secret(str(dialogue_api_key), self._settings)
         field_map = {
+            "folder_id": "folder_id",
+            "agent_id": "agent_id",
+            "base_url": "base_url",
+            "model_or_agent_label": "model_or_agent_label",
             "persona_folder_id": "persona_folder_id",
             "persona_agent_id": "persona_agent_id",
-            "persona_master_prompt": "persona_master_prompt",
-            "persona_json_template": "persona_json_template",
             "dialogue_folder_id": "dialogue_folder_id",
             "dialogue_agent_id": "dialogue_agent_id",
-            "dialogue_master_prompt": "dialogue_master_prompt",
-            "dialogue_json_template": "dialogue_json_template",
         }
         if "folder_id" in updates and "persona_folder_id" not in updates:
-            updates["persona_folder_id"] = updates.pop("folder_id")
+            updates["persona_folder_id"] = updates["folder_id"]
         if "agent_id" in updates and "persona_agent_id" not in updates:
-            updates["persona_agent_id"] = updates.pop("agent_id")
-        updates.pop("base_url", None)
-        updates.pop("model_or_agent_label", None)
+            updates["persona_agent_id"] = updates["agent_id"]
         for field in ("name", "provider", *field_map):
             if field in updates:
                 setattr(config, field, str(updates[field]) if field == "provider" else updates[field])
@@ -662,8 +653,7 @@ class InternalAdminService:
             name=config.name,
             is_active=config.is_active,
             default_scenario_id=config.default_scenario_id,
-            product_line=config.product_line,
-            persona_generation_prompt=config.persona_generation_prompt,
+            persona_generation_context=config.persona_generation_context,
             persona_policy=config.persona_policy,
             ui_config=config.ui_config,
             limits=config.limits,
@@ -688,14 +678,10 @@ class InternalAdminService:
             persona_api_key_preview=persona_preview,
             persona_folder_id=config.persona_folder_id or config.folder_id,
             persona_agent_id=config.persona_agent_id or config.agent_id,
-            persona_master_prompt=config.persona_master_prompt,
-            persona_json_template=config.persona_json_template,
             has_dialogue_api_key=config.dialogue_api_key_encrypted is not None,
             dialogue_api_key_preview=dialogue_preview,
             dialogue_folder_id=config.dialogue_folder_id,
             dialogue_agent_id=config.dialogue_agent_id,
-            dialogue_master_prompt=config.dialogue_master_prompt,
-            dialogue_json_template=config.dialogue_json_template,
             created_at=config.created_at,
             updated_at=config.updated_at,
         )

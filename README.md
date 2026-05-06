@@ -166,7 +166,7 @@ Admin UI sections:
 - Organizations: list/search/create/edit/enable/disable organizations;
 - Organization detail: overview, users, training configs, history, usage, audit;
 - Users: create/update users, reset temporary passwords, enable/disable, assign/default/unassign training configs;
-- Training Configs: create/update/enable/disable configs with client-side JSON validation and `persona_generation_prompt`;
+- Training Configs: create/update/enable/disable configs with client-side JSON validation and `persona_generation_context`;
 - Training History: persistent history list and public-safe session detail;
 - Usage Analytics: basic usage summary from persistent history;
 - Audit Log: filterable audit events with compact JSON payload display.
@@ -249,7 +249,7 @@ MVP runtime no longer depends on organization-level `llm_provider_config_id`.
 - One global `YANDEX_API_KEY` is configured in `.env`.
 - One global persona generator agent is configured in `.env`.
 - One global dialogue agent is configured in `.env`.
-- `persona_generation_prompt` is stored on `client_training_configs` and edited only by `internal_admin`.
+- `persona_generation_context` is stored on `client_training_configs` and edited only by `internal_admin`.
 - Persona and dialogue master prompts plus JSON templates live inside Yandex Agents, not in the service database.
 - Backend still validates provider JSON through Pydantic and business rules before it touches runtime state.
 
@@ -285,9 +285,9 @@ Authenticated API session creation separates persona generation from dialogue si
 
 Generation input is normalized into `PersonaGenerationInput`:
 
-- product line and scenario;
+- scenario;
 - training config name;
-- `persona_generation_prompt` business context;
+- `persona_generation_context` business context;
 - free-form `persona_policy`;
 - optional organization context, target action, allowed roles/product lines, training goal, difficulty, seed, and constraints.
 
@@ -297,7 +297,7 @@ Provider behavior:
 
 - `fake` provider uses the legacy Python `PersonaGenerator`.
 - `yandex_compatible` uses the global persona agent from `.env`.
-- If `persona_generation_prompt` is empty, local mode can fall back to the legacy Python generator; production-like mode returns a controlled configuration error.
+- If `persona_generation_context` is empty, local mode can fall back to the legacy Python generator; production-like mode returns a controlled configuration error.
 - API keys are read from environment settings, are never logged in full, and are never returned.
 
 Security notes:
@@ -347,10 +347,10 @@ Prompt ownership:
 - Master prompts for persona generation and dialogue live in Yandex Agents and are edited in Yandex, not in this service.
 - JSON schema/templates for structured responses are configured in Yandex Agent plus validated again by this backend.
 - `app/prompts/client_simulator.md` and `app/prompts/persona_generator.md` are local reference prompts for documentation and prompt iteration only.
-- The MVP service stores only `persona_generation_prompt` as client business context on a training config.
+- The MVP service stores only `persona_generation_context` as client business context on a training config.
 - Client/training config records do not store API keys, folder IDs, agent IDs, master prompts, or JSON templates.
 
-Example `persona_generation_prompt`:
+Example `persona_generation_context`:
 
 ```text
 Client sells accounting outsourcing and outsourced CFO services to Russian B2B companies with 20-200 employees.
@@ -383,7 +383,7 @@ python -m app.admin.cli create-internal-admin --client-name "Platform" --client-
 
 4. Open `http://localhost:8080/login`, sign in, then open `/admin`.
 5. Create an organization.
-6. Create a training config with name, scenario, product line, limits, and `persona_generation_prompt`.
+6. Create a training config with name, scenario, limits, and `persona_generation_context`.
 7. Create a client manager or lead user.
 8. Assign the training config to the user and mark it as default.
 9. Sign in as the client user.
@@ -612,7 +612,7 @@ Each generated client profile includes:
 - urgency
 - trust_baseline
 
-For production client API sessions, prefer configuring `persona_generation_prompt` plus optional `persona_policy`. To improve the fallback path, extend the role templates in that module with new combinations of role, pains, context, and constraints.
+For production client API sessions, prefer configuring `persona_generation_context` plus optional `persona_policy`. To improve the fallback path, extend the role templates in that module with new combinations of role, pains, context, and constraints.
 
 ## MVP limitations
 

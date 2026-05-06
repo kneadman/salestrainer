@@ -230,8 +230,7 @@ def create_training_config(
             organization_id=organization_id,
             name=request.name,
             default_scenario_id=request.default_scenario_id,
-            product_line=request.product_line,
-            persona_generation_prompt=request.persona_generation_prompt,
+            persona_generation_context=request.persona_generation_context,
             persona_policy=request.persona_policy,
             ui_config=request.ui_config,
             limits=request.limits,
@@ -370,13 +369,11 @@ def create_llm_provider_config(
             persona_api_key=request.persona_api_key or request.api_key,
             persona_folder_id=request.persona_folder_id or request.folder_id,
             persona_agent_id=request.persona_agent_id or request.agent_id,
-            persona_master_prompt=request.persona_master_prompt,
-            persona_json_template=request.persona_json_template,
             dialogue_api_key=request.dialogue_api_key,
             dialogue_folder_id=request.dialogue_folder_id,
             dialogue_agent_id=request.dialogue_agent_id,
-            dialogue_master_prompt=request.dialogue_master_prompt,
-            dialogue_json_template=request.dialogue_json_template,
+            base_url=request.base_url,
+            model_or_agent_label=request.model_or_agent_label,
         )
     except Exception as error:
         _handle_error(error)

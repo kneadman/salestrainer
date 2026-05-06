@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+from json import JSONDecodeError
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 
 from app.access.models import RuntimeTrainingConfig
@@ -12,10 +14,12 @@ from app.domain.scenarios import get_scenario
 from app.infrastructure.config import Settings
 from app.infrastructure.persona_generator_client import (
     FakePersonaGeneratorClient,
+    PersonaGenerationBusinessValidationError,
     PersonaGeneratorClient,
     StructuredPersonaGeneratorClient,
     validate_generated_persona,
 )
+from app.infrastructure.llm_client import LLMClientError
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +51,15 @@ class PersonaGenerationService:
         client = self._build_client(training_config=training_config, input_payload=input_payload)
         try:
             output = client.generate_persona(input_payload)
-        except Exception as error:
+            persona = validate_generated_persona(output, input_payload)
+        except (
+            JSONDecodeError,
+            LLMClientError,
+            PydanticValidationError,
+            PersonaGenerationBusinessValidationError,
+            TimeoutError,
+        ) as error:
             raise PersonaGenerationError("Persona generator failed to produce a valid profile.") from error
-        persona = validate_generated_persona(output, input_payload)
         logger.info(
             "persona_generated training_config_id=%s client_account_id=%s provider=%s persona_id=%s",
             training_config.id,
@@ -71,8 +81,7 @@ class PersonaGenerationService:
         return PersonaGenerationInput(
             scenario=get_scenario(resolved_scenario_id),
             training_config_name=training_config.name,
-            product_line=training_config.product_line.strip(),
-            persona_generation_prompt=training_config.persona_generation_prompt.strip(),
+            persona_generation_context=training_config.persona_generation_context.strip(),
             persona_policy=persona_policy,
             organization_context=self._dict_policy_value(persona_policy, "organization_context"),
             target_action=self._string_policy_value(persona_policy, "target_action"),
@@ -91,13 +100,13 @@ class PersonaGenerationService:
         input_payload: PersonaGenerationInput,
     ) -> PersonaGeneratorClient:
         """Use global Yandex settings for MVP, with local fallback when explicitly allowed."""
-        if input_payload.persona_generation_prompt:
+        if input_payload.persona_generation_context:
             return self._client_factory.build_global_persona_client(fallback_generator=self._fallback_generator)
         if self._allow_local_fallback():
             logger.warning("persona_generator_missing_prompt fallback=local training_config_id=%s", training_config.id)
             return FakePersonaGeneratorClient(self._fallback_generator)
         raise LLMProviderConfigurationError(
-            "Training config does not have persona_generation_prompt and local fallback is disabled."
+            "Training config does not have persona_generation_context and local fallback is disabled."
         )
 
     def _provider_label(self, client: PersonaGeneratorClient) -> str:

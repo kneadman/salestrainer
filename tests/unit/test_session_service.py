@@ -39,7 +39,6 @@ def test_start_session_without_persona_uses_generated_profile() -> None:
 
     assert session.scenario_id == "first_contact_discovery"
     assert session.persona.id.startswith("generated_")
-    assert "product_line" not in session.persona.model_dump()
     assert session.public_brief
 
 

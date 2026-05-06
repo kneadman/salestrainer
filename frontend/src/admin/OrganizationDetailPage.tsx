@@ -53,8 +53,7 @@ type ConfigForm = {
   id?: string;
   name: string;
   default_scenario_id: string;
-  product_line: string;
-  persona_generation_prompt: string;
+  persona_generation_context: string;
   persona_policy: string;
   ui_config: string;
   limits: string;
@@ -63,8 +62,7 @@ type ConfigForm = {
 const DEFAULT_CONFIG_FORM: ConfigForm = {
   name: "",
   default_scenario_id: "first_contact_discovery",
-  product_line: "accounting_outsourcing",
-  persona_generation_prompt: "",
+  persona_generation_context: "",
   persona_policy: "{}",
   ui_config: "{}",
   limits: "{}",
@@ -216,8 +214,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
     return {
       name: configForm.name,
       default_scenario_id: configForm.default_scenario_id,
-      product_line: configForm.product_line,
-      persona_generation_prompt: configForm.persona_generation_prompt,
+      persona_generation_context: configForm.persona_generation_context,
       persona_policy: parseJsonObject(configForm.persona_policy, "persona_policy"),
       ui_config: parseJsonObject(configForm.ui_config, "ui_config"),
       limits: parseJsonObject(configForm.limits, "limits"),
@@ -495,14 +492,13 @@ function ConfigsSection(props: {
         <div className="admin-form-grid">
           <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
           <label><span>Формат тренировки</span><select value={props.form.default_scenario_id} onChange={(event) => props.setForm({ ...props.form, default_scenario_id: event.target.value })}>{props.scenarioIds.map((id) => <option key={id} value={id}>{scenarioLabel(id)}</option>)}</select></label>
-          <label><span>Продуктовая линия</span><input value={props.form.product_line} onChange={(event) => props.setForm({ ...props.form, product_line: event.target.value })} /></label>
         </div>
         <label>
-          <span>Промпт генерации личности</span>
+          <span>Контекст генерации личности</span>
           <textarea
             rows={8}
-            value={props.form.persona_generation_prompt}
-            onChange={(event) => props.setForm({ ...props.form, persona_generation_prompt: event.target.value })}
+            value={props.form.persona_generation_context}
+            onChange={(event) => props.setForm({ ...props.form, persona_generation_context: event.target.value })}
           />
           <small className="admin-muted">
             Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения. Этот текст будет отправлен в глобальный Yandex Persona Generator Agent как бизнес-контекст. Master prompt и JSON-контракт хранятся в самом Yandex Agent.
@@ -518,14 +514,13 @@ function ConfigsSection(props: {
       {props.configs.length === 0 ? <EmptyState title="Тренировочных конфигов нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Название</th><th>Формат</th><th>Продукт</th><th>Промпт</th><th>Статус</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Название</th><th>Формат</th><th>Контекст</th><th>Статус</th><th>Действия</th></tr></thead>
             <tbody>
               {props.configs.map((config) => (
                 <tr key={config.id}>
                   <td>{config.name}</td>
                   <td>{scenarioLabel(config.default_scenario_id)}</td>
-                  <td>{config.product_line || "—"}</td>
-                  <td>{config.persona_generation_prompt ? `${config.persona_generation_prompt.slice(0, 120)}${config.persona_generation_prompt.length > 120 ? "..." : ""}` : "—"}</td>
+                  <td>{config.persona_generation_context ? `${config.persona_generation_context.slice(0, 120)}${config.persona_generation_context.length > 120 ? "..." : ""}` : "—"}</td>
                   <td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td>
                   <td>
                     <div className="admin-row-actions">
@@ -536,8 +531,7 @@ function ConfigsSection(props: {
                           id: config.id,
                           name: config.name,
                           default_scenario_id: config.default_scenario_id,
-                          product_line: config.product_line,
-                          persona_generation_prompt: config.persona_generation_prompt,
+                          persona_generation_context: config.persona_generation_context,
                           persona_policy: stringifyJson(config.persona_policy),
                           ui_config: stringifyJson(config.ui_config),
                           limits: stringifyJson(config.limits),

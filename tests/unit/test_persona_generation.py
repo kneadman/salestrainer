@@ -23,11 +23,10 @@ def test_universal_fake_persona_generator_uses_selected_training_format() -> Non
     assert "price" in persona.behavior_model or persona.price_sensitivity >= 60
 
 
-def test_generated_persona_has_required_domain_fields_without_product_line() -> None:
+def test_generated_persona_has_required_domain_fields() -> None:
     persona = UniversalFakePersonaGenerator(seed=4).generate()
 
     assert persona.role
-    assert "product_line" not in persona.model_dump()
     assert persona.behavior_model
     assert persona.current_business_context
     assert persona.latent_pains

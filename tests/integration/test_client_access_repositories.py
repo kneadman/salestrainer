@@ -73,8 +73,7 @@ def test_training_config_assignment_and_session_ownership() -> None:
         client_account_id=client_account.id,
         name="Outbound Core",
         default_scenario_id="sales_audit_cold_outreach",
-        product_line="accounting_outsourcing",
-        persona_generation_prompt="Owner persona for accounting outsourcing discovery.",
+        persona_generation_context="Owner persona for accounting outsourcing discovery.",
         persona_policy={"persona_ids": ["owner"]},
         ui_config={"theme": "light"},
         limits={"max_turns": 12},
@@ -91,7 +90,7 @@ def test_training_config_assignment_and_session_ownership() -> None:
     assert default_config is not None
     assert default_config.id == training_config.id
     assert default_config.client_account_id == client_account.id
-    assert default_config.persona_generation_prompt == "Owner persona for accounting outsourcing discovery."
+    assert default_config.persona_generation_context == "Owner persona for accounting outsourcing discovery."
     assert default_config.persona_policy == {"persona_ids": ["owner"]}
 
     session_id = uuid4()

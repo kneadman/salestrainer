@@ -65,7 +65,6 @@ def _seed_account(
         client_account_id=account.id,
         name="Default",
         default_scenario_id="generic_b2b_first_contact",
-        product_line="accounting_outsourcing",
     )
     created: dict[str, User] = {}
     for email, role in users:

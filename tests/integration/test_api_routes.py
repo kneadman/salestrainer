@@ -416,7 +416,6 @@ def test_api_create_session_uses_users_default_training_config_and_creates_owner
     saved_session = repository.get(session_id)
     assert saved_session is not None
     assert saved_session.scenario_id == "qualification_and_authority"
-    assert "product_line" not in saved_session.persona.model_dump()
     assert saved_session.persona.authority_level == "final_decider"
     ownership = db_session.scalar(select(TrainingSessionOwnership).where(TrainingSessionOwnership.session_id == saved_session.session_id))
     assert ownership is not None
@@ -438,7 +437,7 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     access_repository = AccessRepository(db_session)
     access_repository.update_training_config(
         training_config_id=training_config.id,
-        persona_generation_prompt="Buyer for a cosmetics retail business with low repeat sales and poor diagnostics.",
+        persona_generation_context="Buyer for a cosmetics retail business with low repeat sales and poor diagnostics.",
         persona_policy={"allowed_roles": ["cfo"], "target_action": "book_diagnostic_call"},
     )
     app = create_app(
@@ -452,7 +451,7 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     class StubPersonaGenerationService:
         def generate_for_training_config(self, *, training_config, scenario_id):
             """Return a known generated persona so the API wiring is observable."""
-            captured["persona_generation_prompt"] = training_config.persona_generation_prompt
+            captured["persona_generation_context"] = training_config.persona_generation_context
             captured["llm_provider_config_id"] = training_config.llm_provider_config_id
             captured["scenario_id"] = scenario_id
             return PersonaProfile(
@@ -499,7 +498,7 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert saved_session.persona.id == "llm_generated_cfo_cash_gap"
     assert saved_session.persona.role == "cfo"
     assert saved_session.interest_score == 31
-    assert captured["persona_generation_prompt"] == "Buyer for a cosmetics retail business with low repeat sales and poor diagnostics."
+    assert captured["persona_generation_context"] == "Buyer for a cosmetics retail business with low repeat sales and poor diagnostics."
     assert captured["llm_provider_config_id"] is None
     assert captured["scenario_id"] is None
     assert "llm_generated_cfo_cash_gap" not in response.text

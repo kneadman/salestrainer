@@ -131,8 +131,8 @@ class StructuredPersonaGeneratorClient:
         request_payload: dict[str, Any] = {
             "input": json.dumps(
                 {
-                    "business_context": payload.persona_generation_prompt,
-                    "payload": snapshot,
+                    "client_persona_context": payload.persona_generation_context,
+                    "generation_payload": snapshot,
                 },
                 ensure_ascii=False,
             ),

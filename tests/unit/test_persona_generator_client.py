@@ -62,8 +62,31 @@ def test_parse_persona_generation_response_from_provider_output_text() -> None:
 
     output = parse_persona_generation_response(raw)
 
-    assert "product_line" not in output.persona.model_dump()
     assert output.persona.starting_interest == 22
+
+
+def test_structured_persona_generator_builds_context_envelope() -> None:
+    captured: dict[str, object] = {}
+
+    client = StructuredPersonaGeneratorClient(
+        provider="yandex_compatible",
+        base_url="https://example.test/v1",
+        api_key="secret",
+        max_retries=0,
+        transport=lambda request_payload: captured.update(request_payload) or {"output_text": json.dumps(_persona_payload())},
+    )
+
+    client.generate_persona(
+        PersonaGenerationInput(
+            scenario=get_scenario("first_contact_discovery"),
+            training_config_name="Demo",
+            persona_generation_context="Client business context.",
+        )
+    )
+
+    input_payload = json.loads(captured["input"])
+    assert input_payload["client_persona_context"] == "Client business context."
+    assert "generation_payload" in input_payload
 
 
 def _generation_input(allowed_roles: list[str] | None = None) -> PersonaGenerationInput:
@@ -71,6 +94,7 @@ def _generation_input(allowed_roles: list[str] | None = None) -> PersonaGenerati
     return PersonaGenerationInput(
         scenario=get_scenario("first_contact_discovery"),
         training_config_name="Demo",
+        persona_generation_context="Client business context.",
         allowed_roles=allowed_roles,
     )
 
@@ -107,7 +131,6 @@ def test_generated_persona_business_rules_accept_valid_persona() -> None:
     persona = validate_generated_persona(output, _generation_input(allowed_roles=["owner"]))
 
     assert persona.role == "owner"
-    assert "product_line" not in persona.model_dump()
 
 
 def test_structured_persona_generator_raises_after_invalid_business_output_without_fallback() -> None:
