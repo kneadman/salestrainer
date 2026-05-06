@@ -3,8 +3,6 @@ import type {
   AuditLogDTO,
   HistorySessionDetailDTO,
   HistorySessionSummaryDTO,
-  LLMProviderConfigDTO,
-  LLMProviderConfigPayload,
   OrganizationDTO,
   OrganizationPayload,
   ScenarioOptionDTO,
@@ -172,43 +170,6 @@ export function makeDefaultTrainingConfig(userId: string, configId: string): Pro
 export function unassignTrainingConfig(userId: string, configId: string): Promise<{ status: string }> {
   /** Remove a training config assignment from one user. */
   return request<{ status: string }>(`/api/internal/users/${userId}/training-configs/${configId}/unassign`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
-export function listLLMProviderConfigs(organizationId: string): Promise<LLMProviderConfigDTO[]> {
-  /** Load organization-scoped LLM provider configs. */
-  return request<LLMProviderConfigDTO[]>(`/api/internal/organizations/${organizationId}/llm-provider-configs`);
-}
-
-export function createLLMProviderConfig(organizationId: string, payload: LLMProviderConfigPayload): Promise<LLMProviderConfigDTO> {
-  /** Create an encrypted-at-rest LLM provider config. */
-  return request<LLMProviderConfigDTO>(`/api/internal/organizations/${organizationId}/llm-provider-configs`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateLLMProviderConfig(configId: string, payload: LLMProviderConfigPayload): Promise<LLMProviderConfigDTO> {
-  /** Update provider config fields without sending an empty API key. */
-  return request<LLMProviderConfigDTO>(`/api/internal/llm-provider-configs/${configId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function enableLLMProviderConfig(configId: string): Promise<LLMProviderConfigDTO> {
-  /** Enable a disabled LLM provider config. */
-  return request<LLMProviderConfigDTO>(`/api/internal/llm-provider-configs/${configId}/enable`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
-export function disableLLMProviderConfig(configId: string): Promise<LLMProviderConfigDTO> {
-  /** Disable an LLM provider config after confirmation. */
-  return request<LLMProviderConfigDTO>(`/api/internal/llm-provider-configs/${configId}/disable`, {
     method: "POST",
     body: JSON.stringify({}),
   });

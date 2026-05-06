@@ -10,7 +10,6 @@ from app.domain.models import PersonaGenerationInput, PersonaProfile
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.scenarios import get_scenario
 from app.infrastructure.config import Settings
-from app.infrastructure.llm_client import LLMClientError
 from app.infrastructure.persona_generator_client import (
     FakePersonaGeneratorClient,
     PersonaGeneratorClient,
@@ -48,7 +47,7 @@ class PersonaGenerationService:
         client = self._build_client(training_config=training_config, input_payload=input_payload)
         try:
             output = client.generate_persona(input_payload)
-        except LLMClientError as error:
+        except Exception as error:
             raise PersonaGenerationError("Persona generator failed to produce a valid profile.") from error
         persona = validate_generated_persona(output, input_payload)
         logger.info(
@@ -72,6 +71,7 @@ class PersonaGenerationService:
         return PersonaGenerationInput(
             scenario=get_scenario(resolved_scenario_id),
             training_config_name=training_config.name,
+            product_line=training_config.product_line.strip(),
             persona_generation_prompt=training_config.persona_generation_prompt.strip(),
             persona_policy=persona_policy,
             organization_context=self._dict_policy_value(persona_policy, "organization_context"),

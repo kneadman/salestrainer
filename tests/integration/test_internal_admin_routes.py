@@ -252,6 +252,7 @@ def test_training_config_create_and_update_work_without_llm_provider_config() ->
     )
 
     assert create_response.status_code == 201
+    assert create_response.json()["product_line"] == "accounting_outsourcing"
     assert create_response.json()["persona_generation_prompt"].startswith("Финальный ЛПР")
     assert create_response.json()["llm_provider_config_id"] is None
     assert update_response.status_code == 200

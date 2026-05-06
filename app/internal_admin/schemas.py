@@ -14,6 +14,8 @@ NameStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, 
 PasswordStr = Annotated[str, StringConstraints(min_length=8, max_length=256)]
 SlugStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=80, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 ScenarioIdStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+SUPPORTED_PRODUCT_LINES = {"", "accounting_outsourcing", "outsourced_cfo"}
+SUPPORTED_SCENARIO_IDS = set(SCENARIOS) | {"generic_b2b_first_contact"}
 
 
 class ClientUserRole(StrEnum):
@@ -98,6 +100,7 @@ class TrainingConfigDTO(BaseModel):
     name: str
     is_active: bool
     default_scenario_id: str
+    product_line: str
     persona_generation_prompt: str
     persona_policy: dict[str, object]
     ui_config: dict[str, object]
@@ -112,6 +115,7 @@ class TrainingConfigCreateRequest(BaseModel):
 
     name: NameStr
     default_scenario_id: ScenarioIdStr
+    product_line: str = ""
     persona_generation_prompt: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
@@ -121,9 +125,17 @@ class TrainingConfigCreateRequest(BaseModel):
     @field_validator("default_scenario_id")
     @classmethod
     def validate_scenario_id(cls, value: str) -> str:
-        if value not in SCENARIOS:
+        if value not in SUPPORTED_SCENARIO_IDS:
             raise ValueError("Unknown scenario_id.")
         return value
+
+    @field_validator("product_line")
+    @classmethod
+    def validate_product_line(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized not in SUPPORTED_PRODUCT_LINES:
+            raise ValueError("Unknown product_line.")
+        return normalized
 
 
 class TrainingConfigUpdateRequest(BaseModel):
@@ -131,6 +143,7 @@ class TrainingConfigUpdateRequest(BaseModel):
 
     name: NameStr | None = None
     default_scenario_id: ScenarioIdStr | None = None
+    product_line: str | None = None
     persona_generation_prompt: str | None = None
     persona_policy: dict[str, object] | None = None
     ui_config: dict[str, object] | None = None
@@ -140,9 +153,19 @@ class TrainingConfigUpdateRequest(BaseModel):
     @field_validator("default_scenario_id")
     @classmethod
     def validate_scenario_id(cls, value: str | None) -> str | None:
-        if value is not None and value not in SCENARIOS:
+        if value is not None and value not in SUPPORTED_SCENARIO_IDS:
             raise ValueError("Unknown scenario_id.")
         return value
+
+    @field_validator("product_line")
+    @classmethod
+    def validate_product_line(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if normalized not in SUPPORTED_PRODUCT_LINES:
+            raise ValueError("Unknown product_line.")
+        return normalized
 
 
 class UserTrainingConfigAssignmentDTO(BaseModel):

@@ -149,6 +149,7 @@ class PersonaGenerationInput(BaseModel):
     task: Literal["generate_client_persona"] = "generate_client_persona"
     scenario: Scenario
     training_config_name: str | None = None
+    product_line: str = ""
     persona_generation_prompt: str = ""
     persona_policy: dict[str, Any] = Field(default_factory=dict)
     organization_context: dict[str, Any] = Field(default_factory=dict)

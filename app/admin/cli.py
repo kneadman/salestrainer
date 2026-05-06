@@ -123,6 +123,7 @@ def _create_config(
     access_repository: AccessRepository,
     client_slug: str,
     name: str,
+    product_line: str,
     scenario_id: str,
     persona_policy_file: str,
 ) -> str:
@@ -142,6 +143,7 @@ def _create_config(
         client_account_id=client.id,
         name=name,
         default_scenario_id=scenario_id,
+        product_line=product_line,
         persona_policy=persona_policy,
     )
     access_repository.create_audit_log_record(
@@ -316,6 +318,7 @@ def _build_parser() -> argparse.ArgumentParser:
     create_config_parser = subparsers.add_parser("create-config")
     create_config_parser.add_argument("--client", required=True)
     create_config_parser.add_argument("--name", required=True)
+    create_config_parser.add_argument("--product-line", default="")
     create_config_parser.add_argument("--scenario", required=True)
     create_config_parser.add_argument("--persona-policy-file", required=True)
 
@@ -383,6 +386,7 @@ def run_cli(argv: list[str] | None = None) -> int:
                     access_repository=access_repository,
                     client_slug=args.client,
                     name=args.name,
+                    product_line=args.product_line,
                     scenario_id=args.scenario,
                     persona_policy_file=args.persona_policy_file,
                 )

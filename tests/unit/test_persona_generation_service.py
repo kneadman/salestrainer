@@ -17,6 +17,7 @@ def _training_config(*, prompt: str = "Generate a beauty retail decision-maker p
         client_account_id=uuid4(),
         name="Default config",
         default_scenario_id="first_contact_discovery",
+        product_line="accounting_outsourcing",
         persona_generation_prompt=prompt,
         persona_policy={"allowed_roles": ["owner"], "target_action": "book_intro_call"},
         ui_config={},
@@ -31,9 +32,9 @@ def test_persona_generation_service_build_input_uses_training_config_prompt() ->
     payload = service.build_input(training_config=_training_config())
 
     assert payload.persona_generation_prompt == "Generate a beauty retail decision-maker persona."
+    assert payload.product_line == "accounting_outsourcing"
     assert payload.allowed_roles == ["owner"]
     assert payload.target_action == "book_intro_call"
-    assert "product_line" not in payload.model_dump()
 
 
 def test_persona_generation_client_factory_uses_global_persona_yandex_settings(monkeypatch) -> None:

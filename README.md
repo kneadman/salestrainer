@@ -173,8 +173,7 @@ Admin UI sections:
 
 Security notes:
 
-- full API keys are never displayed;
-- blank API key fields are not sent on LLM config update;
+- global Yandex API keys, folder IDs, and agent IDs are configured through `.env`, not through the admin UI;
 - passwords are not stored in localStorage/sessionStorage and reset fields are cleared after success;
 - hidden persona snapshots, raw LLM payloads, raw LLM responses, and secrets are not rendered in admin history views.
 
@@ -345,10 +344,22 @@ Public vs hidden state:
 
 Prompt ownership:
 
-- `app/prompts/client_simulator.md` is a local reference prompt used for documentation and prompt iteration
-- `app/prompts/persona_generator.md` is the reference/default master prompt for persona generation
-- The `yandex_compatible` runtime path currently uses the configured Yandex AI Studio agent via `YANDEX_AGENT_ID`
-- If you update local prompt text, it does not automatically change the remote runtime agent behavior
+- Master prompts for persona generation and dialogue live in Yandex Agents and are edited in Yandex, not in this service.
+- JSON schema/templates for structured responses are configured in Yandex Agent plus validated again by this backend.
+- `app/prompts/client_simulator.md` and `app/prompts/persona_generator.md` are local reference prompts for documentation and prompt iteration only.
+- The MVP service stores only `persona_generation_prompt` as client business context on a training config.
+- Client/training config records do not store API keys, folder IDs, agent IDs, master prompts, or JSON templates.
+
+Example `persona_generation_prompt`:
+
+```text
+Client sells accounting outsourcing and outsourced CFO services to Russian B2B companies with 20-200 employees.
+Target decision-makers are owners, CEOs, CFOs, and managing partners.
+Typical pains: late management reporting, unclear cash gaps, tax risks, overloaded in-house accountant.
+Typical objections: already have an accountant, do not want to share financial data, had bad vendor experience, price concerns.
+Decision criteria: reliability, relevant cases, clear onboarding, transparent reporting, ability to work with 1C and primary documents.
+Training goal: manager should discover role, current accounting process, pain, decision criteria, and earn a relevant next step.
+```
 
 ## Demo run checklist
 
@@ -372,7 +383,7 @@ python -m app.admin.cli create-internal-admin --client-name "Platform" --client-
 
 4. Open `http://localhost:8080/login`, sign in, then open `/admin`.
 5. Create an organization.
-6. Create a training config and fill `persona_generation_prompt`.
+6. Create a training config with name, scenario, product line, limits, and `persona_generation_prompt`.
 7. Create a client manager or lead user.
 8. Assign the training config to the user and mark it as default.
 9. Sign in as the client user.
@@ -385,6 +396,7 @@ Demo notes:
 
 - Authenticated session creation uses the global persona agent from `.env`.
 - Runtime dialogue turns use the global dialogue agent from `.env`.
+- Legacy organization-level LLM provider configs are not part of the MVP demo flow.
 - Landing form submissions are persisted in `landing_leads`.
 - `/app/balance` is a usage placeholder, not billing or payment processing.
 
