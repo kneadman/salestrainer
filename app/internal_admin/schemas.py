@@ -14,9 +14,7 @@ NameStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, 
 PasswordStr = Annotated[str, StringConstraints(min_length=8, max_length=256)]
 SlugStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=80, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 ScenarioIdStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
-ProductLineStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
-
-ALLOWED_PRODUCT_LINES = frozenset({"accounting_outsourcing", "outsourced_cfo"})
+SUPPORTED_SCENARIO_IDS = set(SCENARIOS) | {"generic_b2b_first_contact"}
 
 
 class ClientUserRole(StrEnum):
@@ -101,8 +99,7 @@ class TrainingConfigDTO(BaseModel):
     name: str
     is_active: bool
     default_scenario_id: str
-    product_line: str
-    persona_generation_prompt: str
+    persona_generation_context: str
     persona_policy: dict[str, object]
     ui_config: dict[str, object]
     limits: dict[str, object]
@@ -116,8 +113,7 @@ class TrainingConfigCreateRequest(BaseModel):
 
     name: NameStr
     default_scenario_id: ScenarioIdStr
-    product_line: ProductLineStr
-    persona_generation_prompt: str = ""
+    persona_generation_context: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
     limits: dict[str, object] = Field(default_factory=dict)
@@ -126,25 +122,16 @@ class TrainingConfigCreateRequest(BaseModel):
     @field_validator("default_scenario_id")
     @classmethod
     def validate_scenario_id(cls, value: str) -> str:
-        if value not in SCENARIOS:
+        if value not in SUPPORTED_SCENARIO_IDS:
             raise ValueError("Unknown scenario_id.")
         return value
-
-    @field_validator("product_line")
-    @classmethod
-    def validate_product_line(cls, value: str) -> str:
-        if value not in ALLOWED_PRODUCT_LINES:
-            raise ValueError("Unsupported product_line.")
-        return value
-
 
 class TrainingConfigUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: NameStr | None = None
     default_scenario_id: ScenarioIdStr | None = None
-    product_line: ProductLineStr | None = None
-    persona_generation_prompt: str | None = None
+    persona_generation_context: str | None = None
     persona_policy: dict[str, object] | None = None
     ui_config: dict[str, object] | None = None
     limits: dict[str, object] | None = None
@@ -153,17 +140,9 @@ class TrainingConfigUpdateRequest(BaseModel):
     @field_validator("default_scenario_id")
     @classmethod
     def validate_scenario_id(cls, value: str | None) -> str | None:
-        if value is not None and value not in SCENARIOS:
+        if value is not None and value not in SUPPORTED_SCENARIO_IDS:
             raise ValueError("Unknown scenario_id.")
         return value
-
-    @field_validator("product_line")
-    @classmethod
-    def validate_product_line(cls, value: str | None) -> str | None:
-        if value is not None and value not in ALLOWED_PRODUCT_LINES:
-            raise ValueError("Unsupported product_line.")
-        return value
-
 
 class UserTrainingConfigAssignmentDTO(BaseModel):
     user_id: UUID
@@ -184,14 +163,10 @@ class LLMProviderConfigDTO(BaseModel):
     persona_api_key_preview: str | None
     persona_folder_id: str | None
     persona_agent_id: str | None
-    persona_master_prompt: str | None
-    persona_json_template: str | None
     has_dialogue_api_key: bool
     dialogue_api_key_preview: str | None
     dialogue_folder_id: str | None
     dialogue_agent_id: str | None
-    dialogue_master_prompt: str | None
-    dialogue_json_template: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -204,13 +179,9 @@ class LLMProviderConfigCreateRequest(BaseModel):
     persona_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
     persona_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
     persona_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
-    persona_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
-    persona_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
     dialogue_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
     dialogue_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
     dialogue_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
-    dialogue_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
-    dialogue_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
     api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
     folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
     agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
@@ -221,13 +192,9 @@ class LLMProviderConfigCreateRequest(BaseModel):
         "persona_api_key",
         "persona_folder_id",
         "persona_agent_id",
-        "persona_master_prompt",
-        "persona_json_template",
         "dialogue_api_key",
         "dialogue_folder_id",
         "dialogue_agent_id",
-        "dialogue_master_prompt",
-        "dialogue_json_template",
         "api_key",
         "folder_id",
         "agent_id",
@@ -248,13 +215,9 @@ class LLMProviderConfigUpdateRequest(BaseModel):
     persona_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
     persona_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
     persona_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
-    persona_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
-    persona_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
     dialogue_api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
     dialogue_folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
     dialogue_agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
-    dialogue_master_prompt: Annotated[str, StringConstraints(max_length=20000)] | None = None
-    dialogue_json_template: Annotated[str, StringConstraints(max_length=20000)] | None = None
     api_key: Annotated[str, StringConstraints(max_length=4096)] | None = None
     folder_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
     agent_id: Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)] | None = None
@@ -265,13 +228,9 @@ class LLMProviderConfigUpdateRequest(BaseModel):
         "persona_api_key",
         "persona_folder_id",
         "persona_agent_id",
-        "persona_master_prompt",
-        "persona_json_template",
         "dialogue_api_key",
         "dialogue_folder_id",
         "dialogue_agent_id",
-        "dialogue_master_prompt",
-        "dialogue_json_template",
         "api_key",
         "folder_id",
         "agent_id",

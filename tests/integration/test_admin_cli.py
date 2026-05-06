@@ -174,7 +174,6 @@ def test_assign_config_sets_default_config() -> None:
         client_account_id=client.id,
         name="Other Config",
         default_scenario_id="generic_b2b_first_contact",
-        product_line="accounting_outsourcing",
         persona_policy={},
     )
     access_repository.assign_training_config_to_user(
@@ -186,7 +185,6 @@ def test_assign_config_sets_default_config() -> None:
         client_account_id=client.id,
         name="Accounting Config",
         default_scenario_id="generic_b2b_first_contact",
-        product_line="accounting_outsourcing",
         persona_policy={},
     )
 
@@ -220,7 +218,6 @@ def test_create_config_writes_audit_log(tmp_path) -> None:
         access_repository=access_repository,
         client_slug=client.slug,
         name="Accounting Config",
-        product_line="accounting_outsourcing",
         scenario_id="generic_b2b_first_contact",
         persona_policy_file=str(policy_file),
     )
@@ -240,7 +237,6 @@ def test_update_config_writes_audit_log() -> None:
         client_account_id=client.id,
         name="Accounting Config",
         default_scenario_id="generic_b2b_first_contact",
-        product_line="accounting_outsourcing",
         persona_policy={},
     )
 

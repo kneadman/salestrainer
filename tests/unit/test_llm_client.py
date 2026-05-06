@@ -156,7 +156,7 @@ def test_yandex_compatible_client_builds_expected_request_and_retries_then_succe
     input_payload = json.loads(request_payload["input"])
     assert input_payload["task"] == "simulate_next_client_reply"
     assert input_payload["manager_message"] == "How do you track conversion losses now?"
-    assert input_payload["scenario"]["id"] == "sales_audit_cold_outreach"
+    assert input_payload["scenario"]["id"] == "first_contact_discovery"
     assert input_payload["hidden_profile"]["id"] == "owner"
     assert "latent_pains" in input_payload["hidden_profile"]
     assert input_payload["current_state"]["stage"] == "first_contact"
@@ -209,6 +209,22 @@ def test_build_llm_client_uses_dialogue_specific_yandex_settings() -> None:
     assert isinstance(client, YandexCompatibleLLMClient)
     assert client._folder_id == "dialogue-folder"
     assert client._agent_id == "dialogue-agent"
+
+
+def test_build_llm_client_falls_back_to_legacy_yandex_agent_settings() -> None:
+    settings = Settings(
+        llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=False,
+        yandex_api_key="token",
+        yandex_folder_id="legacy-folder",
+        yandex_agent_id="legacy-agent",
+    )
+
+    client = build_llm_client(settings)
+
+    assert isinstance(client, YandexCompatibleLLMClient)
+    assert client._folder_id == "legacy-folder"
+    assert client._agent_id == "legacy-agent"
 
 
 def test_build_llm_client_raises_when_provider_config_is_incomplete_and_fallback_is_disabled() -> None:

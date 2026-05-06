@@ -25,8 +25,7 @@ class AccessRepository:
         client_account_id: UUID,
         name: str,
         default_scenario_id: str,
-        product_line: str,
-        persona_generation_prompt: str = "",
+        persona_generation_context: str = "",
         persona_policy: dict[str, object] | None = None,
         ui_config: dict[str, object] | None = None,
         limits: dict[str, object] | None = None,
@@ -38,8 +37,7 @@ class AccessRepository:
             client_account_id=client_account_id,
             name=name,
             default_scenario_id=default_scenario_id,
-            product_line=product_line,
-            persona_generation_prompt=persona_generation_prompt,
+            persona_generation_context=persona_generation_context,
             persona_policy=persona_policy or {},
             ui_config=ui_config or {},
             limits=limits or {},
@@ -106,8 +104,7 @@ class AccessRepository:
                 "name": training_config.name,
                 "default_scenario_id": training_config.default_scenario_id,
                 "allowed_scenarios": training_config.ui_config.get("allowed_scenarios"),
-                "product_line": training_config.product_line,
-                "persona_generation_prompt": training_config.persona_generation_prompt,
+                "persona_generation_context": training_config.persona_generation_context,
                 "persona_policy": training_config.persona_policy,
                 "ui_config": training_config.ui_config,
                 "limits": training_config.limits,
@@ -133,8 +130,7 @@ class AccessRepository:
         training_config_id: UUID,
         name: str | None = None,
         default_scenario_id: str | None = None,
-        product_line: str | None = None,
-        persona_generation_prompt: str | None = None,
+        persona_generation_context: str | None = None,
         persona_policy: dict[str, object] | None = None,
         ui_config: dict[str, object] | None = None,
         limits: dict[str, object] | None = None,
@@ -148,10 +144,8 @@ class AccessRepository:
             training_config.name = name
         if default_scenario_id is not None:
             training_config.default_scenario_id = default_scenario_id
-        if product_line is not None:
-            training_config.product_line = product_line
-        if persona_generation_prompt is not None:
-            training_config.persona_generation_prompt = persona_generation_prompt
+        if persona_generation_context is not None:
+            training_config.persona_generation_context = persona_generation_context
         if persona_policy is not None:
             training_config.persona_policy = persona_policy
         if ui_config is not None:

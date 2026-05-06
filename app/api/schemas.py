@@ -39,8 +39,14 @@ class SessionPublicDTO(BaseModel):
 class ScenarioOptionDTO(BaseModel):
     scenario_id: str
     name: str
-    offer: str
-    target_audience: str
+    training_format: str
+    default_starting_interest: int
+    default_stage: str
+    manager_goal: str
+    success_condition: str
+    failure_condition: str
+    evaluation_focus: list[str]
+    client_behavior_hint: str
 
 
 class PersonaOptionDTO(BaseModel):

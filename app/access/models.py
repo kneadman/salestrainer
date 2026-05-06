@@ -23,8 +23,7 @@ class ClientTrainingConfig(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
     default_scenario_id: Mapped[str] = mapped_column(Text, nullable=False)
-    product_line: Mapped[str] = mapped_column(Text, nullable=False)
-    persona_generation_prompt: Mapped[str] = mapped_column(
+    persona_generation_context: Mapped[str] = mapped_column(
         Text,
         nullable=False,
         default="",
@@ -98,13 +97,9 @@ class LLMProviderConfig(Base):
     persona_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     persona_agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     persona_folder_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    persona_master_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    persona_json_template: Mapped[str | None] = mapped_column(Text, nullable=True)
     dialogue_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     dialogue_agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     dialogue_folder_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    dialogue_master_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    dialogue_json_template: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -191,8 +186,7 @@ class RuntimeTrainingConfig(BaseModel):
     name: str
     default_scenario_id: str
     allowed_scenarios: list[str] | None = None
-    product_line: str
-    persona_generation_prompt: str = ""
+    persona_generation_context: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
     limits: dict[str, object] = Field(default_factory=dict)

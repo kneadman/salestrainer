@@ -14,7 +14,7 @@ from app.cli.renderer import (
     render_state,
 )
 from app.domain.errors import SalesTrainerError
-from app.domain.persona_generation import PersonaGenerator
+from app.domain.persona_generation import UniversalFakePersonaGenerator as PersonaGenerator
 from app.infrastructure.config import get_settings
 from app.infrastructure.llm_client import build_llm_client
 from app.infrastructure.logging import setup_logging

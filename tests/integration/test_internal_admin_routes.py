@@ -98,8 +98,7 @@ def _create_training_config(client: TestClient, organization_id: str, name: str 
         json={
             "name": name,
             "default_scenario_id": "generic_b2b_first_contact",
-            "product_line": "accounting_outsourcing",
-            "persona_generation_prompt": "Собственник малого бизнеса, нужен аудит текущего учета и рисков.",
+            "persona_generation_context": "Собственник малого бизнеса, нужен аудит текущего учета и рисков.",
             "persona_policy": {},
             "ui_config": {},
             "limits": {},
@@ -238,8 +237,7 @@ def test_training_config_create_and_update_work_without_llm_provider_config() ->
         json={
             "name": "Prompt config",
             "default_scenario_id": "generic_b2b_first_contact",
-            "product_line": "accounting_outsourcing",
-            "persona_generation_prompt": "Финальный ЛПР по бухгалтерскому аутсорсингу, боли в сроках и прозрачности.",
+            "persona_generation_context": "Финальный ЛПР по бухгалтерскому аутсорсингу, боли в сроках и прозрачности.",
             "persona_policy": {},
             "ui_config": {},
             "limits": {"max_turns": 10},
@@ -248,14 +246,14 @@ def test_training_config_create_and_update_work_without_llm_provider_config() ->
     config_id = create_response.json()["id"]
     update_response = client.patch(
         f"/api/internal/training-configs/{config_id}",
-        json={"persona_generation_prompt": "Обновлённый контекст для генерации личности."},
+        json={"persona_generation_context": "Обновлённый контекст для генерации личности."},
     )
 
     assert create_response.status_code == 201
-    assert create_response.json()["persona_generation_prompt"].startswith("Финальный ЛПР")
+    assert create_response.json()["persona_generation_context"].startswith("Финальный ЛПР")
     assert create_response.json()["llm_provider_config_id"] is None
     assert update_response.status_code == 200
-    assert update_response.json()["persona_generation_prompt"] == "Обновлённый контекст для генерации личности."
+    assert update_response.json()["persona_generation_context"] == "Обновлённый контекст для генерации личности."
     session.close()
 
 
@@ -310,13 +308,9 @@ def test_llm_provider_config_two_yandex_sets_and_blank_key_update() -> None:
             "persona_api_key": "persona-secret-key",
             "persona_folder_id": "persona-folder",
             "persona_agent_id": "persona-agent",
-            "persona_master_prompt": "persona prompt",
-            "persona_json_template": "{\"persona\": {}}",
             "dialogue_api_key": "dialogue-secret-key",
             "dialogue_folder_id": "dialogue-folder",
             "dialogue_agent_id": "dialogue-agent",
-            "dialogue_master_prompt": "dialogue prompt",
-            "dialogue_json_template": "{\"answer\": \"\"}",
         },
     )
     payload = create_response.json()
@@ -368,15 +362,6 @@ def test_internal_admin_schema_validation_rejects_invalid_inputs() -> None:
         json={
             "name": "Invalid scenario",
             "default_scenario_id": "missing",
-            "product_line": "accounting_outsourcing",
-        },
-    )
-    invalid_product_line = client.post(
-        f"/api/internal/organizations/{organization['id']}/training-configs",
-        json={
-            "name": "Invalid product",
-            "default_scenario_id": "generic_b2b_first_contact",
-            "product_line": "unknown",
         },
     )
     invalid_provider = client.post(
@@ -388,7 +373,6 @@ def test_internal_admin_schema_validation_rejects_invalid_inputs() -> None:
     assert invalid_email.status_code == 422
     assert short_password.status_code == 422
     assert invalid_scenario.status_code == 422
-    assert invalid_product_line.status_code == 422
     assert invalid_provider.status_code == 422
     session.close()
 

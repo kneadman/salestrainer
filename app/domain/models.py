@@ -45,7 +45,6 @@ class PersonaProfile(BaseModel):
     company_size: str
     authority_level: AuthorityLevel
     behavior_model: BehaviorModel
-    product_line: Literal["accounting_outsourcing", "outsourced_cfo"] | str = "accounting_outsourcing"
     target_action: str = ""
     current_accounting_model: str = "unknown"
     legal_form: str = "unknown"
@@ -134,27 +133,27 @@ class LLMTurnResponse(BaseModel):
 class Scenario(BaseModel):
     id: str
     name: str
-    offer: str
-    target_audience: str
+    training_format: str
     default_starting_interest: int = Field(ge=0, le=100)
     default_stage: str
+    manager_goal: str
     success_condition: str
     failure_condition: str
+    evaluation_focus: list[str] = Field(default_factory=list)
+    client_behavior_hint: str = ""
 
 
 class PersonaGenerationInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task: Literal["generate_client_persona"] = "generate_client_persona"
-    product_line: str
     scenario: Scenario
     training_config_name: str | None = None
-    persona_generation_prompt: str = ""
+    persona_generation_context: str = ""
     persona_policy: dict[str, Any] = Field(default_factory=dict)
     organization_context: dict[str, Any] = Field(default_factory=dict)
     target_action: str | None = None
     allowed_roles: list[str] | None = None
-    allowed_product_lines: list[str] | None = None
     manager_training_goal: str | None = None
     difficulty_level: str | None = None
     randomization_seed: int | None = None

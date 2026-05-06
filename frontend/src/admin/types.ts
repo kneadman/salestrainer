@@ -73,8 +73,7 @@ export type TrainingConfigDTO = {
   name: string;
   is_active: boolean;
   default_scenario_id: string;
-  product_line: string;
-  persona_generation_prompt: string;
+  persona_generation_context: string;
   persona_policy: JsonObject;
   ui_config: JsonObject;
   limits: JsonObject;
@@ -86,12 +85,10 @@ export type TrainingConfigDTO = {
 export type TrainingConfigPayload = {
   name: string;
   default_scenario_id: string;
-  product_line: string;
-  persona_generation_prompt: string;
+  persona_generation_context: string;
   persona_policy: JsonObject;
   ui_config: JsonObject;
   limits: JsonObject;
-  llm_provider_config_id?: string | null;
 };
 
 export type UserTrainingConfigAssignmentDTO = {
@@ -99,43 +96,6 @@ export type UserTrainingConfigAssignmentDTO = {
   training_config_id: string;
   is_default: boolean;
   training_config: TrainingConfigDTO;
-};
-
-export type LLMProviderConfigDTO = {
-  id: string;
-  client_account_id: string;
-  name: string;
-  provider: string;
-  is_active: boolean;
-  has_persona_api_key: boolean;
-  persona_api_key_preview: string | null;
-  persona_folder_id: string | null;
-  persona_agent_id: string | null;
-  persona_master_prompt: string | null;
-  persona_json_template: string | null;
-  has_dialogue_api_key: boolean;
-  dialogue_api_key_preview: string | null;
-  dialogue_folder_id: string | null;
-  dialogue_agent_id: string | null;
-  dialogue_master_prompt: string | null;
-  dialogue_json_template: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type LLMProviderConfigPayload = {
-  name?: string;
-  provider?: "yandex_compatible" | "openai_compatible" | "fake";
-  persona_api_key?: string;
-  persona_folder_id?: string | null;
-  persona_agent_id?: string | null;
-  persona_master_prompt?: string | null;
-  persona_json_template?: string | null;
-  dialogue_api_key?: string;
-  dialogue_folder_id?: string | null;
-  dialogue_agent_id?: string | null;
-  dialogue_master_prompt?: string | null;
-  dialogue_json_template?: string | null;
 };
 
 export type AuditLogDTO = {
@@ -153,8 +113,14 @@ export type AuditLogDTO = {
 export type ScenarioOptionDTO = {
   scenario_id: string;
   name: string;
-  offer: string;
-  target_audience: string;
+  training_format: string;
+  default_starting_interest: number;
+  default_stage: string;
+  manager_goal: string;
+  success_condition: string;
+  failure_condition: string;
+  evaluation_focus: string[];
+  client_behavior_hint: string;
 };
 
 export type HistorySessionSummaryDTO = {

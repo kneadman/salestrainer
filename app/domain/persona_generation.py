@@ -2,191 +2,149 @@ from __future__ import annotations
 
 import random
 
-from app.domain.models import PersonaProfile
-from app.domain.persona_data.accounting_outsourcing import (
-    ACCOUNTING_MODELS,
-    ACCOUNTING_OUTSOURCING_SCENARIOS,
-    ACCOUNTING_SOFTWARE,
-    ACCOUNTING_SOFTWARE_MODES,
-    LEGAL_FORMS,
-    PRIMARY_DOCS_OWNER,
-    TAX_SYSTEMS,
-)
-from app.domain.persona_data.common import (
-    BEHAVIOR_MODELS,
-    CALL_SCORING_CRITERIA,
-    COMMUNICATION_STYLES,
-    COMPANY_SIZES,
-    DECISION_CRITERIA,
-    HIDDEN_CONSTRAINTS,
-    OBJECTION_GROUPS,
-    PROOF_POINTS,
-    ROLES,
-)
-from app.domain.persona_data.outsourced_cfo import OUTSOURCED_CFO_SCENARIOS
+from app.domain.models import PersonaProfile, Scenario
 
-DEFAULT_TARGET_ACTIONS = {
-    "accounting_outsourcing": "book_express_audit",
-    "outsourced_cfo": "book_financial_diagnostic",
+GENERIC_ROLES = [
+    "owner",
+    "founder",
+    "ceo",
+    "general_director",
+    "managing_partner",
+    "commercial_director",
+    "cfo",
+    "operations_director",
+    "sales_director",
+    "purchase_manager",
+]
+
+GENERIC_BEHAVIOR_MODELS = [
+    "skeptical_but_rational",
+    "dominant_and_direct",
+    "price_sensitive",
+    "analytical_and_cautious",
+    "distrustful_due_to_bad_experience",
+    "busy_and_short",
+    "friendly_but_defensive",
+    "formal_and_distant",
+    "interested_but_overloaded",
+    "process_oriented",
+    "friendly_but_distrustful",
+]
+
+GENERIC_COMPANY_SIZES = ["10-30", "30-100", "100-500", "500+"]
+GENERIC_INDUSTRIES = ["manufacturing", "retail", "beauty", "ecommerce", "saas", "distribution", "services"]
+GENERIC_CARES_ABOUT = ["ROI", "stability", "team capacity", "predictability", "implementation risk"]
+GENERIC_DECISION_CRITERIA = ["business fit", "credibility", "speed", "economics", "clarity of next step"]
+GENERIC_CONSTRAINTS = ["Limited time for meetings.", "Needs internal alignment before commitment."]
+GENERIC_PROOF_SENSITIVITY = ["relevant cases", "clear numbers", "implementation plan"]
+GENERIC_CALL_SCORING = ["discovery depth", "objection handling", "clarity of next step", "context relevance"]
+
+SCENARIO_BEHAVIOR_HINTS = {
+    "first_contact_discovery": "busy_and_short",
+    "qualification_and_authority": "formal_and_distant",
+    "needs_diagnosis": "analytical_and_cautious",
+    "objection_handling": "skeptical_but_rational",
+    "price_and_value": "price_sensitive",
+    "bad_experience_recovery": "distrustful_due_to_bad_experience",
+    "next_step_booking": "interested_but_overloaded",
+    "follow_up_after_pause": "friendly_but_distrustful",
 }
 
-PRODUCT_LINE_TARGET_ACTIONS = {
-    "accounting_outsourcing": [
-        "book_express_audit",
-        "get_accounting_data_export",
-        "schedule_audit_result_meeting",
-        "send_personal_offer_after_audit",
-    ],
-    "outsourced_cfo": [
-        "book_financial_diagnostic",
-        "collect_financial_reports",
-        "schedule_financial_model_meeting",
-        "present_management_reporting_offer",
-    ],
+SCENARIO_OBJECTIONS = {
+    "first_contact_discovery": ["We are not looking right now.", "What exactly is this about?"],
+    "qualification_and_authority": ["I am not the only one involved.", "You need the right contact first."],
+    "needs_diagnosis": ["We need to understand your approach first.", "We already have a process in place."],
+    "objection_handling": ["We had a bad experience before.", "I do not want another long pitch."],
+    "price_and_value": ["It sounds expensive.", "How is this better than doing nothing?"],
+    "bad_experience_recovery": ["Last vendor overpromised.", "Trust is the main problem."],
+    "next_step_booking": ["Send something first.", "I am not ready to book time yet."],
+    "follow_up_after_pause": ["The priority moved.", "We paused this for now."],
 }
 
-PRODUCT_SCENARIOS = {
-    "accounting_outsourcing": ACCOUNTING_OUTSOURCING_SCENARIOS,
-    "outsourced_cfo": OUTSOURCED_CFO_SCENARIOS,
-}
-
-ROLE_CARES_ABOUT = {
-    "owner": ["контроль", "риски", "деньги", "стабильность"],
-    "founder": ["рост", "контроль", "скорость решений", "прибыль"],
-    "ceo": ["управляемость", "результат", "риски", "эффективность"],
-    "general_director": ["устойчивость", "контроль", "порядок", "результат"],
-    "managing_partner": ["прозрачность", "качество сервиса", "контроль", "прибыль"],
-    "commercial_director": ["маржа", "продажи", "план", "эффективность"],
-    "cfo": ["цифры", "прозрачность", "риск", "денежный поток"],
-    "chief_accountant": ["точность", "безопасность", "сроки", "процесс"],
-    "operations_director": ["устойчивость", "процессы", "нагрузка команды", "контроль"],
-    "sales_director": ["конверсия", "маржа", "управляемость", "результат"],
-}
-
-PRODUCT_LINE_INDUSTRIES = {
-    "accounting_outsourcing": ["services", "trade", "manufacturing", "construction", "professional_services"],
-    "outsourced_cfo": ["wholesale", "distribution", "services", "group_companies", "ecommerce"],
+SCENARIO_PAINS = {
+    "first_contact_discovery": ["The team struggles to surface the real situation early."],
+    "qualification_and_authority": ["Too many conversations happen with the wrong stakeholder."],
+    "needs_diagnosis": ["Symptoms are discussed, but root causes stay vague."],
+    "objection_handling": ["Objections stop progress because value is not grounded in context."],
+    "price_and_value": ["Budget concerns dominate before business value is clear."],
+    "bad_experience_recovery": ["Prior disappointment makes every promise sound weak."],
+    "next_step_booking": ["Good conversations still end without a concrete next step."],
+    "follow_up_after_pause": ["Momentum is lost after long silence."],
 }
 
 
-class PersonaGenerator:
+class UniversalFakePersonaGenerator:
     def __init__(self, seed: int | None = None) -> None:
+        """Keep deterministic local persona generation for tests and local development."""
         self._random = random.Random(seed)
 
     def generate(
         self,
-        product_line: str | None = None,
+        scenario: Scenario | None = None,
         persona_policy: dict[str, object] | None = None,
         *,
         policy: dict[str, object] | None = None,
     ) -> PersonaProfile:
+        """Build a generic B2B hidden persona without product-specific datasets."""
         if persona_policy is not None and policy is not None:
             raise ValueError("Use either 'persona_policy' or 'policy', not both.")
 
         resolved_policy = persona_policy if persona_policy is not None else policy
-        allowed_product_lines = self._coerce_allowed_values(
-            resolved_policy,
-            key="allowed_product_lines",
-            available_values=PRODUCT_SCENARIOS.keys(),
-        )
-        resolved_product_line = self._resolve_product_line(product_line, allowed_product_lines)
-        scenario_id, scenario_data = self._pick_scenario(resolved_product_line)
+        resolved_scenario = scenario
         allowed_roles = self._coerce_allowed_values(
             resolved_policy,
             key="allowed_roles",
-            available_values=ROLES,
+            available_values=GENERIC_ROLES,
         )
-        role = self._random.choice(allowed_roles or ROLES)
-        behavior_model = self._pick_behavior_model(scenario_id)
-        company_size = self._random.choice(COMPANY_SIZES)
-        communication_style = self._random.choice(COMMUNICATION_STYLES)
-        proof_sensitivity = list(scenario_data["proof_sensitivity"])
-        target_action = self._resolve_target_action(
-            resolved_product_line=resolved_product_line,
-            persona_policy=resolved_policy,
-        )
-        current_accounting_model = self._pick_current_accounting_model(resolved_product_line)
-        legal_form = self._pick_legal_form(resolved_product_line)
-        tax_system = self._pick_tax_system(resolved_product_line)
-        accounting_software = self._pick_accounting_software(resolved_product_line)
-        accounting_software_mode = self._pick_accounting_software_mode(resolved_product_line)
-        primary_docs_owner = self._pick_primary_docs_owner(resolved_product_line)
+        role = self._random.choice(allowed_roles or GENERIC_ROLES)
+        scenario_id = resolved_scenario.id if resolved_scenario is not None else "first_contact_discovery"
+        behavior_model = SCENARIO_BEHAVIOR_HINTS.get(scenario_id, self._random.choice(GENERIC_BEHAVIOR_MODELS))
+        target_action = self._string_policy_value(resolved_policy, "target_action") or "confirm_next_step"
+        manager_goal = self._string_policy_value(resolved_policy, "manager_training_goal")
+        current_context = self._build_current_context(resolved_scenario, manager_goal)
+        business_facts = self._build_business_facts(resolved_scenario, target_action)
 
         return PersonaProfile(
-            id=f"generated_{resolved_product_line}_{scenario_id}_{role}",
+            id=f"generated_{scenario_id}_{role}",
             display_name="Unknown B2B contact",
             role=role,  # type: ignore[arg-type]
-            industry=self._random.choice(PRODUCT_LINE_INDUSTRIES[resolved_product_line]),
-            company_size=company_size,
+            industry=self._random.choice(GENERIC_INDUSTRIES),
+            company_size=self._random.choice(GENERIC_COMPANY_SIZES),
             authority_level="final_decider",
             behavior_model=behavior_model,  # type: ignore[arg-type]
-            product_line=resolved_product_line,
             target_action=target_action,
-            current_accounting_model=current_accounting_model,
-            legal_form=legal_form,
-            tax_system=tax_system,
-            accounting_software=accounting_software,
-            accounting_software_mode=accounting_software_mode,
-            primary_docs_owner=primary_docs_owner,
-            cares_about=self._pick_cares_about(role, resolved_product_line),
-            typical_objections=self._pick_objections(scenario_data),
-            current_business_context=scenario_data["current_business_context"],
-            latent_pains=list(scenario_data["latent_pains"]),
-            buying_motivation=list(scenario_data["buying_motivation"]),
-            decision_criteria=self._pick_decision_criteria(),
-            hidden_constraints=self._pick_hidden_constraints(scenario_data),
-            business_facts=self._build_business_facts(
-                resolved_product_line=resolved_product_line,
-                scenario_id=scenario_id,
-                scenario_data=scenario_data,
-                current_accounting_model=current_accounting_model,
-                legal_form=legal_form,
-                tax_system=tax_system,
-                accounting_software=accounting_software,
-                primary_docs_owner=primary_docs_owner,
-            ),
-            proof_sensitivity=proof_sensitivity,
-            call_scoring_criteria=list(CALL_SCORING_CRITERIA),
-            communication_style=communication_style,
-            initial_openness=self._pick_initial_openness(),
-            starting_interest=self._pick_starting_interest(scenario_id),
+            current_accounting_model="unknown",
+            legal_form="unknown",
+            tax_system="unknown",
+            accounting_software="unknown",
+            accounting_software_mode="unknown",
+            primary_docs_owner="unknown",
+            cares_about=list(GENERIC_CARES_ABOUT),
+            typical_objections=list(SCENARIO_OBJECTIONS.get(scenario_id, ["We need more context first."])),
+            current_business_context=current_context,
+            latent_pains=list(SCENARIO_PAINS.get(scenario_id, ["The current process is underperforming."])),
+            buying_motivation=["Reduce uncertainty.", "Find a workable next step."],
+            decision_criteria=list(GENERIC_DECISION_CRITERIA),
+            hidden_constraints=list(GENERIC_CONSTRAINTS),
+            business_facts=business_facts,
+            proof_sensitivity=list(GENERIC_PROOF_SENSITIVITY),
+            call_scoring_criteria=list(GENERIC_CALL_SCORING),
+            communication_style=self._communication_style_for_behavior(behavior_model),
+            initial_openness=self._random.randint(15, 35),
+            starting_interest=self._pick_starting_interest(resolved_scenario),
             price_sensitivity=self._pick_price_sensitivity(behavior_model),
-            urgency=self._pick_urgency(scenario_id),
-            trust_baseline=self._pick_trust_baseline(scenario_id, behavior_model),
+            urgency=self._pick_urgency(resolved_scenario),
+            trust_baseline=self._pick_trust_baseline(behavior_model),
         )
-
-    def _resolve_product_line(
-        self,
-        product_line: str | None,
-        allowed_product_lines: list[str],
-    ) -> str:
-        if product_line is not None:
-            if allowed_product_lines and product_line not in allowed_product_lines:
-                raise ValueError(f"Product line '{product_line}' is not allowed by persona policy.")
-            return product_line
-        if allowed_product_lines:
-            return self._random.choice(allowed_product_lines)
-        return self._random.choice(list(PRODUCT_SCENARIOS.keys()))
-
-    def _resolve_target_action(
-        self,
-        *,
-        resolved_product_line: str,
-        persona_policy: dict[str, object] | None,
-    ) -> str:
-        if persona_policy is not None:
-            target_action = persona_policy.get("target_action")
-            if isinstance(target_action, str) and target_action:
-                return target_action
-        return self._random.choice(PRODUCT_LINE_TARGET_ACTIONS[resolved_product_line])
 
     def _coerce_allowed_values(
         self,
         persona_policy: dict[str, object] | None,
         *,
         key: str,
-        available_values,
+        available_values: list[str],
     ) -> list[str]:
+        """Restrict string-list policy values to supported fake-generator enums."""
         if persona_policy is None:
             return []
         raw_value = persona_policy.get(key)
@@ -195,129 +153,71 @@ class PersonaGenerator:
         if not isinstance(raw_value, list):
             raise ValueError(f"Persona policy '{key}' must be a list.")
 
-        available = {str(value) for value in available_values}
+        available = set(available_values)
         resolved = [value for value in raw_value if isinstance(value, str) and value in available]
         if not resolved:
             raise ValueError(f"Persona policy '{key}' does not contain supported values.")
         return resolved
 
-    def _pick_scenario(self, product_line: str) -> tuple[str, dict[str, object]]:
-        scenarios = PRODUCT_SCENARIOS[product_line]
-        scenario_id = self._random.choice(list(scenarios.keys()))
-        return scenario_id, scenarios[scenario_id]
+    def _string_policy_value(self, persona_policy: dict[str, object] | None, key: str) -> str | None:
+        """Read non-empty string overrides from optional fake-generator policy."""
+        if persona_policy is None:
+            return None
+        value = persona_policy.get(key)
+        return value.strip() if isinstance(value, str) and value.strip() else None
 
-    def _pick_behavior_model(self, scenario_id: str) -> str:
-        if "bad_experience" in scenario_id:
-            return "distrustful_due_to_bad_experience"
-        if scenario_id in {"tax_risk_after_requirement", "messy_legal_entities"}:
-            return self._random.choice(["analytical_and_cautious", "skeptical_but_rational"])
-        if scenario_id in {"cash_gap_problem", "scaling_uncertainty"}:
-            return self._random.choice(["interested_but_overloaded", "busy_and_short"])
-        return self._random.choice(BEHAVIOR_MODELS)
+    def _build_current_context(self, scenario: Scenario | None, manager_goal: str | None) -> str:
+        """Compose a neutral business context aligned with the selected training format."""
+        scenario_name = scenario.name if scenario is not None else "Universal training"
+        if manager_goal:
+            return f"The contact is evaluating whether this conversation can help with: {manager_goal}."
+        return f"The contact is in a '{scenario_name}' training format and expects a relevant, concise conversation."
 
-    def _pick_cares_about(self, role: str, product_line: str) -> list[str]:
-        base = list(ROLE_CARES_ABOUT[role])
-        if product_line == "accounting_outsourcing":
-            base.extend(["налоги", "документы"])
-        else:
-            base.extend(["маржа", "денежный поток"])
-        return base[:5]
+    def _build_business_facts(self, scenario: Scenario | None, target_action: str) -> list[str]:
+        """Expose only generic internal facts that help the simulator stay coherent."""
+        if scenario is None:
+            return [f"Preferred next action: {target_action}."]
+        return [
+            f"Training format: {scenario.training_format}.",
+            f"Manager goal: {scenario.manager_goal}.",
+            f"Preferred next action: {target_action}.",
+        ]
 
-    def _pick_objections(self, scenario_data: dict[str, object]) -> list[str]:
-        objections = list(scenario_data["typical_objections"])
-        objections.extend(self._random.sample(OBJECTION_GROUPS["stalling"], k=1))
-        if self._random.random() < 0.5:
-            objections.extend(self._random.sample(OBJECTION_GROUPS["price"], k=1))
-        if self._random.random() < 0.5:
-            objections.extend(self._random.sample(OBJECTION_GROUPS["trust"], k=1))
-        return objections
+    def _communication_style_for_behavior(self, behavior_model: str) -> str:
+        """Keep tone consistent with the generated behavior model."""
+        styles = {
+            "busy_and_short": "Brief and impatient.",
+            "formal_and_distant": "Formal and reserved.",
+            "analytical_and_cautious": "Analytical and careful.",
+            "price_sensitive": "Direct, practical, and cost-aware.",
+            "distrustful_due_to_bad_experience": "Guarded and skeptical.",
+            "interested_but_overloaded": "Interested but time-constrained.",
+        }
+        return styles.get(behavior_model, "Calm, pragmatic, and selective.")
 
-    def _pick_decision_criteria(self) -> list[str]:
-        return self._random.sample(DECISION_CRITERIA, k=4)
-
-    def _pick_hidden_constraints(self, scenario_data: dict[str, object]) -> list[str]:
-        constraints = list(self._random.sample(HIDDEN_CONSTRAINTS, k=2))
-        if "bad_experience" in str(scenario_data["current_business_context"]).lower():
-            constraints.append("Есть негативный опыт с подрядчиками.")
-        return constraints
-
-    def _build_business_facts(
-        self,
-        *,
-        resolved_product_line: str,
-        scenario_id: str,
-        scenario_data: dict[str, object],
-        current_accounting_model: str,
-        legal_form: str,
-        tax_system: str,
-        accounting_software: str,
-        primary_docs_owner: str,
-    ) -> list[str]:
-        facts = list(scenario_data["business_facts"])
-        facts.append(f"Продуктовая линия: {resolved_product_line}.")
-        facts.append(f"Сценарий: {scenario_id}.")
-        facts.append(f"Текущая модель учета: {current_accounting_model}.")
-        if resolved_product_line == "accounting_outsourcing":
-            facts.append(f"Оргформа: {legal_form}.")
-            facts.append(f"Налоговый режим: {tax_system}.")
-            facts.append(f"Учет ведется в: {accounting_software}.")
-            facts.append(f"Первичка чаще всего у: {primary_docs_owner}.")
-        return facts
-
-    def _pick_current_accounting_model(self, product_line: str) -> str:
-        if product_line == "accounting_outsourcing":
-            return self._random.choice(ACCOUNTING_MODELS)
-        return "unknown"
-
-    def _pick_legal_form(self, product_line: str) -> str:
-        if product_line == "accounting_outsourcing":
-            return self._random.choice(LEGAL_FORMS)
-        return self._random.choice(["ООО", "группа компаний", "несколько юрлиц"])
-
-    def _pick_tax_system(self, product_line: str) -> str:
-        if product_line == "accounting_outsourcing":
-            return self._random.choice(TAX_SYSTEMS)
-        return "неизвестно"
-
-    def _pick_accounting_software(self, product_line: str) -> str:
-        if product_line == "accounting_outsourcing":
-            return self._random.choice(ACCOUNTING_SOFTWARE)
-        return "Excel/таблицы"
-
-    def _pick_accounting_software_mode(self, product_line: str) -> str:
-        if product_line == "accounting_outsourcing":
-            return self._random.choice(ACCOUNTING_SOFTWARE_MODES)
-        return "unknown"
-
-    def _pick_primary_docs_owner(self, product_line: str) -> str:
-        if product_line == "accounting_outsourcing":
-            return self._random.choice(PRIMARY_DOCS_OWNER)
-        return "unknown"
-
-    def _pick_initial_openness(self) -> int:
-        return self._random.randint(12, 35)
-
-    def _pick_starting_interest(self, scenario_id: str) -> int:
-        if scenario_id in {"revenue_without_profit", "no_management_reporting"}:
-            return self._random.randint(28, 45)
-        return self._random.randint(18, 45)
+    def _pick_starting_interest(self, scenario: Scenario | None) -> int:
+        """Keep fallback interest anchored to the selected training format."""
+        if scenario is not None:
+            return scenario.default_starting_interest
+        return self._random.randint(20, 35)
 
     def _pick_price_sensitivity(self, behavior_model: str) -> int:
+        """Bias sensitivity upward for explicitly price-focused personas."""
         if behavior_model == "price_sensitive":
-            return self._random.randint(60, 85)
-        return self._random.randint(35, 75)
+            return self._random.randint(60, 80)
+        return self._random.randint(35, 65)
 
-    def _pick_urgency(self, scenario_id: str) -> int:
-        if scenario_id in {"tax_risk_after_requirement", "cash_gap_problem"}:
-            return self._random.randint(50, 75)
-        return self._random.randint(20, 60)
+    def _pick_urgency(self, scenario: Scenario | None) -> int:
+        """Translate training format pressure into a generic urgency baseline."""
+        if scenario is not None and scenario.id in {"bad_experience_recovery", "follow_up_after_pause"}:
+            return self._random.randint(25, 45)
+        return self._random.randint(20, 55)
 
-    def _pick_trust_baseline(self, scenario_id: str, behavior_model: str) -> int:
-        if "bad_experience" in scenario_id or behavior_model == "distrustful_due_to_bad_experience":
-            return self._random.randint(12, 22)
-        if scenario_id in {"revenue_without_profit", "no_management_reporting"}:
-            return self._random.randint(18, 32)
-        return self._random.randint(18, 40)
+    def _pick_trust_baseline(self, behavior_model: str) -> int:
+        """Lower starting trust for distrustful recovery-oriented personas."""
+        if behavior_model == "distrustful_due_to_bad_experience":
+            return self._random.randint(10, 22)
+        return self._random.randint(18, 35)
 
 
-LEGACY_ROLE_TEMPLATES: dict[str, dict[str, object]] = {}
+PersonaGenerator = UniversalFakePersonaGenerator

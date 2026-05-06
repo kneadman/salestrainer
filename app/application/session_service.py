@@ -5,7 +5,7 @@ import logging
 from uuid import uuid4
 
 from app.access.models import RuntimeTrainingConfig
-from app.domain.persona_generation import PersonaGenerator
+from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.interest import interest_band
 from app.domain.errors import SessionNotActiveError, SessionNotFoundError
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
@@ -42,12 +42,12 @@ class TrainingSessionService:
         self,
         repository: SessionRepository,
         *,
-        persona_generator: PersonaGenerator | None = None,
-        default_scenario_id: str = "generic_b2b_first_contact",
+        persona_generator: UniversalFakePersonaGenerator | None = None,
+        default_scenario_id: str = "first_contact_discovery",
     ) -> None:
         """Keep runtime repository and local persona fallback for CLI/debug flows."""
         self._repository = repository
-        self._persona_generator = persona_generator or PersonaGenerator()
+        self._persona_generator = persona_generator or UniversalFakePersonaGenerator()
         self._default_scenario_id = default_scenario_id
 
     def start_session(
@@ -66,12 +66,13 @@ class TrainingSessionService:
         if persona_override is not None:
             persona = persona_override
         elif training_config is not None:
-            persona = self._persona_generator.generate(
-                product_line=training_config.product_line,
-                persona_policy=training_config.persona_policy,
-            )
+            persona = self._persona_generator.generate(scenario=scenario, persona_policy=training_config.persona_policy)
         else:
-            persona = get_persona(persona_id) if persona_id else self._persona_generator.generate()
+            persona = (
+                get_persona(persona_id)
+                if persona_id
+                else self._persona_generator.generate(scenario=scenario)
+            )
         starting_interest = persona.starting_interest or scenario.default_starting_interest
         now = datetime.now(tz=UTC)
         session = TrainingSessionState(

@@ -12,7 +12,7 @@ from app.api.schemas import ErrorBody, ErrorResponse
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
-from app.domain.persona_generation import PersonaGenerator
+from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.infrastructure.config import Settings, get_settings
 from app.infrastructure.llm_client import LLMClient, build_llm_client
 from app.infrastructure.logging import setup_logging
@@ -97,7 +97,7 @@ def create_app(
 
     session_service = TrainingSessionService(
         resolved_repository,
-        persona_generator=PersonaGenerator(resolved_settings.persona_random_seed),
+        persona_generator=UniversalFakePersonaGenerator(resolved_settings.persona_random_seed),
         default_scenario_id=resolved_settings.default_training_scenario_id,
     )
     turn_service = TurnService(

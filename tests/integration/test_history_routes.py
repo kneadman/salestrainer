@@ -64,7 +64,6 @@ def _seed_account_with_users(
         client_account_id=account.id,
         name="Default config",
         default_scenario_id="generic_b2b_first_contact",
-        product_line="accounting_outsourcing",
         persona_policy={},
         ui_config={},
     )

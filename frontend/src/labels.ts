@@ -24,19 +24,19 @@ export function statusLabel(value: string | boolean | null | undefined): string 
 
 export function scenarioLabel(id: string | null | undefined): string {
   const labels: Record<string, string> = {
-    generic_b2b_first_contact: "Первичный B2B-контакт",
-    sales_audit_cold_outreach: "Аудит отдела продаж",
-    accounting_outsource_cold_outreach: "Бухгалтерский аутсорсинг",
+    first_contact_discovery: "Первичный контакт и разведка",
+    qualification_and_authority: "Квалификация и полномочия",
+    needs_diagnosis: "Диагностика потребностей",
+    objection_handling: "Работа с возражениями",
+    price_and_value: "Цена и ценность",
+    bad_experience_recovery: "Восстановление доверия",
+    next_step_booking: "Назначение следующего шага",
+    follow_up_after_pause: "Возврат после паузы",
+    generic_b2b_first_contact: "Первичный контакт и разведка",
+    sales_audit_cold_outreach: "Первичный контакт и разведка",
+    accounting_outsource_cold_outreach: "Первичный контакт и разведка",
   };
   return id ? labels[id] ?? id : "Не указано";
-}
-
-export function productLineLabel(value: string | null | undefined): string {
-  const labels: Record<string, string> = {
-    accounting_outsourcing: "Бухгалтерский аутсорсинг",
-    outsourced_cfo: "Финансовый директор на аутсорсинге",
-  };
-  return value ? labels[value] ?? value : "Не указано";
 }
 
 export function providerLabel(value: string | null | undefined): string {
