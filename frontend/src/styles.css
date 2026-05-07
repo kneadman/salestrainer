@@ -1458,22 +1458,22 @@ button:disabled {
 }
 
 .client-trainer-layout--has-report {
-  width: min(1200px, 100%);
-  grid-template-columns: minmax(0, 320px) auto minmax(320px, 430px);
+  width: min(1180px, 100%);
+  grid-template-columns: minmax(0, 320px) max-content minmax(320px, 430px);
   gap: 16px;
 }
 
 .trainer-report-rail {
   align-self: start;
   position: sticky;
-  top: 80px;
+  top: 84px;
   display: flex;
   justify-content: center;
 }
 
 .trainer-report-open-button {
   min-height: 38px;
-  min-width: 108px;
+  min-width: 84px;
   padding: 0 18px;
   border-radius: 999px;
   font-weight: 700;
@@ -1517,7 +1517,7 @@ button:disabled {
   .trainer-report-rail {
     position: static;
     order: 2;
-    justify-content: flex-start;
+    justify-content: stretch;
   }
 
   .phone-shell {
