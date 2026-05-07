@@ -48,9 +48,12 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   /** Run one typed JSON API request with cookies, CSRF, and normalized errors. */
   let response: Response;
   const method = (init?.method ?? "GET").toUpperCase();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const headers: Record<string, string> = isFormDataBody
+    ? {}
+    : {
+        "Content-Type": "application/json",
+      };
   const initHeaders = new Headers(init?.headers);
   initHeaders.forEach((value, key) => {
     headers[key] = value;

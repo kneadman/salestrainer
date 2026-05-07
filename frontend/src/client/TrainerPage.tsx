@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, createSession, finishSession, getReport, getSession, sendMessage } from "../api";
+import { ApiError, createSession, finishSession, getReport, getSession, sendMessage, transcribeSpeech } from "../api";
 import { ChatWindow } from "../components/ChatWindow";
 import { Composer } from "../components/Composer";
 import { FactsPanel } from "../components/FactsPanel";
@@ -23,6 +23,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [inputValue, setInputValue] = useState("");
   const [busyAction, setBusyAction] = useState<"boot" | "create" | "send" | "finish" | null>("boot");
   const [error, setError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
   const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -69,11 +70,13 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const canSend = session?.status === "active" && !loading;
   const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
   const canShowReportButton = session?.status === "finished" && (report !== null || reportPayload !== null);
+  const voiceDisabled = !session || session.status !== "active" || loading;
 
   const startNewSession = async () => {
     /** Start a new Redis-backed training session through the existing API. */
     setBusyAction("create");
     setError(null);
+    setVoiceError(null);
     setReportModalOpen(false);
     setReport(null);
     setReportPayload(null);
@@ -101,6 +104,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     setInputValue("");
     setBusyAction("send");
     setError(null);
+    setVoiceError(null);
     try {
       const response = await sendMessage(session.session_id, message);
       setSession(response.session);
@@ -113,6 +117,19 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     }
   };
 
+  const handleTranscribeAudio = async (audio: Blob) => {
+    /** Insert recognized text into the textarea without sending a simulator turn. */
+    if (!session || session.status !== "active") {
+      return;
+    }
+    setVoiceError(null);
+    const response = await transcribeSpeech(audio, session.session_id);
+    if (!response.text.trim()) {
+      return;
+    }
+    setInputValue((currentValue) => appendTranscribedText(currentValue, response.text));
+  };
+
   const handleFinish = async () => {
     /** Finish the active session and open the saved report in a modal. */
     if (!session || loading || session.status !== "active") {
@@ -120,6 +137,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     }
     setBusyAction("finish");
     setError(null);
+    setVoiceError(null);
     try {
       const response = await finishSession(session.session_id);
       setSession(response.session);
@@ -134,7 +152,11 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   };
 
   if (busyAction === "boot") {
-    return <div className="client-state"><strong>Загрузка тренажёра</strong></div>;
+    return (
+      <div className="client-state">
+        <strong>Загрузка тренажёра</strong>
+      </div>
+    );
   }
 
   if (!session) {
@@ -160,11 +182,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
         </div>
         {canShowReportButton ? (
           <div className="trainer-report-rail">
-            <button
-              type="button"
-              className="secondary-button trainer-report-open-button"
-              onClick={() => setReportModalOpen(true)}
-            >
+            <button type="button" className="secondary-button trainer-report-open-button" onClick={() => setReportModalOpen(true)}>
               Отчёт
             </button>
           </div>
@@ -179,15 +197,41 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
           />
           {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
           <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
-          <Composer value={inputValue} onChange={setInputValue} onSend={handleSend} disabled={!canSend} loading={isSending} />
+          <Composer
+            value={inputValue}
+            onChange={setInputValue}
+            onSend={handleSend}
+            disabled={!canSend}
+            loading={isSending}
+            onTranscribeAudio={async (audio) => {
+              try {
+                await handleTranscribeAudio(audio);
+              } catch (transcriptionError) {
+                const message = getClientErrorMessage(transcriptionError);
+                setVoiceError(message);
+                throw new Error(message);
+              }
+            }}
+            voiceDisabled={voiceDisabled}
+            voiceError={voiceError}
+          />
         </PhoneShell>
       </main>
-      <TrainingReportModal
-        open={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        report={report}
-        payload={reportPayload}
-      />
+      <TrainingReportModal open={reportModalOpen} onClose={() => setReportModalOpen(false)} report={report} payload={reportPayload} />
     </>
   );
+}
+
+function appendTranscribedText(currentValue: string, transcribedText: string): string {
+  const trimmedTranscript = transcribedText.trim();
+  if (!trimmedTranscript) {
+    return currentValue;
+  }
+  if (!currentValue.trim()) {
+    return trimmedTranscript;
+  }
+  if (currentValue.endsWith(" ") || currentValue.endsWith("\n")) {
+    return `${currentValue}${trimmedTranscript}`;
+  }
+  return `${currentValue} ${trimmedTranscript}`;
 }

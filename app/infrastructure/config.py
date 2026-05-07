@@ -42,6 +42,23 @@ class Settings(BaseSettings):
     login_rate_limit_attempts: int = Field(default=5, ge=0)
     login_rate_limit_window_seconds: int = Field(default=300, ge=1)
     secret_encryption_key: str = ""
+    stt_enabled: bool = False
+    stt_backend: str = "fake"
+    stt_language: str = "ru"
+    stt_max_upload_bytes: int = Field(default=6_000_000, ge=100_000, le=25_000_000)
+    stt_max_audio_seconds: int = Field(default=90, ge=1, le=300)
+    stt_timeout_seconds: int = Field(default=120, ge=5, le=300)
+    stt_concurrency: int = Field(default=1, ge=1, le=2)
+    stt_max_concurrent_jobs: int = Field(default=1, ge=1, le=2)
+    stt_queue_wait_timeout_seconds: int = Field(default=20, ge=1, le=120)
+    stt_per_user_concurrency: int = Field(default=1, ge=1, le=2)
+    stt_reject_unknown_duration: bool = True
+    stt_temp_dir: str = "/tmp/salestrainer-stt"
+    stt_whisper_cpp_binary: str = ""
+    stt_model_path: str = ""
+    stt_ffprobe_binary: str = "ffprobe"
+    stt_ffmpeg_binary: str = "ffmpeg"
+    stt_normalization_mode: str = "light"
 
     @property
     def is_local_env(self) -> bool:
