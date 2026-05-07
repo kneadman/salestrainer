@@ -1,4 +1,4 @@
-import type { AuthUser } from "../types";
+import type { AuthUser, ReportPayload } from "../types";
 
 export type AdminRoute =
   | "dashboard"
@@ -157,6 +157,7 @@ export type HistoryTurnDTO = {
 export type HistoryReportDTO = {
   session_id: string;
   report: string;
+  report_payload?: ReportPayload | null;
   report_version: number;
   created_at: string;
   updated_at: string;
