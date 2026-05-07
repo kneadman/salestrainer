@@ -11,6 +11,7 @@ export function StructuredReportSummary({ payload }: StructuredReportSummaryProp
   if (payload === null) {
     return null;
   }
+
   if (!isJudgeSessionOutputPayload(payload)) {
     return (
       <section className="structured-report-summary">
@@ -24,22 +25,24 @@ export function StructuredReportSummary({ payload }: StructuredReportSummaryProp
     );
   }
 
+  const judgePayload = payload;
+
   return (
     <section className="structured-report-summary">
       <div className="structured-report-summary__header">
         <div>
           <h2>Структурированная оценка</h2>
-          <p>{payload.executive_summary}</p>
+          <p>{judgePayload.executive_summary}</p>
         </div>
         <div className="structured-report-summary__score">
-          <strong>{payload.overall_score}/100</strong>
-          <span>{gradeLabel(payload.overall_grade)}</span>
+          <strong>{judgePayload.overall_score}/100</strong>
+          <span>{gradeLabel(judgePayload.overall_grade)}</span>
         </div>
       </div>
       <BentoReportGrid
-        blocks={payload.bento_blocks}
-        skillScores={payload.skill_scores}
-        recommendations={payload.recommendations}
+        blocks={judgePayload.bento_blocks}
+        skillScores={judgePayload.skill_scores}
+        recommendations={judgePayload.recommendations}
       />
     </section>
   );

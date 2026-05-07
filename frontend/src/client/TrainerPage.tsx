@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, createSession, finishSession, getReport, getSession, sendMessage } from "../api";
+import { ApiError, createSession, finishSession, getReport, getSession, sendMessage, transcribeSpeech } from "../api";
 import { ChatWindow } from "../components/ChatWindow";
 import { Composer } from "../components/Composer";
 import { FactsPanel } from "../components/FactsPanel";
@@ -23,6 +23,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [inputValue, setInputValue] = useState("");
   const [busyAction, setBusyAction] = useState<"boot" | "create" | "send" | "finish" | null>("boot");
   const [error, setError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
   const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -68,6 +69,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const loading = busyAction !== null;
   const isSending = busyAction === "send";
   const canSend = session?.status === "active" && !loading;
+  const voiceDisabled = !session || session.status !== "active" || loading;
   const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
   const canShowReportButton = session?.status === "finished" && (report !== null || reportPayload !== null);
 
@@ -75,6 +77,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     /** Start a new runtime session and clear finished-session UI state before the request. */
     setBusyAction("create");
     setError(null);
+    setVoiceError(null);
     setReport(null);
     setReportPayload(null);
     setReportModalOpen(false);
@@ -104,6 +107,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     setInputValue("");
     setBusyAction("send");
     setError(null);
+    setVoiceError(null);
 
     try {
       const response = await sendMessage(session.session_id, message);
@@ -117,20 +121,38 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     }
   };
 
+  const handleTranscribeAudio = async (audio: Blob) => {
+    /** Upload one recorded batch for STT and append the recognized text to the textarea. */
+    if (!session || session.status !== "active") {
+      return;
+    }
+
+    setVoiceError(null);
+    const response = await transcribeSpeech(audio, session.session_id);
+
+    if (!response.text.trim()) {
+      return;
+    }
+
+    setInputValue((currentValue) => appendTranscribedText(currentValue, response.text));
+  };
+
   const handleFinish = async () => {
-    /** Finish the active session and keep the report available only via the modal entry point. */
+    /** Finish the active session and reopen the saved report modal as soon as the response arrives. */
     if (!session || loading || session.status !== "active") {
       return;
     }
 
     setBusyAction("finish");
     setError(null);
+    setVoiceError(null);
 
     try {
       const response = await finishSession(session.session_id);
       setSession(response.session);
       setReport(response.report);
       setReportPayload(response.report_payload ?? null);
+      setReportModalOpen(true);
     } catch (finishError) {
       setError(getClientErrorMessage(finishError));
     } finally {
@@ -184,6 +206,17 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
               onSend={handleSend}
               disabled={!canSend}
               loading={isSending}
+              onTranscribeAudio={async (audio) => {
+                try {
+                  await handleTranscribeAudio(audio);
+                } catch (transcriptionError) {
+                  const message = getClientErrorMessage(transcriptionError);
+                  setVoiceError(message);
+                  throw new Error(message);
+                }
+              }}
+              voiceDisabled={voiceDisabled}
+              voiceError={voiceError}
             />
           </PhoneShell>
         </section>
@@ -196,4 +229,18 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
       />
     </>
   );
+}
+
+function appendTranscribedText(currentValue: string, transcribedText: string): string {
+  const trimmedTranscript = transcribedText.trim();
+  if (!trimmedTranscript) {
+    return currentValue;
+  }
+  if (!currentValue.trim()) {
+    return trimmedTranscript;
+  }
+  if (currentValue.endsWith(" ") || currentValue.endsWith("\n")) {
+    return `${currentValue}${trimmedTranscript}`;
+  }
+  return `${currentValue} ${trimmedTranscript}`;
 }

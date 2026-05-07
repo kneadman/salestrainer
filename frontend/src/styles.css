@@ -282,66 +282,6 @@ button:disabled {
   gap: 16px;
 }
 
-.training-report-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgba(3, 8, 16, 0.72);
-  backdrop-filter: blur(8px);
-}
-
-.training-report-modal__dialog {
-  width: min(960px, 100%);
-  max-height: min(92dvh, 980px);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(14, 23, 38, 0.98) 0%, rgba(8, 14, 24, 0.98) 100%);
-  box-shadow: 0 30px 120px rgba(2, 6, 15, 0.48);
-  overflow: hidden;
-}
-
-.training-report-modal__header {
-  padding: 20px 22px 16px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.training-report-modal__header h2 {
-  margin: 6px 0 0;
-}
-
-.training-report-modal__body {
-  min-height: 0;
-  overflow: auto;
-  padding: 0 22px 22px;
-}
-
-.training-report-modal__text,
-.training-report-modal__empty {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: #e5eefc;
-}
-
-.training-report-modal__text {
-  padding: 18px 0 0;
-  font-family: inherit;
-}
-
-.training-report-modal__empty {
-  padding: 18px 0 0;
-  color: #b8c5d9;
-}
-
 @keyframes trainer-report-glint {
   0%,
   35% {
@@ -1858,11 +1798,11 @@ button:disabled {
     justify-content: flex-start;
   }
 
-  .training-report-modal {
+  .training-report-modal__backdrop {
     padding: 12px;
   }
 
-  .training-report-modal__dialog {
+  .training-report-modal {
     max-height: min(100dvh - 24px, 980px);
     border-radius: 18px;
   }
