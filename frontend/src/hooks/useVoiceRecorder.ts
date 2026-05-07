@@ -5,6 +5,7 @@ type VoiceRecorderState = "idle" | "recording" | "transcribing" | "error";
 type UseVoiceRecorderOptions = {
   enabled: boolean;
   onTranscribeAudio: (audio: Blob) => Promise<void>;
+  maxDurationSeconds?: number;
 };
 
 type UseVoiceRecorderResult = {
@@ -21,6 +22,7 @@ type UseVoiceRecorderResult = {
 export function useVoiceRecorder({
   enabled,
   onTranscribeAudio,
+  maxDurationSeconds = 90,
 }: UseVoiceRecorderOptions): UseVoiceRecorderResult {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -79,6 +81,13 @@ export function useVoiceRecorder({
       void stopInternal();
     }
   }, [enabled, state, stopInternal]);
+
+  useEffect(() => {
+    if (state !== "recording" || elapsedSeconds < maxDurationSeconds) {
+      return;
+    }
+    void stopInternal();
+  }, [elapsedSeconds, maxDurationSeconds, state, stopInternal]);
 
   useEffect(() => {
     return () => {

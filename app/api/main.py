@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from app.api.dependencies import ServiceContainer
 from app.application.judgement_service import JudgementService
 from app.api.routes import router
-from app.api.speech_routes import router as speech_router
+from app.api.speech_routes import build_speech_router
 from app.api.schemas import ErrorBody, ErrorResponse
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
@@ -23,6 +23,7 @@ from app.infrastructure.logging import setup_logging
 from app.infrastructure.redis_client import build_repository
 from app.infrastructure.session_repository import SessionRepository
 from app.infrastructure.stt_client import STTClient, build_stt_client
+from app.infrastructure.stt_concurrency import LocalSTTConcurrencyLimiter
 from app.infrastructure.summary_compressor import build_summary_compressor
 from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
 from app.identity.rate_limit import build_login_rate_limiter
@@ -124,6 +125,11 @@ def create_app(
     speech_service = SpeechService(
         resolved_stt_client,
         settings=resolved_settings,
+        concurrency_limiter=LocalSTTConcurrencyLimiter(
+            max_jobs=resolved_settings.stt_concurrency,
+            queue_wait_timeout_seconds=resolved_settings.stt_queue_wait_timeout_seconds,
+            per_user_limit=resolved_settings.stt_per_user_concurrency,
+        ),
     )
 
     app = FastAPI(title="Sales Trainer MVP API", version="0.1.0")
@@ -180,7 +186,8 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)
     app.include_router(router)
-    app.include_router(speech_router)
+    if resolved_settings.stt_enabled:
+        app.include_router(build_speech_router())
     app.include_router(history_router)
     app.include_router(client_portal_router)
     app.include_router(internal_admin_router)

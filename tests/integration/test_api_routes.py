@@ -250,17 +250,20 @@ def test_api_speech_transcribe_rejects_authenticated_request_without_csrf() -> N
 
 def test_api_speech_transcribe_accepts_small_audio_and_normalizes_text() -> None:
     db_session = _create_db_session()
+    repository = InMemorySessionRepository()
     _seed_authenticated_user(db_session)
     client = _create_client(
         db_session,
+        repository=repository,
         settings=_speech_settings(),
         stt_client=StubSTTClient(),
     )
     _login(client)
+    session_id = _create_session_for_logged_in_user(client)
 
     response = client.post(
         "/api/speech/transcribe",
-        data={"session_id": "session-123"},
+        data={"session_id": session_id},
         files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
     )
 

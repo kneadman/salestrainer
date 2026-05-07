@@ -55,3 +55,11 @@ class UnsupportedAudioTypeError(SalesTrainerError):
 
 class SpeechConcurrencyLimitError(SalesTrainerError):
     """Raised when the speech backend is already processing another request."""
+
+
+class SpeechQueueTimeoutError(SalesTrainerError):
+    """Raised when a speech request waited too long for a global worker slot."""
+
+
+class SpeechSessionAccessError(SalesTrainerError):
+    """Raised when a user cannot access the provided session for speech operations."""
