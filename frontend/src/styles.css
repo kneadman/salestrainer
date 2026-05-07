@@ -57,6 +57,25 @@ button {
   gap: 16px;
 }
 
+.client-trainer-layout--has-report {
+  width: min(1180px, 100%);
+  grid-template-columns: minmax(0, 320px) max-content minmax(320px, 430px);
+  gap: 16px;
+}
+
+.trainer-report-rail {
+  align-self: start;
+  position: sticky;
+  top: 84px;
+  display: flex;
+  justify-content: center;
+}
+
+.trainer-report-open-button {
+  min-width: 84px;
+  white-space: nowrap;
+}
+
 .panel-card,
 .welcome-card,
 .login-card {
@@ -1457,27 +1476,11 @@ button:disabled {
   width: min(1120px, 100%);
 }
 
-.client-trainer-layout--has-report {
-  width: min(1180px, 100%);
-  grid-template-columns: minmax(0, 320px) max-content minmax(320px, 430px);
-  gap: 16px;
-}
-
-.trainer-report-rail {
-  align-self: start;
-  position: sticky;
-  top: 84px;
-  display: flex;
-  justify-content: center;
-}
-
 .trainer-report-open-button {
   min-height: 38px;
-  min-width: 84px;
   padding: 0 18px;
   border-radius: 999px;
   font-weight: 700;
-  white-space: nowrap;
   box-shadow: 0 14px 32px rgba(4, 8, 18, 0.24);
 }
 
@@ -1518,6 +1521,10 @@ button:disabled {
     position: static;
     order: 2;
     justify-content: stretch;
+  }
+
+  .trainer-report-open-button {
+    width: 100%;
   }
 
   .phone-shell {
