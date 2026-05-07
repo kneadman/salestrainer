@@ -46,20 +46,27 @@ class LocalSTTConcurrencyLimiter:
         self._per_user_limit = per_user_limit
         self._global_active_jobs = 0
         self._user_active_jobs: dict[str, int] = defaultdict(int)
+        self._user_pending_jobs: dict[str, int] = defaultdict(int)
         self._condition = asyncio.Condition()
 
     async def acquire(self, *, user_key: str) -> STTConcurrencyLease:
         """Reserve one job slot or fail with a controlled queue/per-user error."""
         async with self._condition:
-            if self._user_active_jobs[user_key] >= self._per_user_limit:
+            if (self._user_active_jobs[user_key] + self._user_pending_jobs[user_key]) >= self._per_user_limit:
                 raise SpeechConcurrencyLimitError("Another speech transcription is already running for this user.")
+            self._user_pending_jobs[user_key] += 1
             try:
                 await asyncio.wait_for(
                     self._condition.wait_for(lambda: self._global_active_jobs < self._max_jobs),
                     timeout=self._queue_wait_timeout_seconds,
                 )
             except TimeoutError as error:
+                self._decrement_pending(user_key)
                 raise SpeechQueueTimeoutError("Speech transcription queue is busy. Please try again later.") from error
+            except Exception:
+                self._decrement_pending(user_key)
+                raise
+            self._decrement_pending(user_key)
             self._global_active_jobs += 1
             self._user_active_jobs[user_key] += 1
             return STTConcurrencyLease(self, user_key)
@@ -73,3 +80,9 @@ class LocalSTTConcurrencyLimiter:
             else:
                 self._user_active_jobs[user_key] -= 1
             self._condition.notify_all()
+
+    def _decrement_pending(self, user_key: str) -> None:
+        if self._user_pending_jobs.get(user_key, 0) <= 1:
+            self._user_pending_jobs.pop(user_key, None)
+        else:
+            self._user_pending_jobs[user_key] -= 1

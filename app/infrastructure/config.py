@@ -49,12 +49,15 @@ class Settings(BaseSettings):
     stt_max_audio_seconds: int = Field(default=90, ge=1, le=300)
     stt_timeout_seconds: int = Field(default=120, ge=5, le=300)
     stt_concurrency: int = Field(default=1, ge=1, le=2)
+    stt_max_concurrent_jobs: int = Field(default=1, ge=1, le=2)
     stt_queue_wait_timeout_seconds: int = Field(default=20, ge=1, le=120)
     stt_per_user_concurrency: int = Field(default=1, ge=1, le=2)
+    stt_reject_unknown_duration: bool = True
     stt_temp_dir: str = "/tmp/salestrainer-stt"
     stt_whisper_cpp_binary: str = ""
     stt_model_path: str = ""
     stt_ffprobe_binary: str = "ffprobe"
+    stt_ffmpeg_binary: str = "ffmpeg"
     stt_normalization_mode: str = "light"
 
     @property

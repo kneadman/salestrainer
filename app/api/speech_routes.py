@@ -8,6 +8,8 @@ from app.api.schemas import ErrorResponse, SpeechTranscriptionResponse
 from app.application.speech_service import SpeechService
 from app.domain.errors import (
     SpeechConcurrencyLimitError,
+    SpeechDisabledError,
+    SpeechDurationUnknownError,
     SpeechQueueTimeoutError,
     SpeechToTextConfigurationError,
     SpeechTranscriptionError,
@@ -62,6 +64,10 @@ def build_speech_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
         except SpeechQueueTimeoutError as error:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(error)) from error
+        except SpeechDisabledError as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+        except SpeechDurationUnknownError as error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
         except SpeechToTextConfigurationError as error:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
         except SpeechTranscriptionError as error:

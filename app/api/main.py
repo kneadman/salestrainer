@@ -16,6 +16,8 @@ from app.application.session_service import TrainingSessionService
 from app.application.speech_service import SpeechService
 from app.application.turn_service import TurnService
 from app.domain.persona_generation import UniversalFakePersonaGenerator
+from app.infrastructure.audio_converter import AudioConverter
+from app.infrastructure.audio_duration_probe import AudioDurationProbe
 from app.infrastructure.config import Settings, get_settings
 from app.infrastructure.judge_client import build_judge_client
 from app.infrastructure.llm_client import LLMClient, build_llm_client
@@ -99,6 +101,8 @@ def create_app(
     repository: SessionRepository | None = None,
     llm_client: LLMClient | None = None,
     stt_client: STTClient | None = None,
+    audio_duration_probe: AudioDurationProbe | None = None,
+    audio_converter: AudioConverter | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     setup_logging(resolved_settings.log_level)
@@ -126,10 +130,12 @@ def create_app(
         resolved_stt_client,
         settings=resolved_settings,
         concurrency_limiter=LocalSTTConcurrencyLimiter(
-            max_jobs=resolved_settings.stt_concurrency,
+            max_jobs=max(resolved_settings.stt_concurrency, resolved_settings.stt_max_concurrent_jobs),
             queue_wait_timeout_seconds=resolved_settings.stt_queue_wait_timeout_seconds,
             per_user_limit=resolved_settings.stt_per_user_concurrency,
         ),
+        duration_probe=audio_duration_probe,
+        audio_converter=audio_converter,
     )
 
     app = FastAPI(title="Sales Trainer MVP API", version="0.1.0")
@@ -186,8 +192,7 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)
     app.include_router(router)
-    if resolved_settings.stt_enabled:
-        app.include_router(build_speech_router())
+    app.include_router(build_speech_router())
     app.include_router(history_router)
     app.include_router(client_portal_router)
     app.include_router(internal_admin_router)

@@ -63,3 +63,11 @@ class SpeechQueueTimeoutError(SalesTrainerError):
 
 class SpeechSessionAccessError(SalesTrainerError):
     """Raised when a user cannot access the provided session for speech operations."""
+
+
+class SpeechDisabledError(SalesTrainerError):
+    """Raised when speech transcription is disabled in runtime configuration."""
+
+
+class SpeechDurationUnknownError(SalesTrainerError):
+    """Raised when audio duration cannot be verified under fail-closed policy."""

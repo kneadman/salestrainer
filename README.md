@@ -564,6 +564,7 @@ Notes:
 - `nginx` proxies `/api/*` and `/auth/*` to the internal `backend:8000` service
 - `backend` connects to Redis through `redis://redis:6379/0`
 - `backend` connects to PostgreSQL through `postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer`
+- `backend` image now includes `ffmpeg`/`ffprobe`, which the STT path uses for browser-audio duration probing and WAV preprocessing before `whisper.cpp`
 - only port `8080` is exposed to the host
 
 Smoke checks through nginx:
