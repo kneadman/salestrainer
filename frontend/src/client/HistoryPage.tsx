@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { getHistorySessionDetail, getHistorySessions } from "./api";
+import { StructuredReportSummary } from "../components/StructuredReportSummary";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import { scenarioLabel, statusLabel } from "../labels";
@@ -105,7 +106,17 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
     <div className="client-page">
       <div className="client-page__header"><div><button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>← История</button><h1>Тренировка {detail.session.session_id.slice(0, 8)}</h1><p>{detail.session.summary ?? "Сводки нет."}</p></div><ClientBadge>{statusLabel(detail.session.status)}</ClientBadge></div>
       <section className="client-panel"><h2>Ходы</h2>{detail.turns.length === 0 ? <ClientState title="Ходов нет" /> : <div className="client-turn-list">{detail.turns.map((turn) => <article key={turn.turn_index}><ClientBadge>#{turn.turn_index}</ClientBadge><p><strong>Менеджер:</strong> {turn.manager_message}</p><p><strong>Клиент:</strong> {turn.client_answer}</p><p className="client-muted">Интерес {turn.interest_before} → {turn.interest_after}; этап {turn.stage_before} → {turn.stage_after}</p></article>)}</div>}</section>
-      <section className="client-panel"><h2>Отчёт</h2>{detail.report ? <pre className="client-report">{detail.report.report}</pre> : <ClientState title="Сохранённого отчёта нет" />}</section>
+      <section className="client-panel">
+        <h2>Отчёт</h2>
+        {detail.report ? (
+          <>
+            <StructuredReportSummary payload={detail.report.report_payload ?? null} />
+            <pre className="client-report">{detail.report.report}</pre>
+          </>
+        ) : (
+          <ClientState title="Сохранённого отчёта нет" />
+        )}
+      </section>
     </div>
   );
 }

@@ -58,6 +58,7 @@ def report_dto(record: TrainingReportRecord) -> HistoryReportDTO:
     return HistoryReportDTO(
         session_id=record.session_id,
         report=record.report_text,
+        report_payload=record.report_payload,
         report_version=record.report_version,
         created_at=record.created_at,
         updated_at=record.updated_at,

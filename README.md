@@ -361,6 +361,24 @@ Decision criteria: reliability, relevant cases, clear onboarding, transparent re
 Training goal: manager should discover role, current accounting process, pain, decision criteria, and earn a relevant next step.
 ```
 
+## Judgement Layer contract
+
+- Judge runs only after finish.
+- PR1 adds the strict Pydantic contract, PR2 adds `FakeJudgeClient` plus `JudgementService`, PR3 adds the reference judge prompt plus `StructuredJudgeClient`, PR4 wires `build_judge_client(settings)` into runtime, PR5 makes judge payload generation fail-open with minimal `report_payload` support, and PR6 adds typed frontend bento report rendering plus basic analytics from saved judge payloads.
+- Runtime dialogue flow does not change.
+- Judge still runs only after finish/report generation.
+- `JudgeSessionOutput` is persisted into `training_reports.report_payload`.
+- `GET /report` reuses saved `report_payload` when available instead of regenerating it.
+- If judge payload generation fails, `/finish` and `/report` still return the plain text report instead of failing the core flow.
+- API finish/report responses and history report DTOs now include optional `report_payload`.
+- Frontend opens the structured bento report in a modal after session finish. A compact `Отчёт` button is shown near the chat for finished sessions and reopens the saved report. The legacy plain text report is used only as a modal fallback when structured payload is unavailable or invalid.
+- Client/team analytics can optionally include basic aggregates from saved valid `JudgeSessionOutput` payloads such as average judge score and weakest skill.
+- Judge uses shared `YANDEX_API_KEY` and `YANDEX_BASE_URL`.
+- Optional judge routing env vars:
+  - `YANDEX_JUDGE_FOLDER_ID`
+  - `YANDEX_JUDGE_AGENT_ID`
+- User-facing judge text should be Russian by default unless the whole input session is clearly in another language.
+
 ## Demo run checklist
 
 1. Start the production-like local stack:
@@ -546,6 +564,7 @@ Notes:
 - `nginx` proxies `/api/*` and `/auth/*` to the internal `backend:8000` service
 - `backend` connects to Redis through `redis://redis:6379/0`
 - `backend` connects to PostgreSQL through `postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer`
+- `backend` image now includes `ffmpeg`/`ffprobe`, a built-in `whisper-cli`, and the default `ggml-base.bin` model, so browser-audio duration probing, WAV preprocessing, and `whisper.cpp` STT can run in-container without manual VPS setup
 - only port `8080` is exposed to the host
 
 Smoke checks through nginx:
@@ -554,6 +573,17 @@ Smoke checks through nginx:
 curl -i http://localhost:8080/auth/me
 curl -i http://localhost:8080/auth/csrf
 curl -i http://localhost:8080/api/health
+```
+
+STT container smoke test:
+
+```bash
+docker compose build --no-cache backend
+docker compose up -d backend
+docker compose exec backend bash -lc 'ldd /usr/local/bin/whisper-cli | grep "not found" || true'
+docker compose exec backend bash -lc 'ffmpeg -f lavfi -i sine=frequency=1000:duration=2 -ac 1 -ar 16000 /tmp/test.wav -y'
+docker compose exec backend bash -lc '"$STT_WHISPER_CPP_BINARY" -m "$STT_MODEL_PATH" -f /tmp/test.wav -l ru -otxt -of /tmp/test-out'
+docker compose exec backend cat /tmp/test-out.txt
 ```
 
 Expected results:

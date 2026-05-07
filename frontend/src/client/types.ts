@@ -1,3 +1,5 @@
+import type { JudgeSessionOutputDTO } from "../types";
+
 export type ClientRoute =
   | "dashboard"
   | "trainer"
@@ -27,6 +29,11 @@ export type ClientUserAnalyticsDTO = {
   completion_rate: number;
   avg_final_interest_score: number | null;
   avg_turn_count: number | null;
+  avg_judgement_score: number | null;
+  sessions_with_judgement: number;
+  weakest_skill_id: string | null;
+  weakest_skill_title: string | null;
+  weakest_skill_avg_score: number | null;
   last_activity_at: string | null;
   sessions_by_status: Record<string, number>;
   sessions_by_scenario: Record<string, number>;
@@ -66,6 +73,7 @@ export type HistoryTurnDTO = {
 export type HistoryReportDTO = {
   session_id: string;
   report: string;
+  report_payload?: JudgeSessionOutputDTO | JsonObject | null;
   report_version: number;
   created_at: string;
   updated_at: string;
@@ -104,6 +112,8 @@ export type TeamUsageSummaryDTO = {
   total_turns: number;
   avg_final_interest_score: number | null;
   avg_turn_count: number | null;
+  avg_judgement_score: number | null;
+  sessions_with_judgement: number;
   sessions_by_status: Record<string, number>;
   sessions_by_scenario: Record<string, number>;
   sessions_by_training_config: Record<string, number>;

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.application.persona_generation_service import PersonaGenerationService
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
+from app.application.speech_service import SpeechService
 from app.application.turn_service import TurnService
 from app.infrastructure.config import Settings
 from app.infrastructure.db import get_db_session
@@ -40,6 +41,11 @@ def get_report_service(
     container: ServiceContainer = Depends(get_service_container),
 ) -> ReportService:
     return container.report_service
+
+
+def get_speech_service(request: Request) -> SpeechService:
+    """Return the shared speech transcription service."""
+    return request.app.state.speech_service
 
 
 def get_app_settings(request: Request) -> Settings:

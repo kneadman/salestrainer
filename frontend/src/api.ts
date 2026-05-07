@@ -4,6 +4,7 @@ import type {
   SessionDetailResponse,
   SessionReportResponse,
   SessionStateResponse,
+  SpeechTranscriptionResponse,
   TurnResponse,
 } from "./types";
 import { ApiError, clearCachedCsrfToken, request } from "./apiClient";
@@ -54,6 +55,19 @@ export function sendMessage(sessionId: string, managerMessage: string): Promise<
   });
 }
 
+export function transcribeSpeech(audio: Blob, sessionId?: string): Promise<SpeechTranscriptionResponse> {
+  /** Upload one recorded audio batch for backend STT without sending a training turn. */
+  const formData = new FormData();
+  formData.append("audio", audio, `voice-input.${_extensionForAudio(audio.type)}`);
+  if (sessionId) {
+    formData.append("session_id", sessionId);
+  }
+  return request<SpeechTranscriptionResponse>("/api/speech/transcribe", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export function finishSession(sessionId: string): Promise<FinishSessionResponse> {
   /** Finish a runtime training session and return its report. */
   return request<FinishSessionResponse>(`/api/sessions/${sessionId}/finish`, {
@@ -73,4 +87,18 @@ export function submitLead(payload: Record<string, unknown>): Promise<{ status: 
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+function _extensionForAudio(mimeType: string): string {
+  /** Keep a stable file extension so the backend sees a matching container hint. */
+  if (mimeType.includes("ogg")) {
+    return "ogg";
+  }
+  if (mimeType.includes("mp4")) {
+    return "m4a";
+  }
+  if (mimeType.includes("mpeg")) {
+    return "mp3";
+  }
+  return "webm";
 }
