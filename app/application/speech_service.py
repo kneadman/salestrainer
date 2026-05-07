@@ -92,12 +92,18 @@ class SpeechService:
                 temp_path,
                 content_type=normalized_content_type,
             )
-            self._validate_duration(duration_ms, normalized_content_type=normalized_content_type)
             converted_path = await run_in_threadpool(
                 self._audio_converter.to_wav_16k_mono,
                 temp_path,
                 source_content_type=normalized_content_type,
             )
+            if duration_ms is None and normalized_content_type not in {"audio/wav", "audio/x-wav"}:
+                duration_ms = await run_in_threadpool(
+                    self._duration_probe.get_duration_ms,
+                    converted_path,
+                    content_type="audio/wav",
+                )
+            self._validate_duration(duration_ms, normalized_content_type=normalized_content_type)
             stt_result = await run_in_threadpool(
                 self._stt_client.transcribe,
                 converted_path,
