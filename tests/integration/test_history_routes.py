@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -10,7 +11,12 @@ from sqlalchemy.pool import StaticPool
 
 from app.access.repository import AccessRepository
 from app.api.main import create_app
+from app.application.report_service import ReportService
+from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, ReportRecommendation, SkillScore
+from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
 from app.history.models import TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
+from app.history.repository import HistoryRepository
+from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
 from app.identity.models import User
 from app.identity.repository import IdentityRepository
@@ -48,6 +54,59 @@ def _create_client(db_session: Session, repository: InMemorySessionRepository) -
 
     app.dependency_overrides[get_db_session] = override_get_db_session
     return TestClient(app)
+
+
+class CountingJudgementService:
+    def __init__(self) -> None:
+        """Count how many times report payload generation actually invokes judge logic."""
+        self.calls = 0
+
+    def judge_session(self, session: TrainingSessionState) -> JudgeSessionOutput:
+        """Return a minimal valid structured judge payload and increment the call counter."""
+        self.calls += 1
+        evidence_indexes = [1] if session.turn_count else []
+        return JudgeSessionOutput(
+            overall_score=70,
+            overall_grade="normal",
+            outcome="Итог нормальный.",
+            executive_summary="Сессия завершена и оценена.",
+            bento_blocks=[
+                BentoReportBlock(
+                    id="summary",
+                    title="Итог",
+                    type="summary",
+                    severity="neutral",
+                    short_text="Краткий итог.",
+                    detail="Подробный итог.",
+                    evidence_turn_indexes=evidence_indexes,
+                )
+            ],
+            skill_scores=[
+                SkillScore(
+                    id="discovery_quality",
+                    title="Discovery quality",
+                    score=70,
+                    severity="yellow",
+                    explanation="Навык проявлен на среднем уровне.",
+                    evidence_turn_indexes=evidence_indexes,
+                )
+            ],
+            recommendations=[
+                ReportRecommendation(
+                    title="Уточнить следующий шаг",
+                    description="Нужно добавить больше конкретики перед следующим шагом.",
+                    example_phrase=None,
+                    priority="medium",
+                )
+            ],
+            final_verdict="Стабильный тестовый вердикт.",
+        )
+
+
+class CrashingJudgementService:
+    def judge_session(self, session: TrainingSessionState) -> JudgeSessionOutput:
+        """Raise a deterministic error to verify fail-open API behavior."""
+        raise RuntimeError("judge exploded")
 
 
 def _seed_account_with_users(
@@ -143,6 +202,7 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert turns[0].client_state_snapshot is not None
     assert report is not None
     assert report.report_text
+    assert report.report_payload is not None
     assert {"session_started", "turn_processed", "session_finished", "report_generated"}.issubset(set(event_types))
 
     history_response = client.get(f"/api/history/sessions/{session_id}")
@@ -156,6 +216,8 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert "llm_response_snapshot" not in history_response.text
     assert report_response.status_code == 200
     assert report_response.json()["report"] == report.report_text
+    assert "report_payload" in report_response.json()
+    assert report_response.json()["report_payload"] == report.report_payload
     db_session.close()
 
 
@@ -224,4 +286,183 @@ def test_history_access_rules_for_manager_lead_and_internal_admin() -> None:
 
     anonymous_client = _create_client(db_session, repository)
     assert anonymous_client.get("/api/history/sessions").status_code == 401
+    db_session.close()
+
+
+def test_history_service_persists_report_payload_without_exposing_it_in_dto() -> None:
+    """Verify explicit report_payload is saved in the persistent report record."""
+    db_session = _create_db_session()
+    account, training_config, users = _seed_account_with_users(
+        db_session,
+        slug="acme-payload",
+        users=[("manager@example.com", "client_manager")],
+    )
+    history_service = HistoryService(HistoryRepository(db_session))
+    now = datetime.now(tz=UTC)
+    session = TrainingSessionState(
+        session_id=uuid4(),
+        scenario_id="sales_audit_cold_outreach",
+        status="finished",
+        persona=PersonaProfile(
+            id="generated_persona",
+            display_name="Unknown B2B contact",
+            role="owner",
+            industry="professional_services",
+            company_size="20-50",
+            authority_level="final_decider",
+            behavior_model="analytical_and_cautious",
+        ),
+        interest_score=52,
+        stage="need_discovery",
+        client_state=ClientState(
+            tone="neutral",
+            trust=38,
+            irritation=10,
+            urgency=24,
+            price_sensitivity=40,
+        ),
+        summary="Finished session for payload persistence test.",
+        public_brief="Brief",
+        turns=[],
+        turn_evaluations=[],
+        recent_turns=[],
+        turn_count=0,
+        state_version=2,
+        created_at=now,
+        updated_at=now,
+    )
+    history_service.record_session_started(
+        session=session,
+        client_account_id=account.id,
+        user_id=users["manager@example.com"].id,
+        training_config_id=training_config.id,
+    )
+    payload = {
+        "schema_version": 1,
+        "overall_score": 74,
+        "overall_grade": "good",
+    }
+
+    history_service.record_session_finished_with_report(
+        session=session,
+        report_text="Report text",
+        report_payload=payload,
+        user_id=users["manager@example.com"].id,
+        client_account_id=account.id,
+        training_config_id=training_config.id,
+    )
+
+    record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == session.session_id))
+
+    assert record is not None
+    assert record.report_payload == payload
+    db_session.close()
+
+
+def test_get_report_reuses_saved_report_payload_without_regenerating_judge() -> None:
+    """GET /report should reuse persisted report_payload instead of re-running judge logic."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-reuse",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    counting_judgement_service = CountingJudgementService()
+    client.app.state.services.report_service = ReportService(
+        repository,
+        judgement_service=counting_judgement_service,
+    )
+    _login(client, "manager@example.com")
+
+    session_id = _start_turn_finish(client)
+
+    assert counting_judgement_service.calls == 1
+
+    first_report = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+    assert first_report is not None
+    assert first_report.report_payload is not None
+
+    report_response = client.get(f"/api/sessions/{session_id}/report")
+
+    assert report_response.status_code == 200
+    assert counting_judgement_service.calls == 1
+    assert "report_payload" in report_response.json()
+    assert report_response.json()["report_payload"] == first_report.report_payload
+    db_session.close()
+
+
+def test_finish_session_returns_null_payload_but_persists_fallback_report_payload_when_judge_fails() -> None:
+    """API returns report_payload=null after judge failure, while HistoryService persists a fallback DB payload by design.
+
+    The response-level null payload is expected because Judge generation crashed in the request flow.
+    The persisted fallback payload is also expected because HistoryService keeps minimal structured report data in DB.
+    That difference is intentional and should not be treated as a contradiction.
+    """
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-judge-fail-open",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    client.app.state.services.report_service = ReportService(
+        repository,
+        judgement_service=CrashingJudgementService(),
+    )
+    _login(client, "manager@example.com")
+
+    create_response = client.post("/api/sessions", json={})
+    assert create_response.status_code == 201
+    session_id = create_response.json()["session"]["session_id"]
+    turn_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you solve this process today?"},
+    )
+    assert turn_response.status_code == 200
+
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+    report_record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+
+    assert finish_response.status_code == 200
+    assert finish_response.json()["report"]
+    assert "report_payload" in finish_response.json()
+    assert finish_response.json()["report_payload"] is None
+    assert report_record is not None
+    assert report_record.report_text
+    assert report_record.report_payload == {
+        "status": "finished",
+        "turn_count": finish_response.json()["session"]["turn_count"],
+        "final_interest_score": finish_response.json()["session"]["interest"]["score"],
+        "final_stage": finish_response.json()["session"]["stage"],
+    }
+    db_session.close()
+
+
+def test_history_report_response_exposes_saved_report_payload() -> None:
+    """Persistent history report DTO should include the saved structured judge payload."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-history-payload",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    counting_judgement_service = CountingJudgementService()
+    client.app.state.services.report_service = ReportService(
+        repository,
+        judgement_service=counting_judgement_service,
+    )
+    _login(client, "manager@example.com")
+
+    session_id = _start_turn_finish(client)
+    report_record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+    history_report_response = client.get(f"/api/history/sessions/{session_id}/report")
+
+    assert history_report_response.status_code == 200
+    assert "report_payload" in history_report_response.json()
+    assert history_report_response.json()["report_payload"] == report_record.report_payload
     db_session.close()

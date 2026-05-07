@@ -28,6 +28,71 @@ export type TurnPublicDTO = {
   created_at: string;
 };
 
+export type JudgementSeverity = "green" | "yellow" | "red" | "neutral";
+export type JudgementGrade = "critical" | "weak" | "normal" | "good" | "strong";
+export type FindingImpact = "low" | "medium" | "high";
+export type BentoBlockType =
+  | "summary"
+  | "score"
+  | "strength"
+  | "weakness"
+  | "missed_context"
+  | "recommendation"
+  | "timeline"
+  | "next_step";
+
+export type BentoReportBlockDTO = {
+  id: string;
+  title: string;
+  type: BentoBlockType;
+  severity: JudgementSeverity;
+  score?: number | null;
+  short_text: string;
+  detail: string;
+  evidence_turn_indexes: number[];
+};
+
+export type SkillScoreDTO = {
+  id: string;
+  title: string;
+  score: number;
+  severity: JudgementSeverity;
+  explanation: string;
+  evidence_turn_indexes: number[];
+};
+
+export type ReportFindingDTO = {
+  title: string;
+  description: string;
+  evidence_turn_indexes: number[];
+  impact: FindingImpact;
+};
+
+export type ReportRecommendationDTO = {
+  title: string;
+  description: string;
+  example_phrase?: string | null;
+  priority: FindingImpact;
+};
+
+export type JudgeSessionOutputDTO = {
+  schema_version: 1;
+  overall_score: number;
+  overall_grade: JudgementGrade;
+  outcome: string;
+  executive_summary: string;
+  bento_blocks: BentoReportBlockDTO[];
+  skill_scores: SkillScoreDTO[];
+  key_strengths: ReportFindingDTO[];
+  key_weaknesses: ReportFindingDTO[];
+  missed_opportunities: ReportFindingDTO[];
+  recommendations: ReportRecommendationDTO[];
+  final_verdict: string;
+  risk_flags: string[];
+};
+
+export type ReportPayload = JudgeSessionOutputDTO | Record<string, unknown>;
+
 export type SessionPublicDTO = {
   session_id: string;
   scenario_id: string;
@@ -66,11 +131,20 @@ export type TurnResponse = {
 export type FinishSessionResponse = {
   session: SessionPublicDTO;
   report: string;
+  report_payload?: ReportPayload | null;
 };
 
 export type SessionReportResponse = {
   session: SessionPublicDTO;
   report: string;
+  report_payload?: ReportPayload | null;
+};
+
+export type SpeechTranscriptionResponse = {
+  text: string;
+  raw_text: string;
+  normalized: boolean;
+  duration_ms?: number | null;
 };
 
 export type ClientAccount = {

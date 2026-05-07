@@ -4,8 +4,11 @@ from uuid import UUID
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
+from app.domain.judgement_models import JudgeSessionOutput
 from app.history.models import TrainingSessionRecord
+from app.history.models import TrainingReportRecord
 from app.history.projections import session_summary_dto
 from app.history.repository import HistoryRepository, SessionListFilters
 from app.history.schemas import HistorySessionSummaryDTO, UsageSummaryDTO
@@ -43,8 +46,11 @@ class ClientPortalService:
         """Return organization usage summary for a client lead."""
         self._require_client_lead(requester)
         summary = UsageSummaryDTO.model_validate(self._history.usage_summary(requester.client_account_id))
+        judgement_analytics = self._judgement_analytics_for_account(requester.client_account_id)
         return TeamUsageSummaryDTO(
             **summary.model_dump(),
+            avg_judgement_score=judgement_analytics["avg_judgement_score"],
+            sessions_with_judgement=judgement_analytics["sessions_with_judgement"],
             users=self.list_team_users(requester=requester),
         )
 
@@ -137,6 +143,7 @@ class ClientPortalService:
         )
         avg_turns = self._session.scalar(select(func.avg(TrainingSessionRecord.turn_count)).where(user_filter))
         last_activity = self._session.scalar(select(func.max(TrainingSessionRecord.last_activity_at)).where(user_filter))
+        judgement_analytics = self._judgement_analytics_for_user(user.id)
         return ClientUserAnalyticsDTO(
             user_id=user.id,
             user_email=user.email,
@@ -146,10 +153,86 @@ class ClientPortalService:
             completion_rate=(finished_sessions / total_sessions) if total_sessions else 0.0,
             avg_final_interest_score=float(avg_interest) if avg_interest is not None else None,
             avg_turn_count=float(avg_turns) if avg_turns is not None else None,
+            avg_judgement_score=judgement_analytics["avg_judgement_score"],
+            sessions_with_judgement=judgement_analytics["sessions_with_judgement"],
+            weakest_skill_id=judgement_analytics["weakest_skill_id"],
+            weakest_skill_title=judgement_analytics["weakest_skill_title"],
+            weakest_skill_avg_score=judgement_analytics["weakest_skill_avg_score"],
             last_activity_at=last_activity,
             sessions_by_status=self._group_counts(TrainingSessionRecord.status, user_filter),
             sessions_by_scenario=self._group_counts(TrainingSessionRecord.scenario_id, user_filter),
         )
+
+    def _judgement_analytics_for_user(self, user_id: UUID) -> dict[str, float | int | str | None]:
+        """Aggregate judgement payload metrics for one user from saved persistent reports."""
+        statement = (
+            select(TrainingReportRecord.report_payload)
+            .join(TrainingSessionRecord, TrainingReportRecord.session_id == TrainingSessionRecord.id)
+            .where(
+                TrainingSessionRecord.user_id == user_id,
+                TrainingReportRecord.report_payload.is_not(None),
+            )
+        )
+        return self._aggregate_judgement_payloads(self._session.scalars(statement))
+
+    def _judgement_analytics_for_account(self, client_account_id: UUID) -> dict[str, float | int | str | None]:
+        """Aggregate judgement payload metrics for one client account from saved persistent reports."""
+        statement = (
+            select(TrainingReportRecord.report_payload)
+            .join(TrainingSessionRecord, TrainingReportRecord.session_id == TrainingSessionRecord.id)
+            .where(
+                TrainingSessionRecord.client_account_id == client_account_id,
+                TrainingReportRecord.report_payload.is_not(None),
+            )
+        )
+        return self._aggregate_judgement_payloads(self._session.scalars(statement))
+
+    def _aggregate_judgement_payloads(self, payloads) -> dict[str, float | int | str | None]:
+        """Compute lightweight aggregates from valid saved JudgeSessionOutput payloads only."""
+        parsed_payloads = [payload for payload in (self._parse_judge_payload(item) for item in payloads) if payload is not None]
+        if not parsed_payloads:
+            return {
+                "avg_judgement_score": None,
+                "sessions_with_judgement": 0,
+                "weakest_skill_id": None,
+                "weakest_skill_title": None,
+                "weakest_skill_avg_score": None,
+            }
+        skill_totals: dict[str, dict[str, float | int | str]] = {}
+        for payload in parsed_payloads:
+            for skill in payload.skill_scores:
+                aggregate = skill_totals.setdefault(
+                    skill.id,
+                    {"title": skill.title, "score_sum": 0.0, "count": 0},
+                )
+                aggregate["score_sum"] = float(aggregate["score_sum"]) + float(skill.score)
+                aggregate["count"] = int(aggregate["count"]) + 1
+        weakest_skill_id = None
+        weakest_skill_title = None
+        weakest_skill_avg_score = None
+        if skill_totals:
+            weakest_skill_id, weakest_skill_data = min(
+                skill_totals.items(),
+                key=lambda item: (float(item[1]["score_sum"]) / int(item[1]["count"]), item[0]),
+            )
+            weakest_skill_title = str(weakest_skill_data["title"])
+            weakest_skill_avg_score = float(weakest_skill_data["score_sum"]) / int(weakest_skill_data["count"])
+        return {
+            "avg_judgement_score": sum(payload.overall_score for payload in parsed_payloads) / len(parsed_payloads),
+            "sessions_with_judgement": len(parsed_payloads),
+            "weakest_skill_id": weakest_skill_id,
+            "weakest_skill_title": weakest_skill_title,
+            "weakest_skill_avg_score": weakest_skill_avg_score,
+        }
+
+    def _parse_judge_payload(self, payload: object) -> JudgeSessionOutput | None:
+        """Validate one saved report payload and ignore unknown or incompatible shapes."""
+        if not isinstance(payload, dict):
+            return None
+        try:
+            return JudgeSessionOutput.model_validate(payload)
+        except ValidationError:
+            return None
 
     def _scalar_int(self, statement) -> int:
         """Execute a scalar aggregate and normalize null to zero."""

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, createSession, finishSession, getReport, getSession, sendMessage } from "../api";
+import { ApiError, createSession, finishSession, getReport, getSession, sendMessage, transcribeSpeech } from "../api";
 import { ChatWindow } from "../components/ChatWindow";
 import { Composer } from "../components/Composer";
 import { FactsPanel } from "../components/FactsPanel";
 import { MetricsPanel } from "../components/MetricsPanel";
 import { PhoneShell } from "../components/PhoneShell";
 import { SessionHeader } from "../components/SessionHeader";
-import type { SessionPublicDTO, TurnPublicDTO } from "../types";
+import { TrainingReportModal } from "../components/TrainingReportModal";
+import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
 import { getClientErrorMessage } from "./utils";
 
 const STORAGE_KEY = "salestrainer.currentSessionId";
@@ -22,7 +23,10 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [inputValue, setInputValue] = useState("");
   const [busyAction, setBusyAction] = useState<"boot" | "create" | "send" | "finish" | null>("boot");
   const [error, setError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
+  const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity. */
@@ -40,8 +44,12 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
           try {
             const reportResponse = await getReport(sessionId);
             setReport(reportResponse.report);
+            setReportPayload(reportResponse.report_payload ?? null);
+            setReportModalOpen(false);
           } catch {
             setReport(null);
+            setReportPayload(null);
+            setReportModalOpen(false);
           }
         }
       } catch (restoreError) {
@@ -61,12 +69,17 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const isSending = busyAction === "send";
   const canSend = session?.status === "active" && !loading;
   const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
+  const canShowReportButton = session?.status === "finished" && (report !== null || reportPayload !== null);
+  const voiceDisabled = !session || session.status !== "active" || loading;
 
   const startNewSession = async () => {
     /** Start a new Redis-backed training session through the existing API. */
     setBusyAction("create");
     setError(null);
+    setVoiceError(null);
+    setReportModalOpen(false);
     setReport(null);
+    setReportPayload(null);
     setTurns([]);
     setInputValue("");
     try {
@@ -91,6 +104,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     setInputValue("");
     setBusyAction("send");
     setError(null);
+    setVoiceError(null);
     try {
       const response = await sendMessage(session.session_id, message);
       setSession(response.session);
@@ -103,17 +117,33 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     }
   };
 
+  const handleTranscribeAudio = async (audio: Blob) => {
+    /** Insert recognized text into the textarea without sending a simulator turn. */
+    if (!session || session.status !== "active") {
+      return;
+    }
+    setVoiceError(null);
+    const response = await transcribeSpeech(audio, session.session_id);
+    if (!response.text.trim()) {
+      return;
+    }
+    setInputValue((currentValue) => appendTranscribedText(currentValue, response.text));
+  };
+
   const handleFinish = async () => {
-    /** Finish the active session and render its report. */
+    /** Finish the active session and open the saved report in a modal. */
     if (!session || loading || session.status !== "active") {
       return;
     }
     setBusyAction("finish");
     setError(null);
+    setVoiceError(null);
     try {
       const response = await finishSession(session.session_id);
       setSession(response.session);
       setReport(response.report);
+      setReportPayload(response.report_payload ?? null);
+      setReportModalOpen(true);
     } catch (finishError) {
       setError(getClientErrorMessage(finishError));
     } finally {
@@ -122,13 +152,17 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   };
 
   if (busyAction === "boot") {
-    return <div className="client-state"><strong>Загрузка тренажера</strong></div>;
+    return (
+      <div className="client-state">
+        <strong>Загрузка тренажёра</strong>
+      </div>
+    );
   }
 
   if (!session) {
     return (
       <section className="client-welcome">
-        <span className="client-kicker">Тренажер</span>
+        <span className="client-kicker">Тренажёр</span>
         <h1>Начните тренировку</h1>
         <p>Отрабатывайте discovery-first продажи: роль, боль, ограничения, критерии решения и следующий шаг.</p>
         {error ? <div className="client-alert client-alert--error">{error}</div> : null}
@@ -140,29 +174,64 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   }
 
   return (
-    <main className="layout client-trainer-layout">
-      <div className="side-panels">
-        <MetricsPanel session={session} />
-        <FactsPanel state={factsState} />
-        {report ? (
-          <section className="panel-card">
-            <div className="panel-card__header"><h2>Итоговый отчёт</h2></div>
-            <pre className="report-block">{report}</pre>
-          </section>
+    <>
+      <main className={`layout client-trainer-layout ${canShowReportButton ? "client-trainer-layout--has-report" : ""}`}>
+        <div className="side-panels">
+          <MetricsPanel session={session} />
+          <FactsPanel state={factsState} />
+        </div>
+        {canShowReportButton ? (
+          <div className="trainer-report-rail">
+            <button type="button" className="secondary-button trainer-report-open-button" onClick={() => setReportModalOpen(true)}>
+              Отчёт
+            </button>
+          </div>
         ) : null}
-      </div>
-      <PhoneShell>
-        <SessionHeader
-          busy={loading}
-          canFinish={session.status === "active"}
-          onNewSession={startNewSession}
-          onFinish={handleFinish}
-          onLogout={onLogout}
-        />
-        {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
-        <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
-        <Composer value={inputValue} onChange={setInputValue} onSend={handleSend} disabled={!canSend} loading={isSending} />
-      </PhoneShell>
-    </main>
+        <PhoneShell>
+          <SessionHeader
+            busy={loading}
+            canFinish={session.status === "active"}
+            onNewSession={startNewSession}
+            onFinish={handleFinish}
+            onLogout={onLogout}
+          />
+          {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
+          <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
+          <Composer
+            value={inputValue}
+            onChange={setInputValue}
+            onSend={handleSend}
+            disabled={!canSend}
+            loading={isSending}
+            onTranscribeAudio={async (audio) => {
+              try {
+                await handleTranscribeAudio(audio);
+              } catch (transcriptionError) {
+                const message = getClientErrorMessage(transcriptionError);
+                setVoiceError(message);
+                throw new Error(message);
+              }
+            }}
+            voiceDisabled={voiceDisabled}
+            voiceError={voiceError}
+          />
+        </PhoneShell>
+      </main>
+      <TrainingReportModal open={reportModalOpen} onClose={() => setReportModalOpen(false)} report={report} payload={reportPayload} />
+    </>
   );
+}
+
+function appendTranscribedText(currentValue: string, transcribedText: string): string {
+  const trimmedTranscript = transcribedText.trim();
+  if (!trimmedTranscript) {
+    return currentValue;
+  }
+  if (!currentValue.trim()) {
+    return trimmedTranscript;
+  }
+  if (currentValue.endsWith(" ") || currentValue.endsWith("\n")) {
+    return `${currentValue}${trimmedTranscript}`;
+  }
+  return `${currentValue} ${trimmedTranscript}`;
 }

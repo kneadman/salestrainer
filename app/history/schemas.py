@@ -40,6 +40,7 @@ class HistoryTurnDTO(BaseModel):
 class HistoryReportDTO(BaseModel):
     session_id: UUID
     report: str
+    report_payload: dict[str, object] | None = None
     report_version: int
     created_at: datetime
     updated_at: datetime

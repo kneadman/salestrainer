@@ -17,6 +17,11 @@ class ClientUserAnalyticsDTO(BaseModel):
     completion_rate: float
     avg_final_interest_score: float | None
     avg_turn_count: float | None
+    avg_judgement_score: float | None
+    sessions_with_judgement: int
+    weakest_skill_id: str | None
+    weakest_skill_title: str | None
+    weakest_skill_avg_score: float | None
     last_activity_at: datetime | None
     sessions_by_status: dict[str, int]
     sessions_by_scenario: dict[str, int]
@@ -41,4 +46,6 @@ class TeamUserDetailDTO(BaseModel):
 
 
 class TeamUsageSummaryDTO(UsageSummaryDTO):
+    avg_judgement_score: float | None
+    sessions_with_judgement: int
     users: list[TeamUserDTO]

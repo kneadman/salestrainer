@@ -145,6 +145,7 @@ class HistoryService:
         *,
         session: TrainingSessionState,
         report_text: str,
+        report_payload: dict[str, object] | None = None,
         user_id: UUID,
         client_account_id: UUID,
         training_config_id: UUID | None,
@@ -153,7 +154,8 @@ class HistoryService:
         report = self._repository.upsert_report(
             session_id=session.session_id,
             report_text=report_text,
-            report_payload={
+            report_payload=report_payload
+            or {
                 "status": session.status,
                 "turn_count": session.turn_count,
                 "final_interest_score": session.interest_score,
@@ -195,6 +197,7 @@ class HistoryService:
         *,
         session: TrainingSessionState,
         report_text: str,
+        report_payload: dict[str, object] | None = None,
         user_id: UUID,
         client_account_id: UUID,
         training_config_id: UUID | None,
@@ -214,7 +217,8 @@ class HistoryService:
                 "turn_count": session.turn_count,
             },
             report_text=report_text,
-            report_payload={
+            report_payload=report_payload
+            or {
                 "status": session.status,
                 "turn_count": session.turn_count,
                 "final_interest_score": session.interest_score,
@@ -350,6 +354,13 @@ class HistoryService:
         if report is None:
             raise HistoryNotFoundError("Report not found.")
         return report_dto(report)
+
+    def get_saved_report_payload(self, session_id: UUID) -> dict[str, object] | None:
+        """Return saved structured report payload when it already exists."""
+        report = self._repository.get_report(session_id)
+        if report is None:
+            return None
+        return report.report_payload
 
     def list_organization_history(
         self,

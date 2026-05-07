@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.access.repository import AccessRepository
 from app.api.main import create_app
-from app.history.models import TrainingSessionRecord
+from app.history.models import TrainingReportRecord, TrainingSessionRecord
 from app.identity.dependencies import get_db_session
 from app.identity.models import User
 from app.identity.repository import IdentityRepository
@@ -125,6 +125,56 @@ def _add_history(
     return record
 
 
+def _valid_judge_payload(*, overall_score: int, skill_score: int, skill_id: str = "discovery_quality", skill_title: str = "Качество диагностики") -> dict[str, object]:
+    """Build one minimal valid saved judge payload for analytics aggregation tests."""
+    return {
+        "schema_version": 1,
+        "overall_score": overall_score,
+        "overall_grade": "good" if overall_score >= 71 else "normal",
+        "outcome": "Итог сессии сформирован.",
+        "executive_summary": "Краткая структурированная сводка по завершённой тренировке.",
+        "bento_blocks": [
+            {
+                "id": "summary",
+                "title": "Итог сессии",
+                "type": "summary",
+                "severity": "neutral",
+                "short_text": "Краткий итог.",
+                "detail": "Подробный итог.",
+                "evidence_turn_indexes": [1],
+            }
+        ],
+        "skill_scores": [
+            {
+                "id": skill_id,
+                "title": skill_title,
+                "score": skill_score,
+                "severity": "yellow",
+                "explanation": "Тестовая агрегированная оценка навыка.",
+                "evidence_turn_indexes": [1],
+            }
+        ],
+        "key_strengths": [],
+        "key_weaknesses": [],
+        "missed_opportunities": [],
+        "recommendations": [],
+        "final_verdict": "Тестовый вердикт.",
+        "risk_flags": [],
+    }
+
+
+def _add_report_payload(db_session: Session, *, session_id: UUID, payload: dict[str, object]) -> None:
+    """Persist one saved structured report payload for analytics endpoint tests."""
+    db_session.add(
+        TrainingReportRecord(
+            session_id=session_id,
+            report_text="Saved report text",
+            report_payload=payload,
+        )
+    )
+    db_session.commit()
+
+
 def test_client_manager_cannot_access_team_endpoints() -> None:
     """Verify team endpoints reject normal managers."""
     db_session = _create_db_session()
@@ -167,6 +217,87 @@ def test_client_lead_can_read_same_org_team_users_and_usage_summary() -> None:
     assert summary_response.json()["total_sessions"] == 1
     assert summary_response.json()["finished_sessions"] == 1
     assert summary_response.json()["users"]
+    db_session.close()
+
+
+def test_personal_analytics_aggregates_saved_judgement_payloads_and_ignores_invalid_ones() -> None:
+    """Personal analytics should aggregate only valid saved judge payloads and expose weakest skill data."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="analytics",
+        users=[("manager@example.com", "client_manager")],
+    )
+    first_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+    )
+    second_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        final_interest_score=68,
+    )
+    invalid_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        final_interest_score=41,
+    )
+    _add_report_payload(db_session, session_id=first_session.id, payload=_valid_judge_payload(overall_score=80, skill_score=55))
+    _add_report_payload(db_session, session_id=second_session.id, payload=_valid_judge_payload(overall_score=60, skill_score=45))
+    _add_report_payload(db_session, session_id=invalid_session.id, payload={"status": "finished"})
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/analytics/me")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sessions_with_judgement"] == 2
+    assert payload["avg_judgement_score"] == 70.0
+    assert payload["weakest_skill_id"] == "discovery_quality"
+    assert payload["weakest_skill_title"] == "Качество диагностики"
+    assert payload["weakest_skill_avg_score"] == 50.0
+    db_session.close()
+
+
+def test_team_usage_summary_aggregates_saved_judgement_payloads() -> None:
+    """Team analytics should expose average judge score and judged session count from saved payloads."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="team-analytics",
+        users=[("lead@example.com", "client_lead"), ("manager@example.com", "client_manager")],
+    )
+    judged_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+    )
+    ignored_session = _add_history(
+        db_session,
+        user=users["lead@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        final_interest_score=55,
+    )
+    _add_report_payload(db_session, session_id=judged_session.id, payload=_valid_judge_payload(overall_score=78, skill_score=52))
+    _add_report_payload(db_session, session_id=ignored_session.id, payload={"unexpected": "shape"})
+    client = _create_client(db_session)
+    _login(client, "lead@example.com")
+
+    response = client.get("/api/team/usage-summary")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sessions_with_judgement"] == 1
+    assert payload["avg_judgement_score"] == 78.0
     db_session.close()
 
 
