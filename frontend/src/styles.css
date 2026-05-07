@@ -1707,6 +1707,17 @@ button:disabled {
   overflow: hidden;
 }
 
+.trainer-chat-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.trainer-chat-body .chat-window {
+  flex: 1;
+  min-height: 0;
+}
+
 @media (max-width: 860px) {
   .client-shell {
     grid-template-columns: 1fr;

@@ -174,4 +174,38 @@ describe("TrainerPage", () => {
     expect(screen.getByText("Структурированная оценка")).toBeInTheDocument();
     expect(screen.getByText("Менеджер качественно провёл discovery.")).toBeInTheDocument();
   });
+
+  it("keeps the error banner inside trainer-chat-body while composer remains a direct panel child", async () => {
+    const user = userEvent.setup();
+
+    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+
+    apiMocks.getSession.mockResolvedValue({
+      session: activeSession,
+      turns: [],
+    });
+    apiMocks.sendMessage.mockRejectedValue(new Error("Сервис временно недоступен"));
+
+    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+
+    const textarea = await screen.findByPlaceholderText("Введите сообщение клиенту");
+    await user.type(textarea, "Привет");
+    await user.click(screen.getByRole("button", { name: "Отправить" }));
+
+    const errorBanner = await screen.findByText("Сервис временно недоступен");
+    const trainerChatPanel = container.querySelector(".trainer-chat-panel");
+    const trainerChatBody = container.querySelector(".trainer-chat-body");
+    const composer = container.querySelector(".composer");
+    const chatWindow = container.querySelector(".chat-window");
+
+    expect(trainerChatPanel).not.toBeNull();
+    expect(trainerChatBody).not.toBeNull();
+    expect(chatWindow).not.toBeNull();
+    expect(composer).not.toBeNull();
+    expect(container.querySelector(".phone-shell")).not.toBeInTheDocument();
+    expect(container.querySelector(".trainer-report-rail")).not.toBeInTheDocument();
+    expect(trainerChatBody).toContainElement(errorBanner);
+    expect(trainerChatBody).toContainElement(chatWindow as HTMLElement);
+    expect(trainerChatPanel?.lastElementChild).toBe(composer);
+  });
 });

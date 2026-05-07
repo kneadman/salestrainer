@@ -197,8 +197,10 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
                 void onLogout();
               }}
             />
-            {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
-            <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
+            <div className="trainer-chat-body">
+              {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
+              <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
+            </div>
             <Composer
               value={inputValue}
               onChange={setInputValue}
