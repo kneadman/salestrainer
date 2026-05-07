@@ -102,7 +102,7 @@ describe("TrainerPage", () => {
     vi.clearAllMocks();
   });
 
-  it("restores a finished session, opens the report modal, and clears report state on new session", async () => {
+  it("renders the trainer chat panel without phone shell markup and clears report state on new session", async () => {
     const user = userEvent.setup();
 
     localStorage.setItem("salestrainer.currentSessionId", finishedSession.session_id);
@@ -127,6 +127,8 @@ describe("TrainerPage", () => {
 
     const reportButton = await screen.findByRole("button", { name: "Открыть итоговый отчёт" });
     expect(reportButton).toBeInTheDocument();
+    expect(container.querySelector(".trainer-chat-panel")).toBeInTheDocument();
+    expect(container.querySelector(".phone-shell")).not.toBeInTheDocument();
     expect(container.querySelector(".trainer-report-rail")).not.toBeInTheDocument();
 
     await user.click(reportButton);

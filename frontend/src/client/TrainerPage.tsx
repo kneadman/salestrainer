@@ -4,7 +4,6 @@ import { ChatWindow } from "../components/ChatWindow";
 import { Composer } from "../components/Composer";
 import { FactsPanel } from "../components/FactsPanel";
 import { MetricsPanel } from "../components/MetricsPanel";
-import { PhoneShell } from "../components/PhoneShell";
 import { SessionHeader } from "../components/SessionHeader";
 import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
@@ -186,7 +185,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
           <FactsPanel state={factsState} />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
-          <PhoneShell className="phone-shell--adaptive">
+          <section className="trainer-chat-panel">
             <SessionHeader
               busy={loading}
               canFinish={session.status === "active"}
@@ -218,7 +217,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
               voiceDisabled={voiceDisabled}
               voiceError={voiceError}
             />
-          </PhoneShell>
+          </section>
         </section>
       </main>
       <TrainingReportModal

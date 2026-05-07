@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, SVGProps } from "react";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 
 type ComposerProps = {
@@ -50,6 +50,7 @@ export function Composer({
   const isVoiceTranscribing = voiceLoading || voiceState === "transcribing";
   const composerDisabled = disabled || isVoiceTranscribing;
   const inlineVoiceError = voiceError ?? recorderError;
+  const voiceButtonLabel = isVoiceRecording ? "Остановить запись" : "Голосовой ввод";
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -106,15 +107,15 @@ export function Composer({
         onPointerDown={(event) => void handlePointerDown(event.pointerType)}
         onPointerUp={() => void handlePointerStop()}
         onPointerCancel={() => void handlePointerStop()}
-        aria-label={isVoiceRecording ? "Остановить запись" : "Начать голосовой ввод"}
-        title={isVoiceRecording ? "Остановить запись" : "Начать голосовой ввод"}
+        aria-label={voiceButtonLabel}
+        title={voiceButtonLabel}
         disabled={voiceDisabled || !onTranscribeAudio || !isSupported || isVoiceTranscribing}
       >
         <span className="composer__voice-icon" aria-hidden="true">
-          {isVoiceRecording ? "Стоп" : "Мик"}
+          <MicrophoneIcon />
         </span>
+        <span className="composer__voice-label">{isVoiceTranscribing ? "Распознаём..." : "Голос"}</span>
         {isVoiceRecording ? <span className="composer__voice-timer">{formatElapsedSeconds(elapsedSeconds)}</span> : null}
-        {isVoiceTranscribing ? <span className="composer__voice-label">Распознаём...</span> : null}
       </button>
       <button type="button" className="composer__send" onClick={onSend} disabled={composerDisabled || !value.trim()}>
         {loading ? "..." : "Отправить"}
@@ -124,6 +125,17 @@ export function Composer({
         <div className="composer__hint">Голосовой ввод не поддерживается в этом браузере.</div>
       ) : null}
     </div>
+  );
+}
+
+function MicrophoneIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 1 1-6 0V6a3 3 0 0 1 3-3Z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <path d="M12 19v3" />
+      <path d="M8 22h8" />
+    </svg>
   );
 }
 

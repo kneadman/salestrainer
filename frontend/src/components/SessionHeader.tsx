@@ -17,13 +17,10 @@ export function SessionHeader({
   canShowReport = false,
   onOpenReport,
 }: SessionHeaderProps) {
-  /** Render trainer session controls with the report action next to the reset action. */
+  /** Render trainer session controls in a stable desktop-friendly order. */
   return (
     <header className="session-header">
       <div className="session-header__actions">
-        <button type="button" className="secondary-button" onClick={onNewSession} disabled={busy}>
-          Новая тренировка
-        </button>
         {canShowReport && onOpenReport ? (
           <button
             type="button"
@@ -36,6 +33,9 @@ export function SessionHeader({
             Отчёт
           </button>
         ) : null}
+        <button type="button" className="secondary-button" onClick={onNewSession} disabled={busy}>
+          Новая тренировка
+        </button>
         <button type="button" className="primary-button" onClick={onFinish} disabled={busy || !canFinish}>
           Завершить
         </button>

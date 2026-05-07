@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { SessionHeader } from "./SessionHeader";
 
 describe("SessionHeader", () => {
-  it("renders the report button next to new session and opens the report", async () => {
+  it("renders the report button before new session and opens the report", async () => {
     const user = userEvent.setup();
     const onOpenReport = vi.fn();
     const onNewSession = vi.fn();
@@ -26,8 +26,8 @@ describe("SessionHeader", () => {
     expect(actions).toContainElement(screen.getByRole("button", { name: "Открыть итоговый отчёт" }));
 
     const buttons = within(actions as HTMLElement).getAllByRole("button");
-    expect(buttons[0]).toHaveTextContent("Новая тренировка");
-    expect(buttons[1]).toHaveTextContent("Отчёт");
+    expect(buttons[0]).toHaveTextContent("Отчёт");
+    expect(buttons[1]).toHaveTextContent("Новая тренировка");
 
     await user.click(screen.getByRole("button", { name: "Открыть итоговый отчёт" }));
 
