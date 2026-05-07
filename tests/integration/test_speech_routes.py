@@ -60,6 +60,18 @@ class FixedDurationProbe(AudioDurationProbe):
         return self._duration_ms
 
 
+class SourceThenWavDurationProbe(AudioDurationProbe):
+    def __init__(self, *, source_duration_ms: int | None, wav_duration_ms: int | None) -> None:
+        self._source_duration_ms = source_duration_ms
+        self._wav_duration_ms = wav_duration_ms
+
+    def get_duration_ms(self, audio_path: Path, *, content_type: str | None) -> int | None:
+        del audio_path
+        if content_type in {"audio/wav", "audio/x-wav"}:
+            return self._wav_duration_ms
+        return self._source_duration_ms
+
+
 class FakeAudioConverter(AudioConverter):
     def to_wav_16k_mono(self, source_path: Path, *, source_content_type: str) -> Path:
         output_path = source_path if source_content_type in {"audio/wav", "audio/x-wav"} else source_path.with_suffix(".wav")
@@ -168,6 +180,21 @@ def test_non_wav_unknown_duration_is_rejected_when_fail_closed() -> None:
 
 def test_non_wav_valid_duration_passes() -> None:
     app = _build_speech_test_app(duration_probe=FixedDurationProbe(5_000))
+    client = TestClient(app)
+    _authorize_client(client, token="user-1")
+
+    response = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+    )
+
+    assert response.status_code == 200
+
+
+def test_non_wav_unknown_source_duration_but_known_wav_duration_passes() -> None:
+    app = _build_speech_test_app(
+        duration_probe=SourceThenWavDurationProbe(source_duration_ms=None, wav_duration_ms=5_000),
+    )
     client = TestClient(app)
     _authorize_client(client, token="user-1")
 
