@@ -126,6 +126,13 @@ class SessionReportResponse(BaseModel):
     report_payload: dict[str, object] | None = None
 
 
+class SpeechTranscriptionResponse(BaseModel):
+    text: str
+    raw_text: str
+    normalized: bool
+    duration_ms: int | None = None
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

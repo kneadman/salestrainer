@@ -9,9 +9,11 @@ from fastapi.responses import JSONResponse
 from app.api.dependencies import ServiceContainer
 from app.application.judgement_service import JudgementService
 from app.api.routes import router
+from app.api.speech_routes import router as speech_router
 from app.api.schemas import ErrorBody, ErrorResponse
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
+from app.application.speech_service import SpeechService
 from app.application.turn_service import TurnService
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.infrastructure.config import Settings, get_settings
@@ -20,6 +22,7 @@ from app.infrastructure.llm_client import LLMClient, build_llm_client
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.redis_client import build_repository
 from app.infrastructure.session_repository import SessionRepository
+from app.infrastructure.stt_client import STTClient, build_stt_client
 from app.infrastructure.summary_compressor import build_summary_compressor
 from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
 from app.identity.rate_limit import build_login_rate_limiter
@@ -54,9 +57,12 @@ def _error_response(
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     code = {
+        401: "unauthorized",
         403: "forbidden",
         404: "not_found",
         409: "conflict",
+        413: "payload_too_large",
+        429: "too_many_requests",
         422: "validation_error",
     }.get(exc.status_code, "http_error")
     message = str(exc.detail)
@@ -91,11 +97,13 @@ def create_app(
     settings: Settings | None = None,
     repository: SessionRepository | None = None,
     llm_client: LLMClient | None = None,
+    stt_client: STTClient | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     setup_logging(resolved_settings.log_level)
     resolved_repository = repository or build_repository(resolved_settings)
     resolved_llm_client = llm_client or build_llm_client(resolved_settings)
+    resolved_stt_client = stt_client or build_stt_client(resolved_settings)
 
     session_service = TrainingSessionService(
         resolved_repository,
@@ -112,6 +120,10 @@ def create_app(
     report_service = ReportService(
         resolved_repository,
         judgement_service=JudgementService(build_judge_client(resolved_settings)),
+    )
+    speech_service = SpeechService(
+        resolved_stt_client,
+        settings=resolved_settings,
     )
 
     app = FastAPI(title="Sales Trainer MVP API", version="0.1.0")
@@ -161,12 +173,14 @@ def create_app(
         turn_service=turn_service,
         report_service=report_service,
     )
+    app.state.speech_service = speech_service
     app.state.settings = resolved_settings
     app.state.login_rate_limiter = build_login_rate_limiter(resolved_settings)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)
     app.include_router(router)
+    app.include_router(speech_router)
     app.include_router(history_router)
     app.include_router(client_portal_router)
     app.include_router(internal_admin_router)

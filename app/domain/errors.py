@@ -35,3 +35,23 @@ class PersonaGenerationError(SalesTrainerError):
 
 class RepositoryUnavailableError(SalesTrainerError):
     """Raised when the configured repository backend cannot be used."""
+
+
+class SpeechToTextConfigurationError(SalesTrainerError):
+    """Raised when speech-to-text backend configuration is invalid."""
+
+
+class SpeechTranscriptionError(SalesTrainerError):
+    """Raised when speech transcription cannot be completed."""
+
+
+class SpeechUploadTooLargeError(SalesTrainerError):
+    """Raised when an uploaded audio payload exceeds the configured size limit."""
+
+
+class UnsupportedAudioTypeError(SalesTrainerError):
+    """Raised when an uploaded audio payload uses an unsupported content type."""
+
+
+class SpeechConcurrencyLimitError(SalesTrainerError):
+    """Raised when the speech backend is already processing another request."""

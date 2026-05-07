@@ -330,7 +330,7 @@ button:disabled {
   padding: 14px 18px 18px;
   border-top: 1px solid rgba(148, 163, 184, 0.12);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: end;
 }
@@ -348,6 +348,58 @@ button:disabled {
 
 .composer__input:focus {
   outline: 1px solid rgba(96, 165, 250, 0.8);
+}
+
+.composer__voice,
+.composer__send {
+  min-width: 56px;
+}
+
+.composer__voice {
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #d7e2f3;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.composer__voice--recording {
+  color: #ffe4e6;
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.28);
+}
+
+.composer__voice-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.composer__voice-timer,
+.composer__voice-label,
+.composer__hint,
+.composer__error {
+  font-size: 0.82rem;
+}
+
+.composer__voice-timer {
+  font-variant-numeric: tabular-nums;
+}
+
+.composer__error,
+.composer__hint {
+  grid-column: 1 / -1;
+}
+
+.composer__hint {
+  color: #9aa9bf;
+}
+
+.composer__error {
+  color: #ffd0d0;
 }
 
 .welcome-card {
@@ -757,11 +809,16 @@ button:disabled {
 
   .composer {
     padding-bottom: calc(18px + env(safe-area-inset-bottom));
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
+  .composer__voice,
   .composer__send {
-    width: 100%;
+    min-width: 52px;
+  }
+
+  .composer__voice-label {
+    display: none;
   }
 
   .training-report-modal__backdrop {
@@ -777,6 +834,22 @@ button:disabled {
   .training-report-modal__close {
     width: 36px;
     height: 36px;
+  }
+}
+
+@media (max-width: 420px) {
+  .composer {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .composer__input,
+  .composer__hint,
+  .composer__error {
+    grid-column: 1 / -1;
+  }
+
+  .composer__send {
+    width: 100%;
   }
 }
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from io import BytesIO
+import tempfile
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -12,6 +14,7 @@ from app.access.repository import AccessRepository
 from app.api.dependencies import get_persona_generation_service
 from app.api.main import create_app
 from app.domain.models import PersonaProfile
+from app.history.models import TrainingTurnRecord, UsageEventRecord
 from app.identity.dependencies import get_db_session
 from app.identity.repository import IdentityRepository
 from app.identity.security import hash_password
@@ -19,6 +22,7 @@ from app.infrastructure.config import Settings
 from app.infrastructure.db import Base, import_model_modules
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
+from app.infrastructure.stt_client import FakeSTTClient, STTResult
 
 
 def _create_db_session() -> Session:
@@ -37,11 +41,14 @@ def _create_client(
     db_session: Session | None = None,
     *,
     repository: InMemorySessionRepository | None = None,
+    settings: Settings | None = None,
+    stt_client: FakeSTTClient | None = None,
 ) -> TestClient:
     app = create_app(
-        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        settings=settings or Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
         repository=repository or InMemorySessionRepository(),
         llm_client=FakeLLMClient(),
+        stt_client=stt_client,
     )
 
     if db_session is not None:
@@ -126,6 +133,23 @@ def _valid_lead_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
+def _speech_settings(**overrides: object) -> Settings:
+    temp_dir = tempfile.mkdtemp(prefix="salestrainer-stt-tests-")
+    return Settings(
+        auth_cookie_secure=False,
+        login_rate_limit_attempts=0,
+        stt_enabled=True,
+        stt_backend="fake",
+        stt_temp_dir=temp_dir,
+        **overrides,
+    )
+
+
+class StubSTTClient(FakeSTTClient):
+    def transcribe(self, audio_path, *, language: str) -> STTResult:
+        return STTResult(text="  привет   клиенту \n\nкак дела  ", duration_ms=3450)
+
+
 def test_api_session_flow() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
@@ -194,6 +218,128 @@ def test_api_create_session_requires_auth() -> None:
     response = client.post("/api/sessions", json={})
 
     assert response.status_code == 401
+
+
+def test_api_speech_transcribe_requires_auth() -> None:
+    client = _create_client(settings=_speech_settings())
+
+    response = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+
+    assert response.status_code == 401
+
+
+def test_api_speech_transcribe_rejects_authenticated_request_without_csrf() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, settings=_speech_settings())
+    response = client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    assert response.status_code == 200
+
+    response = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["message"] == "Missing or invalid CSRF token."
+    db_session.close()
+
+
+def test_api_speech_transcribe_accepts_small_audio_and_normalizes_text() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session)
+    client = _create_client(
+        db_session,
+        settings=_speech_settings(),
+        stt_client=StubSTTClient(),
+    )
+    _login(client)
+
+    response = client.post(
+        "/api/speech/transcribe",
+        data={"session_id": "session-123"},
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "text": "Привет клиенту\n\nкак дела",
+        "raw_text": "привет   клиенту \n\nкак дела",
+        "normalized": True,
+        "duration_ms": 3450,
+    }
+    db_session.close()
+
+
+def test_api_speech_transcribe_rejects_oversized_upload() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session)
+    client = _create_client(
+        db_session,
+        settings=_speech_settings(stt_max_upload_bytes=100_000),
+    )
+    _login(client)
+
+    response = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.wav", BytesIO(b"x" * 100_001), "audio/wav")},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "payload_too_large"
+    db_session.close()
+
+
+def test_api_speech_transcribe_rejects_unsupported_content_type() -> None:
+    db_session = _create_db_session()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, settings=_speech_settings())
+    _login(client)
+
+    response = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.txt", BytesIO(b"not-audio"), "text/plain")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    db_session.close()
+
+
+def test_api_speech_transcribe_does_not_create_turns_or_mutate_session_state() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(
+        db_session,
+        repository=repository,
+        settings=_speech_settings(),
+        stt_client=StubSTTClient(),
+    )
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+    session_before = repository.get(session_id)
+    assert session_before is not None
+    session_before_json = session_before.model_dump_json()
+    turns_before = db_session.query(TrainingTurnRecord).count()
+    usage_events_before = db_session.query(UsageEventRecord).count()
+
+    response = client.post(
+        "/api/speech/transcribe",
+        data={"session_id": session_id},
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+
+    session_after = repository.get(session_id)
+    assert response.status_code == 200
+    assert session_after is not None
+    assert session_after.model_dump_json() == session_before_json
+    assert db_session.query(TrainingTurnRecord).count() == turns_before
+    assert db_session.query(UsageEventRecord).count() == usage_events_before
+    db_session.close()
 
 
 def test_api_mutating_endpoint_rejects_authenticated_request_without_csrf() -> None:

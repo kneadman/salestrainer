@@ -140,6 +140,13 @@ export type SessionReportResponse = {
   report_payload?: ReportPayload | null;
 };
 
+export type SpeechTranscriptionResponse = {
+  text: string;
+  raw_text: string;
+  normalized: boolean;
+  duration_ms?: number | null;
+};
+
 export type ClientAccount = {
   id: string;
   name: string;
