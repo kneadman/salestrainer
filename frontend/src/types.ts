@@ -66,12 +66,16 @@ export type TurnResponse = {
 export type FinishSessionResponse = {
   session: SessionPublicDTO;
   report: string;
+  report_payload?: ReportPayload | null;
 };
 
 export type SessionReportResponse = {
   session: SessionPublicDTO;
   report: string;
+  report_payload?: ReportPayload | null;
 };
+
+export type ReportPayload = Record<string, unknown>;
 
 export type ClientAccount = {
   id: string;

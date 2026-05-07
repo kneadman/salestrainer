@@ -29,6 +29,7 @@ export function ClientLayout({ user, path, children, onNavigate, onLogout }: Cli
   const nav = user.role === "client_lead"
     ? [...MANAGER_NAV.slice(0, 4), ...LEAD_EXTRA_NAV, ...MANAGER_NAV.slice(4)]
     : MANAGER_NAV;
+  const contentClassName = path.startsWith("/app/trainer") ? "client-content client-content--trainer" : "client-content";
   return (
     <div className="client-shell">
       <aside className="client-sidebar">
@@ -64,7 +65,7 @@ export function ClientLayout({ user, path, children, onNavigate, onLogout }: Cli
             <button type="button" className="client-button" onClick={() => void onLogout()}>Выйти</button>
           </div>
         </header>
-        <main className="client-content">{children}</main>
+        <main className={contentClassName}>{children}</main>
       </div>
     </div>
   );
