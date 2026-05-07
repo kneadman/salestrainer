@@ -1,3 +1,29 @@
+FROM python:3.13-slim AS whisper-builder
+
+ARG WHISPER_CPP_REF=v1.7.5
+ARG WHISPER_MODEL=base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    build-essential \
+    ca-certificates \
+    cmake \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+RUN git clone --depth 1 --branch ${WHISPER_CPP_REF} https://github.com/ggml-org/whisper.cpp.git
+
+WORKDIR /opt/whisper.cpp
+
+RUN cmake -B build -DGGML_NATIVE=OFF && \
+    cmake --build build --config Release -j"$(nproc)" --target whisper-cli
+
+RUN bash ./models/download-ggml-model.sh ${WHISPER_MODEL}
+
+
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -6,6 +32,9 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
+COPY --from=whisper-builder /opt/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=whisper-builder /opt/whisper.cpp/models /opt/whisper.cpp/models
 
 COPY pyproject.toml README.md ./
 COPY alembic.ini ./
