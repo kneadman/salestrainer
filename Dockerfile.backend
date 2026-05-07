@@ -23,6 +23,11 @@ RUN cmake -B build -DGGML_NATIVE=OFF && \
 
 RUN bash ./models/download-ggml-model.sh ${WHISPER_MODEL}
 
+RUN mkdir -p /opt/whisper-install/bin /opt/whisper-install/lib /opt/whisper-install/models && \
+    cp /opt/whisper.cpp/build/bin/whisper-cli /opt/whisper-install/bin/whisper-cli && \
+    find /opt/whisper.cpp/build -name "*.so*" -exec cp -P {} /opt/whisper-install/lib/ \; && \
+    cp -a /opt/whisper.cpp/models/. /opt/whisper-install/models/
+
 
 FROM python:3.13-slim
 
@@ -31,10 +36,14 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libc-bin \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY --from=whisper-builder /opt/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
-COPY --from=whisper-builder /opt/whisper.cpp/models /opt/whisper.cpp/models
+COPY --from=whisper-builder /opt/whisper-install/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=whisper-builder /opt/whisper-install/lib/ /usr/local/lib/
+COPY --from=whisper-builder /opt/whisper-install/models /opt/whisper.cpp/models
 
 COPY pyproject.toml README.md ./
 COPY alembic.ini ./
@@ -43,6 +52,10 @@ COPY migrations ./migrations
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
+
+RUN ldconfig && \
+    ldd /usr/local/bin/whisper-cli | tee /tmp/whisper-ldd.txt && \
+    ! grep -q "not found" /tmp/whisper-ldd.txt
 
 EXPOSE 8000
 

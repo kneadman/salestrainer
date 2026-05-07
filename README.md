@@ -575,6 +575,17 @@ curl -i http://localhost:8080/auth/csrf
 curl -i http://localhost:8080/api/health
 ```
 
+STT container smoke test:
+
+```bash
+docker compose build --no-cache backend
+docker compose up -d backend
+docker compose exec backend bash -lc 'ldd /usr/local/bin/whisper-cli | grep "not found" || true'
+docker compose exec backend bash -lc 'ffmpeg -f lavfi -i sine=frequency=1000:duration=2 -ac 1 -ar 16000 /tmp/test.wav -y'
+docker compose exec backend bash -lc '"$STT_WHISPER_CPP_BINARY" -m "$STT_MODEL_PATH" -f /tmp/test.wav -l ru -otxt -of /tmp/test-out'
+docker compose exec backend cat /tmp/test-out.txt
+```
+
 Expected results:
 
 - `/auth/me` returns a `401` JSON response, not React `index.html`

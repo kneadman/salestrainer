@@ -82,8 +82,20 @@ class WhisperCppSTTClient:
         except OSError as error:
             raise SpeechTranscriptionError("Speech transcription backend could not be started.") from error
         if completed.returncode != 0:
+            logger.warning(
+                "stt_whisper_cpp_failed returncode=%s stdout_tail=%s stderr_tail=%s",
+                completed.returncode,
+                completed.stdout[-2000:],
+                completed.stderr[-2000:],
+            )
             raise SpeechTranscriptionError("Speech transcription failed.")
         if not output_file.exists():
+            logger.warning(
+                "stt_whisper_cpp_missing_output output_file=%s stdout_tail=%s stderr_tail=%s",
+                output_file,
+                completed.stdout[-2000:],
+                completed.stderr[-2000:],
+            )
             raise SpeechTranscriptionError("Speech transcription output was not produced.")
         return STTResult(text=output_file.read_text(encoding="utf-8").strip())
 
