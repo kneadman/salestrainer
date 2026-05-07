@@ -1,6 +1,8 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, SVGProps } from "react";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
+
+const TEXTAREA_MAX_HEIGHT = 160;
 
 type ComposerProps = {
   value: string;
@@ -25,6 +27,7 @@ export function Composer({
   voiceLoading = false,
   voiceError = null,
 }: ComposerProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const ignoreNextClickRef = useRef(false);
   const holdRecordingRef = useRef(false);
   const {
@@ -45,6 +48,18 @@ export function Composer({
       await onTranscribeAudio(audio);
     },
   });
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(textarea.scrollHeight, TEXTAREA_MAX_HEIGHT);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
+  }, [value]);
 
   const isVoiceRecording = voiceState === "recording";
   const isVoiceTranscribing = voiceLoading || voiceState === "transcribing";
@@ -92,6 +107,7 @@ export function Composer({
   return (
     <div className="composer">
       <textarea
+        ref={textareaRef}
         className="composer__input"
         value={value}
         onChange={(event) => onChange(event.target.value)}
