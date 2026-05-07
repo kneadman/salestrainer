@@ -371,7 +371,7 @@ Training goal: manager should discover role, current accounting process, pain, d
 - `GET /report` reuses saved `report_payload` when available instead of regenerating it.
 - If judge payload generation fails, `/finish` and `/report` still return the plain text report instead of failing the core flow.
 - API finish/report responses and history report DTOs now include optional `report_payload`.
-- Frontend now renders a compact bento-style structured report section next to the fallback text report, without using a modal or popup.
+- Frontend opens the structured bento report in a modal after session finish. A compact `Отчёт` button is shown near the chat for finished sessions and reopens the saved report. The legacy plain text report is used only as a modal fallback when structured payload is unavailable or invalid.
 - Client/team analytics can optionally include basic aggregates from saved valid `JudgeSessionOutput` payloads such as average judge score and weakest skill.
 - Judge uses shared `YANDEX_API_KEY` and `YANDEX_BASE_URL`.
 - Optional judge routing env vars:

@@ -6,7 +6,7 @@ import { FactsPanel } from "../components/FactsPanel";
 import { MetricsPanel } from "../components/MetricsPanel";
 import { PhoneShell } from "../components/PhoneShell";
 import { SessionHeader } from "../components/SessionHeader";
-import { StructuredReportSummary } from "../components/StructuredReportSummary";
+import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
 import { getClientErrorMessage } from "./utils";
 
@@ -25,6 +25,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
   const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity. */
@@ -43,9 +44,11 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
             const reportResponse = await getReport(sessionId);
             setReport(reportResponse.report);
             setReportPayload(reportResponse.report_payload ?? null);
+            setReportModalOpen(false);
           } catch {
             setReport(null);
             setReportPayload(null);
+            setReportModalOpen(false);
           }
         }
       } catch (restoreError) {
@@ -65,11 +68,13 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const isSending = busyAction === "send";
   const canSend = session?.status === "active" && !loading;
   const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
+  const canShowReportButton = session?.status === "finished" && (report !== null || reportPayload !== null);
 
   const startNewSession = async () => {
     /** Start a new Redis-backed training session through the existing API. */
     setBusyAction("create");
     setError(null);
+    setReportModalOpen(false);
     setReport(null);
     setReportPayload(null);
     setTurns([]);
@@ -109,7 +114,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   };
 
   const handleFinish = async () => {
-    /** Finish the active session and render its report. */
+    /** Finish the active session and open the saved report in a modal. */
     if (!session || loading || session.status !== "active") {
       return;
     }
@@ -120,6 +125,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
       setSession(response.session);
       setReport(response.report);
       setReportPayload(response.report_payload ?? null);
+      setReportModalOpen(true);
     } catch (finishError) {
       setError(getClientErrorMessage(finishError));
     } finally {
@@ -128,13 +134,13 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   };
 
   if (busyAction === "boot") {
-    return <div className="client-state"><strong>Загрузка тренажера</strong></div>;
+    return <div className="client-state"><strong>Загрузка тренажёра</strong></div>;
   }
 
   if (!session) {
     return (
       <section className="client-welcome">
-        <span className="client-kicker">Тренажер</span>
+        <span className="client-kicker">Тренажёр</span>
         <h1>Начните тренировку</h1>
         <p>Отрабатывайте discovery-first продажи: роль, боль, ограничения, критерии решения и следующий шаг.</p>
         {error ? <div className="client-alert client-alert--error">{error}</div> : null}
@@ -146,30 +152,42 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   }
 
   return (
-    <main className="layout client-trainer-layout">
-      <div className="side-panels">
-        <MetricsPanel session={session} />
-        <FactsPanel state={factsState} />
-        {report ? (
-          <section className="panel-card">
-            <div className="panel-card__header"><h2>Итоговый отчёт</h2></div>
-            <StructuredReportSummary payload={reportPayload} />
-            <pre className="report-block">{report}</pre>
-          </section>
+    <>
+      <main className={`layout client-trainer-layout ${canShowReportButton ? "client-trainer-layout--has-report" : ""}`}>
+        <div className="side-panels">
+          <MetricsPanel session={session} />
+          <FactsPanel state={factsState} />
+        </div>
+        {canShowReportButton ? (
+          <div className="trainer-report-rail">
+            <button
+              type="button"
+              className="secondary-button trainer-report-open-button"
+              onClick={() => setReportModalOpen(true)}
+            >
+              Отчёт
+            </button>
+          </div>
         ) : null}
-      </div>
-      <PhoneShell>
-        <SessionHeader
-          busy={loading}
-          canFinish={session.status === "active"}
-          onNewSession={startNewSession}
-          onFinish={handleFinish}
-          onLogout={onLogout}
-        />
-        {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
-        <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
-        <Composer value={inputValue} onChange={setInputValue} onSend={handleSend} disabled={!canSend} loading={isSending} />
-      </PhoneShell>
-    </main>
+        <PhoneShell>
+          <SessionHeader
+            busy={loading}
+            canFinish={session.status === "active"}
+            onNewSession={startNewSession}
+            onFinish={handleFinish}
+            onLogout={onLogout}
+          />
+          {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
+          <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
+          <Composer value={inputValue} onChange={setInputValue} onSend={handleSend} disabled={!canSend} loading={isSending} />
+        </PhoneShell>
+      </main>
+      <TrainingReportModal
+        open={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        report={report}
+        payload={reportPayload}
+      />
+    </>
   );
 }
