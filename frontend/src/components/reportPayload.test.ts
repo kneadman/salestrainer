@@ -1,5 +1,5 @@
 import type { JudgeSessionOutputDTO } from "../types";
-import { isJudgeSessionOutputPayload } from "./reportPayload";
+import { gradeLabel, isJudgeSessionOutputPayload, severityLabel } from "./reportPayload";
 
 const validPayload: JudgeSessionOutputDTO = {
   schema_version: 1,
@@ -43,6 +43,25 @@ const validPayload: JudgeSessionOutputDTO = {
   final_verdict: "Сильная попытка.",
   risk_flags: [],
 };
+
+describe("severityLabel", () => {
+  it("returns readable Russian labels", () => {
+    expect(severityLabel("green")).toBe("Сильная зона");
+    expect(severityLabel("yellow")).toBe("Средняя зона");
+    expect(severityLabel("red")).toBe("Риск");
+    expect(severityLabel("neutral")).toBe("Инфо");
+  });
+});
+
+describe("gradeLabel", () => {
+  it("returns readable Russian labels", () => {
+    expect(gradeLabel("critical")).toBe("Критично");
+    expect(gradeLabel("weak")).toBe("Слабо");
+    expect(gradeLabel("normal")).toBe("Нормально");
+    expect(gradeLabel("good")).toBe("Хорошо");
+    expect(gradeLabel("strong")).toBe("Сильно");
+  });
+});
 
 describe("isJudgeSessionOutputPayload", () => {
   it("returns true for a valid judge payload", () => {
