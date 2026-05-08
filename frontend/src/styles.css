@@ -6931,3 +6931,20 @@ html {
 .lp-showcase-scene .lp-demo--interactive .lp-demo__grid > * {
   grid-area: slide;
 }
+
+@media (max-width: 760px) {
+  .lp-showcase-scene .lp-demo--interactive .lp-demo__grid {
+    min-height: 520px;
+  }
+
+  .lp-showcase-scene .lp-demo--interactive .lp-demo-card {
+    height: 100%;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .lp-showcase-scene .lp-demo--interactive .lp-demo__grid {
+    min-height: 560px;
+  }
+}
