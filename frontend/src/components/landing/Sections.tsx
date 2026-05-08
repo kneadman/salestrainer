@@ -16,7 +16,6 @@ type HeaderProps = {
 type HeroSectionProps = {
   onDemoClick: () => void;
   onMechanicsClick: () => void;
-  onLoginClick: () => void;
 };
 
 type FinalCTAProps = {
@@ -100,7 +99,7 @@ export function LandingHeader({
   );
 }
 
-export function HeroSection({ onDemoClick, onMechanicsClick, onLoginClick }: HeroSectionProps) {
+export function HeroSection({ onDemoClick, onMechanicsClick }: HeroSectionProps) {
   /** Lead the page with one message and one visual: a live training dialogue. */
   return (
     <section className="lp-hero">
@@ -119,9 +118,7 @@ export function HeroSection({ onDemoClick, onMechanicsClick, onLoginClick }: Her
               Посмотреть механику
             </button>
           </div>
-          <button type="button" className="lp-link-action" onClick={onLoginClick}>
-            Войти в кабинет
-          </button>
+          <span className="lp-link-action lp-link-action--spacer" aria-hidden="true" />
         </Tile>
 
         <div className="lp-hero__visual lp-hero__visual--tile">
@@ -171,17 +168,6 @@ export function DemoSection() {
 
         <div className="lp-showcase-scene">
           <ProductDemo variant="interactive" />
-        </div>
-
-        <div className="lp-showcase-side">
-          <Tile className="lp-showcase-note">
-            <h3>Что видно сразу</h3>
-            <p>Система показывает не общий балл, а конкретные места: где менеджер не уточнил роль, пропустил возражение или не закрепил следующий шаг.</p>
-          </Tile>
-          <Tile tone="subtle" className="lp-showcase-note">
-            <h3>Зачем это руководителю</h3>
-            <p>После тренировки остаётся материал для разбора: что повторить, какой сценарий усилить и кого можно выпускать на реальных клиентов.</p>
-          </Tile>
         </div>
       </div>
     </SectionShell>

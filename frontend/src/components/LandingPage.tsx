@@ -157,7 +157,6 @@ export function LandingPage({ authenticated }: LandingPageProps) {
         <HeroSection
           onDemoClick={() => scrollToBlock("lead", "hero_demo_click")}
           onMechanicsClick={() => scrollToBlock("demo", "hero_mechanics_click")}
-          onLoginClick={handleLoginClick}
         />
         <ProblemTilesSection />
         <DemoSection />

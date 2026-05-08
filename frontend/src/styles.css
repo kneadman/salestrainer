@@ -5056,6 +5056,12 @@ html {
   background: transparent;
 }
 
+.lp-link-action--spacer {
+  display: block;
+  min-height: 24px;
+  visibility: hidden;
+}
+
 .lp-mobile-toggle {
   display: none;
   width: 44px;
@@ -5257,11 +5263,14 @@ html {
   border-radius: 999px;
   color: var(--color-text-muted);
   background: transparent;
+  transition: color 0.24s ease, background 0.24s ease, box-shadow 0.24s ease, transform 0.24s ease;
 }
 
 .lp-demo__phase--active {
   color: #04100c;
   background: linear-gradient(135deg, var(--color-accent), var(--color-info));
+  box-shadow: 0 8px 22px rgba(125, 242, 196, 0.16);
+  transform: translateY(-1px);
 }
 
 .lp-demo__grid {
@@ -5302,6 +5311,16 @@ html {
   opacity: 1;
   border-color: rgba(125, 242, 196, 0.28);
   transform: translateY(-2px);
+}
+
+.lp-demo--interactive .lp-demo__grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lp-demo--interactive .lp-demo-card {
+  min-height: 0;
+  opacity: 1;
+  animation: lpSlideIn 0.34s ease both;
 }
 
 .lp-demo--presentation .lp-demo-card {
@@ -5904,6 +5923,18 @@ html {
   }
 }
 
+@keyframes lpSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Landing tile-system override: compose the page as independent bento groups. */
 .lp-section {
   padding: 84px 0;
@@ -6389,22 +6420,24 @@ html {
 }
 
 .lp-hero__grid--tile {
-  grid-template-columns: minmax(0, 0.84fr) minmax(420px, 1.16fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
   gap: 26px;
 }
 
 .lp-hero__copy--tile {
-  padding: 38px;
-  gap: 20px;
+  padding: 36px 38px;
+  gap: 18px;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  align-content: stretch;
   background:
     radial-gradient(circle at top right, rgba(116, 191, 255, 0.16), transparent 42%),
     linear-gradient(180deg, rgba(28, 40, 64, 0.94), rgba(16, 24, 41, 0.94));
 }
 
 .lp-hero h1 {
-  max-width: 14ch;
-  font-size: clamp(2.25rem, 3.2vw, 3.35rem);
-  line-height: 1.08;
+  max-width: 24ch;
+  font-size: clamp(1.85rem, 2.35vw, 2.55rem);
+  line-height: 1.12;
 }
 
 .lp-hero__copy--tile .lp-lead {
@@ -6414,8 +6447,18 @@ html {
   color: rgba(226, 234, 247, 0.88);
 }
 
+.lp-hero__copy--tile .lp-hero__actions {
+  align-self: end;
+}
+
+.lp-hero__copy--tile .lp-link-action--spacer {
+  display: none;
+}
+
 .lp-demo--hero {
+  height: 100%;
   padding: 16px;
+  display: grid;
   background:
     radial-gradient(circle at 15% 12%, rgba(128, 216, 255, 0.14), transparent 24%),
     linear-gradient(180deg, rgba(18, 27, 44, 0.94), rgba(11, 16, 28, 0.95));
@@ -6423,7 +6466,8 @@ html {
 }
 
 .lp-demo--hero .lp-demo-card {
-  min-height: 500px;
+  min-height: 100%;
+  height: 100%;
   background: linear-gradient(180deg, rgba(17, 24, 40, 0.8), rgba(11, 17, 29, 0.78));
 }
 
@@ -6516,19 +6560,21 @@ html {
 }
 
 .lp-showcase-group {
-  grid-template-columns: minmax(0, 0.64fr) minmax(0, 1.36fr);
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
   grid-template-areas:
-    "intro scene"
-    "side scene";
+    "intro scene";
   gap: 22px;
+  align-items: stretch;
 }
 
 .lp-showcase-intro {
   grid-area: intro;
+  min-height: 100%;
 }
 
 .lp-showcase-scene {
   grid-area: scene;
+  min-height: 100%;
 }
 
 .lp-showcase-side {
@@ -6537,32 +6583,35 @@ html {
 }
 
 .lp-showcase-scene .lp-demo {
+  height: 100%;
   gap: 14px;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .lp-showcase-scene .lp-demo__grid {
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 0.85fr);
-  grid-template-areas:
-    "chat scoring"
-    "chat report";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "slide";
+  grid-template-rows: minmax(0, auto);
   gap: 14px;
+  align-items: start;
 }
 
 .lp-showcase-scene .lp-demo__grid > :nth-child(1) {
-  grid-area: chat;
+  grid-area: slide;
 }
 
 .lp-showcase-scene .lp-demo__grid > :nth-child(2) {
-  grid-area: scoring;
+  grid-area: slide;
 }
 
 .lp-showcase-scene .lp-demo__grid > :nth-child(3) {
-  grid-area: report;
+  grid-area: slide;
 }
 
 .lp-showcase-scene .lp-demo-card {
   padding: 18px;
-  min-height: auto;
+  min-height: 100%;
+  align-self: stretch;
 }
 
 .lp-showcase-scene .lp-demo-chat {
@@ -6576,6 +6625,10 @@ html {
 .lp-showcase-scene .lp-demo-report {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.lp-showcase-scene .lp-demo__grid > :nth-child(1) {
+  min-height: 0;
 }
 
 .lp-showcase-note {
@@ -6617,6 +6670,7 @@ html {
 .lp-management-group {
   grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
   gap: 22px;
+  align-items: stretch;
 }
 
 .lp-management-grid {
@@ -6638,6 +6692,7 @@ html {
 .lp-scenarios-group {
   grid-template-columns: minmax(0, 0.68fr) minmax(0, 1.32fr);
   gap: 22px;
+  align-items: stretch;
 }
 
 .lp-scenarios-cloud {
@@ -6745,8 +6800,7 @@ html {
     grid-template-columns: 1fr;
     grid-template-areas:
       "intro"
-      "scene"
-      "side";
+      "scene";
   }
 
   .lp-scenarios-cloud {
@@ -6783,9 +6837,7 @@ html {
   }
 
   .lp-showcase-scene .lp-demo__grid {
-    grid-template-areas:
-      "chat chat"
-      "scoring report";
+    grid-template-areas: "slide";
   }
 
   .lp-scenarios-cloud {
@@ -6847,7 +6899,7 @@ html {
   .lp-final__copy--tile h2,
   .lp-faq-shell h2 {
     max-width: none;
-    font-size: clamp(1.75rem, 7.2vw, 2.4rem);
+    font-size: clamp(1.65rem, 6.2vw, 2.2rem);
     line-height: 1.16;
   }
 
@@ -6862,13 +6914,20 @@ html {
   }
 
   .lp-showcase-scene .lp-demo__grid {
-    grid-template-areas:
-      "chat"
-      "scoring"
-      "report";
+    grid-template-areas: "slide";
   }
 
   .lp-demo--hero .lp-demo-card {
     min-height: 440px;
   }
+}
+
+.lp-showcase-scene .lp-demo--interactive .lp-demo__grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "slide";
+  grid-template-rows: minmax(0, auto);
+}
+
+.lp-showcase-scene .lp-demo--interactive .lp-demo__grid > * {
+  grid-area: slide;
 }

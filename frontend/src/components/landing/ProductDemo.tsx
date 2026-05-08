@@ -58,6 +58,7 @@ export function ProductDemo({ variant = "interactive" }: ProductDemoProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const isHero = variant === "hero";
   const isPresentation = variant === "presentation";
+  const isInteractive = variant === "interactive";
   const [activeStep, setActiveStep] = useState<DemoStep>(reducedMotion ? "report" : "chat");
   const [enteredViewport, setEnteredViewport] = useState(reducedMotion || isPresentation || isHero);
   const [visibleMessageCount, setVisibleMessageCount] = useState(reducedMotion ? demoMessages.length : 1);
@@ -98,7 +99,7 @@ export function ProductDemo({ variant = "interactive" }: ProductDemoProps) {
 
   useEffect(() => {
     /** Drive either the hero loop or the viewport-triggered walkthrough sequence. */
-    if (reducedMotion || !enteredViewport) {
+    if (reducedMotion || !enteredViewport || isInteractive) {
       return;
     }
 
@@ -146,7 +147,24 @@ export function ProductDemo({ variant = "interactive" }: ProductDemoProps) {
         window.clearTimeout(loopTimer);
       }
     };
-  }, [cycleKey, enteredViewport, isHero, isPresentation, reducedMotion]);
+  }, [cycleKey, enteredViewport, isHero, isInteractive, isPresentation, reducedMotion]);
+
+  useEffect(() => {
+    /** Rotate the showcase slider one visible panel at a time after it enters the viewport. */
+    if (reducedMotion || !enteredViewport || !isInteractive) {
+      return;
+    }
+
+    setActiveStep("chat");
+    setVisibleMessageCount(demoMessages.length);
+
+    const steps: DemoStep[] = ["chat", "scoring", "report"];
+    const interval = window.setInterval(() => {
+      setActiveStep((current) => steps[(steps.indexOf(current) + 1) % steps.length]);
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [enteredViewport, isInteractive, reducedMotion]);
 
   const visibleMessages = useMemo(() => {
     /** Reveal more of the conversation as the viewer moves through the demo phases. */
@@ -199,6 +217,7 @@ export function ProductDemo({ variant = "interactive" }: ProductDemoProps) {
       ) : null}
 
       <div className="lp-demo__grid">
+        {isHero || isPresentation || activeStep === "chat" ? (
         <section className={activeStep === "chat" ? "lp-demo-card lp-demo-card--active" : "lp-demo-card"} aria-label="Демо-чат">
           <header className="lp-demo-card__header">
             <span>{isHero ? "Тренировка" : "Диалог"}</span>
@@ -216,8 +235,9 @@ export function ProductDemo({ variant = "interactive" }: ProductDemoProps) {
             ))}
           </div>
         </section>
+        ) : null}
 
-        {!isHero ? (
+        {!isHero && (isPresentation || activeStep === "scoring") ? (
           <section className={activeStep === "scoring" ? "lp-demo-card lp-demo-card--active" : "lp-demo-card"} aria-label="Демо-оценка">
             <header className="lp-demo-card__header">
               <span>После разговора</span>
@@ -243,7 +263,7 @@ export function ProductDemo({ variant = "interactive" }: ProductDemoProps) {
           </section>
         ) : null}
 
-        {!isHero ? (
+        {!isHero && (isPresentation || activeStep === "report") ? (
           <section className={activeStep === "report" ? "lp-demo-card lp-demo-card--active" : "lp-demo-card"} aria-label="Демо-отчёт">
             <header className="lp-demo-card__header">
               <span>Для руководителя</span>
