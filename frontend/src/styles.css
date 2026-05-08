@@ -6933,18 +6933,38 @@ html {
 }
 
 @media (max-width: 760px) {
+  .lp-demo--hero {
+    height: 460px;
+  }
+
+  .lp-demo--hero .lp-demo__grid,
+  .lp-demo--hero .lp-demo-card {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .lp-demo--hero .lp-demo-card {
+    overflow-y: auto;
+  }
+
   .lp-showcase-scene .lp-demo--interactive .lp-demo__grid {
-    min-height: 520px;
+    min-height: 0;
+    height: 560px;
   }
 
   .lp-showcase-scene .lp-demo--interactive .lp-demo-card {
+    min-height: 0;
     height: 100%;
     overflow-y: auto;
   }
 }
 
 @media (max-width: 420px) {
+  .lp-demo--hero {
+    height: 500px;
+  }
+
   .lp-showcase-scene .lp-demo--interactive .lp-demo__grid {
-    min-height: 560px;
+    height: 620px;
   }
 }
