@@ -36,4 +36,14 @@ describe("ClientLayout", () => {
     expect(main).toBeInTheDocument();
     expect(main).not.toHaveClass("client-content--trainer");
   });
+
+  it("renders the shared logo in the client sidebar", () => {
+    const { container } = render(
+      <ClientLayout user={user} path="/app" onNavigate={vi.fn()} onLogout={vi.fn()}>
+        <div>dashboard</div>
+      </ClientLayout>,
+    );
+
+    expect(container.querySelector('img[src="/logo.svg"]')).toBeInTheDocument();
+  });
 });

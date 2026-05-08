@@ -37,4 +37,9 @@ describe("LandingPage", () => {
     expect(screen.getAllByTestId("landing-demo").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Попробовать демо/i }).length).toBeGreaterThan(0);
   });
+  it("renders the shared logo asset", () => {
+    const { container } = render(<LandingPage authenticated={false} />);
+
+    expect(container.querySelector('img[src="/logo.svg"]')).toBeInTheDocument();
+  });
 });

@@ -982,6 +982,18 @@ button:disabled {
   margin-bottom: 22px;
 }
 
+.admin-sidebar__brand-mark {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.admin-sidebar__brand-text {
+  display: grid;
+  gap: 4px;
+}
+
 .admin-sidebar__brand span {
   width: 42px;
   height: 42px;
@@ -1417,6 +1429,18 @@ button:disabled {
 .client-brand {
   justify-content: flex-start;
   margin-bottom: 22px;
+}
+
+.client-brand__mark {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.client-brand__text {
+  display: grid;
+  gap: 4px;
 }
 
 .client-brand span {
@@ -4959,15 +4983,17 @@ html {
   gap: 12px;
 }
 
+.lp-brand__content {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .lp-brand__mark {
   width: 40px;
   height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  color: #05110d;
-  background: linear-gradient(135deg, var(--color-accent), var(--color-info));
-  font-weight: 900;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .lp-brand__text {
@@ -5005,6 +5031,18 @@ html {
 .lp-hero__actions,
 .lp-footer__grid {
   gap: 12px;
+}
+
+.lp-footer__brand,
+.lp-footer__logo {
+  display: grid;
+  gap: 12px;
+}
+
+.lp-footer__mark {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
 }
 
 .lp-button,

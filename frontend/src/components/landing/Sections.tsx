@@ -1,4 +1,5 @@
 import type { FormEventHandler } from "react";
+import { BrandLogo } from "../BrandLogo";
 import { Tile, SectionHeading, SectionShell } from "./Primitives";
 import { ProductDemo } from "./ProductDemo";
 import { evaluationTiles, faqItems, managementTiles, pilotSteps, problemTiles, scenarioTiles } from "./content";
@@ -44,11 +45,13 @@ export function LandingHeader({
   return (
     <header className="lp-header">
       <a className="lp-brand" href="/" aria-label="Replikor">
-        <span className="lp-brand__mark">R</span>
-        <span className="lp-brand__text">
-          <strong>Replikor</strong>
-          <small>AI-тренажёр продаж</small>
-        </span>
+        <BrandLogo
+          className="lp-brand__content"
+          imageClassName="lp-brand__mark"
+          textClassName="lp-brand__text"
+          title="Replikor"
+          subtitle="AI-тренажёр продаж"
+        />
       </a>
 
       <nav className="lp-nav" aria-label="Основная навигация">
@@ -430,7 +433,7 @@ export function LandingFooter() {
     <footer className="lp-footer">
       <div className="lp-shell lp-footer__grid">
         <div>
-          <strong>Replikor</strong>
+          <BrandLogo className="lp-footer__logo" imageClassName="lp-footer__mark" textClassName="lp-brand__text" title="Replikor" />
           <p>Тренажёр продаж для пилота, онбординга и разбора качества разговора.</p>
         </div>
         <div>

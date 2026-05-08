@@ -12,6 +12,8 @@ type ProductDemoProps = {
   variant?: DemoVariant;
 };
 
+const SHOWCASE_SLIDE_INTERVAL_MS = 60_000;
+
 const demoMessages: DemoMessage[] = [
   { speaker: "client", text: "Сейчас у нас всё держится на менеджерах. Чем вы отличаетесь от обычного обучения?" },
   { speaker: "manager", text: "Менеджер проходит живой разговор с тренажёром и получает разбор по конкретным моментам диалога." },
@@ -161,7 +163,7 @@ export function ProductDemo({ variant = "interactive" }: ProductDemoProps) {
     const steps: DemoStep[] = ["chat", "scoring", "report"];
     const interval = window.setInterval(() => {
       setActiveStep((current) => steps[(steps.indexOf(current) + 1) % steps.length]);
-    }, 3000);
+    }, SHOWCASE_SLIDE_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
   }, [enteredViewport, isInteractive, reducedMotion]);
