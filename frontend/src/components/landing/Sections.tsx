@@ -392,7 +392,6 @@ export function FAQSection({ openIndex, onToggle }: FAQSectionProps) {
           <SectionHeading
             kicker="FAQ"
             title="Коротко о запуске, кабинетах и границах продукта."
-            description="Спокойный финальный блок ниже CTA без лишнего визуального шума."
           />
 
           <div className="lp-faq">
