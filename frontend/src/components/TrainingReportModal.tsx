@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import type { ReportPayload } from "../types";
-import { StructuredReportSummary } from "./StructuredReportSummary";
-import { isJudgeSessionOutputPayload } from "./reportPayload";
+import { ReportSurface } from "./ReportSurface";
 
 type TrainingReportModalProps = {
   open: boolean;
@@ -36,9 +35,6 @@ export function TrainingReportModal({ open, report, reportPayload, onClose }: Tr
     return null;
   }
 
-  const hasStructuredPayload = reportPayload !== null && isJudgeSessionOutputPayload(reportPayload);
-  const shouldShowFallbackText = Boolean(report) && (!reportPayload || !hasStructuredPayload);
-
   return (
     <div className="training-report-modal__backdrop" role="presentation" onClick={onClose}>
       <section
@@ -65,19 +61,7 @@ export function TrainingReportModal({ open, report, reportPayload, onClose }: Tr
           </button>
         </header>
         <div className="training-report-modal__body">
-          {reportPayload ? <StructuredReportSummary payload={reportPayload} /> : null}
-          {shouldShowFallbackText ? (
-            <section className={`training-report-modal__fallback${reportPayload ? " training-report-modal__fallback--secondary" : ""}`}>
-              <h3>Текстовая версия</h3>
-              <pre className="report-block">{report}</pre>
-            </section>
-          ) : null}
-          {!reportPayload && !report ? (
-            <section className="training-report-modal__fallback">
-              <h3>Отчёт недоступен</h3>
-              <p className="training-report-modal__empty">Итоговый отчёт пока не был сформирован.</p>
-            </section>
-          ) : null}
+          <ReportSurface report={report} reportPayload={reportPayload} />
         </div>
       </section>
     </div>

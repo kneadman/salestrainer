@@ -26,14 +26,14 @@ export function ClientStat({ label, value, detail }: { label: string; value: Rea
   );
 }
 
-export function SimpleBars({ values }: { values: Record<string, number> }) {
+export function SimpleBars({ values, labelFormatter }: { values: Record<string, number>; labelFormatter?: (key: string) => string }) {
   /** Render tiny CSS bars without adding a chart dependency. */
   const max = Math.max(1, ...Object.values(values));
   return (
     <div className="client-bars">
       {Object.entries(values).map(([key, value]) => (
         <div key={key} className="client-bars__row">
-          <span>{key}</span>
+          <span>{labelFormatter ? labelFormatter(key) : key}</span>
           <div><i style={{ width: `${Math.max(6, (value / max) * 100)}%` }} /></div>
           <strong>{value}</strong>
         </div>

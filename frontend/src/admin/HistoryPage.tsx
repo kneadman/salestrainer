@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StructuredReportSummary } from "../components/StructuredReportSummary";
+import { ReportSurface } from "../components/ReportSurface";
 import { scenarioLabel, statusLabel } from "../labels";
 import { getHistorySession, listOrganizationHistory, listOrganizations } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
@@ -114,7 +114,12 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
           </label>
           <label>
             <span>Статус</span>
-            <input value={status} onChange={(event) => setStatus(event.target.value)} placeholder="active / finished" />
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="">Все статусы</option>
+              <option value="active">Активные</option>
+              <option value="finished">Завершённые</option>
+              <option value="expired">Истёкшие</option>
+            </select>
           </label>
           <label>
             <span>Сценарий</span>
@@ -259,15 +264,15 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
         </div>
         {!detail.report ? (
           <EmptyState title="Сохранённого отчёта нет" />
-        ) : detail.report.report_payload ? (
-          <div className="admin-structured-report">
-            <StructuredReportSummary payload={detail.report.report_payload} />
-          </div>
         ) : (
-          <section className="admin-report-fallback">
-            <h3>Текстовый отчёт</h3>
-            <pre className="admin-report-block">{detail.report.report}</pre>
-          </section>
+          <div className="admin-structured-report">
+            <ReportSurface
+              report={detail.report.report}
+              reportPayload={detail.report.report_payload ?? null}
+              fallbackClassName="admin-report-fallback"
+              fallbackTextClassName="admin-report-block"
+            />
+          </div>
         )}
       </section>
     </div>

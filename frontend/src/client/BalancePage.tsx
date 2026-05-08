@@ -1,18 +1,15 @@
 import type { AuthUser } from "../types";
-import { ClientState, ClientStat } from "./components/ClientPrimitives";
+import { ClientState } from "./components/ClientPrimitives";
 
-export function BalancePage({ user }: { user: AuthUser }) {
-  /** Render honest usage/balance placeholder without fake billing data. */
+export function BalancePage({ user: _user, onNavigate }: { user: AuthUser; onNavigate?: (path: string, replace?: boolean) => void }) {
+  /** Keep the future usage section route in code while the product surface is hidden. */
   return (
     <div className="client-page">
-      <div className="client-page__header"><div><span className="client-kicker">Использование</span><h1>Баланс / использование</h1></div></div>
-      <section className="client-stats-grid">
-        <ClientStat label="Организация" value={user.client_account.name} />
-        <ClientStat label="Тариф" value="Не настроен" />
-        <ClientStat label="Лимиты" value="Не настроены" />
-      </section>
       <section className="client-panel">
-        <ClientState title="Биллинг пока не подключен." detail="Здесь будет отображаться использование, лимиты организации и предупреждения по тарифу. Реальные платежи и invoices не реализованы в этом этапе." />
+        <ClientState title="Раздел использования временно скрыт." detail="Вернитесь в обзор кабинета." />
+        <button type="button" className="client-button client-button--primary" onClick={() => onNavigate?.("/app", true)}>
+          Перейти в обзор
+        </button>
       </section>
     </div>
   );

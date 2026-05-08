@@ -1346,6 +1346,17 @@ button:disabled {
   background: #090f19;
 }
 
+.admin-technical-details {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-technical-details summary {
+  cursor: pointer;
+  color: #9bdcff;
+  font-weight: 800;
+}
+
 .admin-history-turns {
   display: grid;
   gap: 12px;
@@ -1705,6 +1716,10 @@ button:disabled {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   background: #090f19;
+}
+
+.client-report-fallback {
+  margin-top: 0;
 }
 
 .client-profile-list {

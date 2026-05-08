@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getTeamUsageSummary } from "./api";
 import { ClientState, ClientStat, SimpleBars } from "./components/ClientPrimitives";
 import type { TeamUsageSummaryDTO } from "./types";
+import { scenarioLabel, statusLabel } from "../labels";
 import { getClientErrorMessage } from "./utils";
 
 export function TeamAnalyticsPage() {
@@ -48,8 +49,8 @@ export function TeamAnalyticsPage() {
         <ClientStat label="Пользователей" value={summary.unique_users} />
         <ClientStat label="Всего ходов" value={summary.total_turns} />
         <ClientStat label="Средний интерес" value={summary.avg_final_interest_score?.toFixed(1) ?? "—"} />
-        <ClientStat label="Средняя judge-оценка" value={summary.avg_judgement_score?.toFixed(1) ?? "—"} />
-        <ClientStat label="С judge-оценкой" value={summary.sessions_with_judgement} />
+        <ClientStat label="Средняя оценка тренировки" value={summary.avg_judgement_score?.toFixed(1) ?? "—"} />
+        <ClientStat label="С оценкой тренировки" value={summary.sessions_with_judgement} />
       </section>
       <section className="client-panel">
         <h2>По менеджерам</h2>
@@ -78,11 +79,11 @@ export function TeamAnalyticsPage() {
       </section>
       <section className="client-panel">
         <h2>По статусам</h2>
-        <SimpleBars values={summary.sessions_by_status} />
+        <SimpleBars values={summary.sessions_by_status} labelFormatter={statusLabel} />
       </section>
       <section className="client-panel">
         <h2>По сценариям</h2>
-        <SimpleBars values={summary.sessions_by_scenario} />
+        <SimpleBars values={summary.sessions_by_scenario} labelFormatter={scenarioLabel} />
       </section>
     </div>
   );
