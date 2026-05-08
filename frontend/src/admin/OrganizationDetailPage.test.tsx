@@ -43,12 +43,7 @@ const trainingConfig: TrainingConfigDTO = {
   client_account_id: "org-1",
   name: "Existing config",
   is_active: true,
-  default_scenario_id: "qualification_and_authority",
   persona_generation_context: "Existing persona context",
-  persona_policy: { hidden: true },
-  ui_config: { theme: "internal" },
-  limits: { turns: 8 },
-  llm_provider_config_id: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
 };

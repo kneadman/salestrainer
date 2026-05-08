@@ -122,9 +122,6 @@ def _seed_account_with_users(
     training_config = access_repository.create_training_config(
         client_account_id=account.id,
         name="Default config",
-        default_scenario_id="generic_b2b_first_contact",
-        persona_policy={},
-        ui_config={},
     )
     created_users: dict[str, User] = {}
     for email, role in users:

@@ -24,25 +24,15 @@ class AccessRepository:
         *,
         client_account_id: UUID,
         name: str,
-        default_scenario_id: str,
         persona_generation_context: str = "",
-        persona_policy: dict[str, object] | None = None,
-        ui_config: dict[str, object] | None = None,
-        limits: dict[str, object] | None = None,
-        llm_provider_config_id: UUID | None = None,
         is_active: bool = True,
         training_config_id: UUID | None = None,
     ) -> ClientTrainingConfig:
         training_config_kwargs = dict(
             client_account_id=client_account_id,
             name=name,
-            default_scenario_id=default_scenario_id,
             persona_generation_context=persona_generation_context,
-            persona_policy=persona_policy or {},
-            ui_config=ui_config or {},
-            limits=limits or {},
             is_active=is_active,
-            llm_provider_config_id=llm_provider_config_id,
         )
         if training_config_id is not None:
             training_config_kwargs["id"] = training_config_id
@@ -102,12 +92,7 @@ class AccessRepository:
                 "id": training_config.id,
                 "client_account_id": training_config.client_account_id,
                 "name": training_config.name,
-                "default_scenario_id": training_config.default_scenario_id,
                 "persona_generation_context": training_config.persona_generation_context,
-                "persona_policy": training_config.persona_policy,
-                "ui_config": training_config.ui_config,
-                "limits": training_config.limits,
-                "llm_provider_config_id": training_config.llm_provider_config_id,
             }
         )
 
@@ -128,12 +113,7 @@ class AccessRepository:
         *,
         training_config_id: UUID,
         name: str | None = None,
-        default_scenario_id: str | None = None,
         persona_generation_context: str | None = None,
-        persona_policy: dict[str, object] | None = None,
-        ui_config: dict[str, object] | None = None,
-        limits: dict[str, object] | None = None,
-        llm_provider_config_id: UUID | None = None,
     ) -> ClientTrainingConfig | None:
         training_config = self._session.get(ClientTrainingConfig, training_config_id)
         if training_config is None:
@@ -141,18 +121,8 @@ class AccessRepository:
 
         if name is not None:
             training_config.name = name
-        if default_scenario_id is not None:
-            training_config.default_scenario_id = default_scenario_id
         if persona_generation_context is not None:
             training_config.persona_generation_context = persona_generation_context
-        if persona_policy is not None:
-            training_config.persona_policy = persona_policy
-        if ui_config is not None:
-            training_config.ui_config = ui_config
-        if limits is not None:
-            training_config.limits = limits
-        if llm_provider_config_id is not None:
-            training_config.llm_provider_config_id = llm_provider_config_id
 
         self._session.commit()
         self._session.refresh(training_config)

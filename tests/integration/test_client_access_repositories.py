@@ -72,11 +72,7 @@ def test_training_config_assignment_and_session_ownership() -> None:
     training_config = access_repository.create_training_config(
         client_account_id=client_account.id,
         name="Outbound Core",
-        default_scenario_id="sales_audit_cold_outreach",
         persona_generation_context="Owner persona for accounting outsourcing discovery.",
-        persona_policy={"persona_ids": ["owner"]},
-        ui_config={"theme": "light"},
-        limits={"max_turns": 12},
     )
 
     assignment = access_repository.assign_training_config_to_user(
@@ -91,7 +87,6 @@ def test_training_config_assignment_and_session_ownership() -> None:
     assert default_config.id == training_config.id
     assert default_config.client_account_id == client_account.id
     assert default_config.persona_generation_context == "Owner persona for accounting outsourcing discovery."
-    assert default_config.persona_policy == {"persona_ids": ["owner"]}
 
     session_id = uuid4()
     ownership = access_repository.create_training_session_ownership(

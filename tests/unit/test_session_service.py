@@ -73,8 +73,6 @@ def test_start_session_with_training_config_uses_service_default_and_ignores_pol
         id=uuid4(),
         client_account_id=uuid4(),
         name="Default",
-        default_scenario_id="qualification_and_authority",
-        persona_policy={"allowed_roles": ["owner"], "target_action": "confirm_decision_process"},
     )
 
     session = service.start_session(training_config=training_config, persona_id="purchase_manager")
@@ -95,8 +93,6 @@ def test_start_session_with_training_config_prefers_explicit_scenario() -> None:
         id=uuid4(),
         client_account_id=uuid4(),
         name="Default",
-        default_scenario_id="qualification_and_authority",
-        persona_policy={"allowed_roles": ["owner"]},
     )
 
     session = service.start_session(scenario_id="objection_handling", training_config=training_config)

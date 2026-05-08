@@ -64,7 +64,6 @@ def _seed_account(
     config = access_repository.create_training_config(
         client_account_id=account.id,
         name="Default",
-        default_scenario_id="generic_b2b_first_contact",
     )
     created: dict[str, User] = {}
     for email, role in users:

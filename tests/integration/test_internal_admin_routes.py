@@ -4,11 +4,11 @@ from collections.abc import Generator
 from uuid import UUID
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.access.models import AuditLog, LLMProviderConfig, UserTrainingConfig
+from app.access.models import AuditLog, ClientTrainingConfig, LLMProviderConfig, UserTrainingConfig
 from app.api.main import create_app
 from app.identity.dependencies import get_db_session
 from app.identity.models import User
@@ -97,11 +97,7 @@ def _create_training_config(client: TestClient, organization_id: str, name: str 
         f"/api/internal/organizations/{organization_id}/training-configs",
         json={
             "name": name,
-            "default_scenario_id": "generic_b2b_first_contact",
-            "persona_generation_context": "Собственник малого бизнеса, нужен аудит текущего учета и рисков.",
-            "persona_policy": {},
-            "ui_config": {},
-            "limits": {},
+            "persona_generation_context": "Hidden decision-maker for an SMB accounting outsourcing scenario.",
         },
     )
     assert response.status_code == 201
@@ -236,24 +232,24 @@ def test_training_config_create_and_update_work_without_llm_provider_config() ->
         f"/api/internal/organizations/{organization['id']}/training-configs",
         json={
             "name": "Prompt config",
-            "default_scenario_id": "generic_b2b_first_contact",
-            "persona_generation_context": "Финальный ЛПР по бухгалтерскому аутсорсингу, боли в сроках и прозрачности.",
-            "persona_policy": {},
-            "ui_config": {},
-            "limits": {"max_turns": 10},
+            "persona_generation_context": "Final decision-maker for accounting outsourcing with objections about control.",
         },
     )
     config_id = create_response.json()["id"]
     update_response = client.patch(
         f"/api/internal/training-configs/{config_id}",
-        json={"persona_generation_context": "Обновлённый контекст для генерации личности."},
+        json={"persona_generation_context": "Updated persona context for generation."},
     )
 
     assert create_response.status_code == 201
-    assert create_response.json()["persona_generation_context"].startswith("Финальный ЛПР")
-    assert create_response.json()["llm_provider_config_id"] is None
+    assert create_response.json()["persona_generation_context"].startswith("Final decision-maker")
+    assert "default_scenario_id" not in create_response.json()
+    assert "persona_policy" not in create_response.json()
+    assert "ui_config" not in create_response.json()
+    assert "limits" not in create_response.json()
+    assert "llm_provider_config_id" not in create_response.json()
     assert update_response.status_code == 200
-    assert update_response.json()["persona_generation_context"] == "Обновлённый контекст для генерации личности."
+    assert update_response.json()["persona_generation_context"] == "Updated persona context for generation."
     session.close()
 
 
@@ -274,14 +270,32 @@ def test_training_config_create_accepts_minimal_payload() -> None:
     payload = response.json()
     assert payload["name"] == "Accounting outsourcing"
     assert payload["persona_generation_context"].startswith("Final decision-maker")
-    assert payload["default_scenario_id"] == "first_contact_discovery"
-    assert payload["persona_policy"] == {}
-    assert payload["ui_config"] == {}
-    assert payload["limits"] == {}
+    assert set(payload) == {
+        "id",
+        "client_account_id",
+        "name",
+        "is_active",
+        "persona_generation_context",
+        "created_at",
+        "updated_at",
+    }
+    stored = session.get(ClientTrainingConfig, UUID(str(payload["id"])))
+    assert stored is not None
+    column_names = {column["name"] for column in inspect(session.bind).get_columns("client_training_configs")}
+    assert "default_scenario_id" not in column_names
+    assert "persona_policy" not in column_names
+    assert "ui_config" not in column_names
+    assert "limits" not in column_names
+    assert "llm_provider_config_id" not in column_names
+    assert "default_scenario_id" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "persona_policy" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "ui_config" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "limits" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "llm_provider_config_id" not in ClientTrainingConfig.__table__.columns.keys()
     session.close()
 
 
-def test_training_config_create_accepts_legacy_payload() -> None:
+def test_training_config_create_rejects_legacy_payload() -> None:
     session = _create_session()
     client = _admin_client(session)
     organization = _create_org(client)
@@ -289,17 +303,17 @@ def test_training_config_create_accepts_legacy_payload() -> None:
     response = client.post(
         f"/api/internal/organizations/{organization['id']}/training-configs",
         json={
-            "name": "Legacy compatible",
+            "name": "Legacy rejected",
             "default_scenario_id": "generic_b2b_first_contact",
             "persona_generation_context": "Legacy frontend adapter payload.",
             "persona_policy": {},
             "ui_config": {},
             "limits": {},
+            "llm_provider_config_id": "11111111-1111-1111-1111-111111111111",
         },
     )
 
-    assert response.status_code == 201
-    assert response.json()["default_scenario_id"] == "generic_b2b_first_contact"
+    assert response.status_code == 422
     session.close()
 
 
@@ -320,6 +334,32 @@ def test_training_config_update_accepts_minimal_payload() -> None:
     assert response.status_code == 200
     assert response.json()["name"] == "Updated"
     assert response.json()["persona_generation_context"] == "Updated context"
+    assert "default_scenario_id" not in response.json()
+    assert "persona_policy" not in response.json()
+    assert "ui_config" not in response.json()
+    assert "limits" not in response.json()
+    assert "llm_provider_config_id" not in response.json()
+    session.close()
+
+
+def test_training_config_update_rejects_legacy_fields() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+    config = _create_training_config(client, str(organization["id"]))
+
+    response = client.patch(
+        f"/api/internal/training-configs/{config['id']}",
+        json={
+            "default_scenario_id": "generic_b2b_first_contact",
+            "persona_policy": {},
+            "ui_config": {},
+            "limits": {},
+            "llm_provider_config_id": "11111111-1111-1111-1111-111111111111",
+        },
+    )
+
+    assert response.status_code == 422
     session.close()
 
 
@@ -423,10 +463,10 @@ def test_internal_admin_schema_validation_rejects_invalid_inputs() -> None:
         f"/api/internal/organizations/{organization['id']}/users",
         json={"email": "short@example.com", "password": "short", "role": "client_manager"},
     )
-    invalid_scenario = client.post(
+    legacy_training_config_payload = client.post(
         f"/api/internal/organizations/{organization['id']}/training-configs",
         json={
-            "name": "Invalid scenario",
+            "name": "Legacy payload",
             "default_scenario_id": "missing",
         },
     )
@@ -438,7 +478,7 @@ def test_internal_admin_schema_validation_rejects_invalid_inputs() -> None:
     assert invalid_slug.status_code == 422
     assert invalid_email.status_code == 422
     assert short_password.status_code == 422
-    assert invalid_scenario.status_code == 422
+    assert legacy_training_config_payload.status_code == 422
     assert invalid_provider.status_code == 422
     session.close()
 

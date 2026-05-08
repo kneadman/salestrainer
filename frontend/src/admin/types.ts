@@ -72,26 +72,12 @@ export type TrainingConfigDTO = {
   client_account_id: string;
   name: string;
   is_active: boolean;
-  default_scenario_id: string;
   persona_generation_context: string;
-  persona_policy: JsonObject;
-  ui_config: JsonObject;
-  limits: JsonObject;
-  llm_provider_config_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type TrainingConfigPayload = {
-  name: string;
-  default_scenario_id: string;
-  persona_generation_context: string;
-  persona_policy: JsonObject;
-  ui_config: JsonObject;
-  limits: JsonObject;
-};
-
-export type TrainingConfigFormPayload = {
   name: string;
   persona_generation_context: string;
 };
