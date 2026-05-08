@@ -2,7 +2,6 @@ import { FormEvent, useEffect, useState } from "react";
 import { getHistorySessionDetail, getHistorySessions } from "./api";
 import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
-import { SessionSummaryCard } from "./SessionSummaryCard";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, HistoryTurnDTO } from "./types";
 import { scenarioLabel, statusLabel } from "../labels";
 import { formatClientDate, getClientErrorMessage } from "./utils";
@@ -60,7 +59,12 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
   }
   return (
     <div className="client-page">
-      <div className="client-page__header"><div><span className="client-kicker">История</span><h1>Тренировки</h1></div></div>
+      <div className="client-page__header">
+        <div>
+          <span className="client-kicker">История</span>
+          <h1>Тренировки</h1>
+        </div>
+      </div>
       <HistoryFilters status={status} scenarioId={scenarioId} setStatus={setStatus} setScenarioId={setScenarioId} onSubmit={submit} />
       <section className="client-panel">
         {history.length === 0 ? <ClientState title="История появится после первых тренировок." /> : <HistoryTable history={history} onNavigate={onNavigate} />}
@@ -95,10 +99,18 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
   if (error || !detail) {
     return <ClientState title="Тренировка недоступна" detail={error ?? "Не найдена."} tone="error" />;
   }
+  const startedAtLabel = formatClientDate(detail.session.started_at);
   return (
     <div className="client-page">
-      <div className="client-page__header"><div><button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>← История</button><h1>Тренировка {detail.session.session_id.slice(0, 8)}</h1></div><ClientBadge>{statusLabel(detail.session.status)}</ClientBadge></div>
-      <SessionSummaryCard summary={detail.session.summary} publicBrief={detail.public_brief} />
+      <div className="client-page__header">
+        <div>
+          <button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>
+            ← История
+          </button>
+          <h1>{startedAtLabel === "—" ? "Тренировка" : `Тренировка ${startedAtLabel}`}</h1>
+        </div>
+        <ClientBadge>{statusLabel(detail.session.status)}</ClientBadge>
+      </div>
       <HistoryTurnsList turns={detail.turns} />
       <section className="client-panel">
         <h2>Отчёт</h2>
@@ -141,7 +153,9 @@ function HistoryFilters(props: {
           <span>Сценарий</span>
           <input value={props.scenarioId} onChange={(event) => props.setScenarioId(event.target.value)} />
         </label>
-        <button type="submit" className="client-button client-button--primary">Применить</button>
+        <button type="submit" className="client-button client-button--primary">
+          Применить
+        </button>
       </form>
     </section>
   );
