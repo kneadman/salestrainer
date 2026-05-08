@@ -7,12 +7,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.access.models import AuditLog, ClientTrainingConfig, LLMProviderConfig, UserTrainingConfig
+from app.client_portal.service import ClientPortalService
+from app.history.projections import session_summary_dto
+from app.history.repository import HistoryRepository, SessionListFilters
 from app.identity.models import ClientAccount, User
 from app.identity.roles import CLIENT_ROLES, normalize_role
 from app.identity.security import hash_password
 from app.infrastructure.config import Settings
 from app.infrastructure.secrets import encrypt_secret, preview_encrypted_secret
 from app.internal_admin.schemas import (
+    AdminUserAnalyticsDetailDTO,
     AuditLogDTO,
     ClientAccountBriefDTO,
     LLMProviderConfigDTO,
@@ -113,6 +117,25 @@ class InternalAdminService:
             .order_by(User.created_at.desc())
         )
         return [self._user_dto(user) for user in self._session.scalars(statement)]
+
+    def get_user_analytics_detail(self, *, organization_id: UUID, user_id: UUID) -> AdminUserAnalyticsDetailDTO:
+        """Return one organization user's profile, analytics, and recent public-safe history for internal admin."""
+        self._get_account(organization_id)
+        user = self._get_user(user_id)
+        if user.client_account_id != organization_id:
+            raise NotFoundError("User not found.")
+        analytics = ClientPortalService(self._session).get_user_analytics_for_admin(user_id=user.id)
+        history_rows = HistoryRepository(self._session).list_sessions_for_user(
+            user_id=user.id,
+            filters=SessionListFilters(),
+            limit=25,
+            offset=0,
+        )
+        return AdminUserAnalyticsDetailDTO(
+            user=self._user_dto(user),
+            analytics=analytics,
+            history=[session_summary_dto(record, user_email=email) for record, email in history_rows],
+        )
 
     def create_user(
         self,

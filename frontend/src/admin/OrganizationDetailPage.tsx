@@ -25,6 +25,7 @@ import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./compone
 import type {
   AuditLogDTO,
   HistorySessionSummaryDTO,
+  OrganizationDetailTab,
   OrganizationDTO,
   TrainingConfigDTO,
   UsageSummaryDTO,
@@ -35,10 +36,9 @@ import { compactJson, formatDate, getErrorMessage, statusLabel } from "./utils";
 
 type OrganizationDetailPageProps = {
   organizationId: string;
+  initialTab?: OrganizationDetailTab;
   onNavigate: (path: string) => void;
 };
-
-type DetailTab = "overview" | "users" | "configs" | "history" | "usage" | "audit";
 
 type UserForm = {
   email: string;
@@ -57,7 +57,7 @@ const DEFAULT_CONFIG_FORM: ConfigForm = {
   persona_generation_context: "",
 };
 
-const TAB_LABELS: Record<DetailTab, string> = {
+const TAB_LABELS: Record<OrganizationDetailTab, string> = {
   overview: "Обзор",
   users: "Пользователи",
   configs: "Настройки",
@@ -66,9 +66,9 @@ const TAB_LABELS: Record<DetailTab, string> = {
   audit: "Аудит",
 };
 
-export function OrganizationDetailPage({ organizationId, onNavigate }: OrganizationDetailPageProps) {
+export function OrganizationDetailPage({ organizationId, initialTab, onNavigate }: OrganizationDetailPageProps) {
   /** Render one organization workspace with users, training configs, history, usage, and audit sections. */
-  const [activeTab, setActiveTab] = useState<DetailTab>("overview");
+  const [activeTab, setActiveTab] = useState<OrganizationDetailTab>(initialTab ?? "overview");
   const [organization, setOrganization] = useState<OrganizationDTO | null>(null);
   const [users, setUsers] = useState<UserDTO[]>([]);
   const [configs, setConfigs] = useState<TrainingConfigDTO[]>([]);
@@ -123,6 +123,11 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
     /** Refresh detail data when the organization id changes. */
     void loadAll();
   }, [organizationId]);
+
+  useEffect(() => {
+    /** Sync requested tab from the route when organization detail opens or changes. */
+    setActiveTab(initialTab ?? "overview");
+  }, [organizationId, initialTab]);
 
   const submitUser = async (event: FormEvent<HTMLFormElement>) => {
     /** Create or update a client user without allowing internal_admin role creation. */
@@ -294,7 +299,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       {error ? <div className="admin-alert admin-alert--error">{error}</div> : null}
       {success ? <div className="admin-alert">{success}</div> : null}
       <div className="admin-tabs">
-        {(["overview", "users", "configs", "history", "usage", "audit"] as DetailTab[]).map((tab) => (
+        {(["overview", "users", "configs", "history", "usage", "audit"] as OrganizationDetailTab[]).map((tab) => (
           <button key={tab} type="button" className={activeTab === tab ? "admin-tab admin-tab--active" : "admin-tab"} onClick={() => setActiveTab(tab)}>
             {TAB_LABELS[tab]}
           </button>
@@ -319,6 +324,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
           onToggle={toggleUser}
           onReset={resetPassword}
           onAssignment={handleAssignment}
+          onOpenAnalytics={(userId) => onNavigate(`/admin/organizations/${organizationId}/users/${userId}/analytics`)}
         />
       ) : null}
       {activeTab === "configs" ? (
@@ -375,6 +381,7 @@ function UsersSection(props: {
   onToggle: (user: UserDTO) => void;
   onReset: (user: UserDTO) => void;
   onAssignment: (userId: string, configId: string, action: "assign" | "default" | "unassign") => void;
+  onOpenAnalytics: (userId: string) => void;
 }) {
   /** Render user form, assignments, and reset-password actions. */
   return (
@@ -431,6 +438,7 @@ function UsersSection(props: {
                     </td>
                     <td>
                       <div className="admin-row-actions">
+                        <button type="button" className="admin-link-button" onClick={() => props.onOpenAnalytics(user.id)}>Аналитика</button>
                         <button type="button" className="admin-link-button" onClick={() => {
                           props.setEditingUserId(user.id);
                           props.setUserForm({ email: user.email, password: "", role: user.role === "client_lead" ? "client_lead" : "client_manager" });

@@ -1023,6 +1023,32 @@ button:disabled {
   color: #9aa9bf;
 }
 
+.admin-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-bars__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-bars__row div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.admin-bars__row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7dd3fc 0%, #34d399 100%);
+}
+
 .admin-nav {
   display: grid;
   gap: 6px;

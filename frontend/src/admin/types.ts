@@ -1,16 +1,22 @@
 import type { AuthUser, ReportPayload } from "../types";
+import type { ClientUserAnalyticsDTO } from "../client/types";
 
 export type AdminRoute =
   | "dashboard"
   | "organizations"
   | "organization-detail"
+  | "organization-user-analytics"
   | "history"
   | "history-detail"
   | "audit-log";
 
+export type OrganizationDetailTab = "overview" | "users" | "configs" | "history" | "usage" | "audit";
+
 export type AdminRouteState = {
   route: AdminRoute;
   organizationId?: string;
+  tab?: OrganizationDetailTab;
+  userId?: string;
   sessionId?: string;
 };
 
@@ -54,6 +60,12 @@ export type UserDTO = {
     name: string;
     slug: string;
   } | null;
+};
+
+export type AdminUserAnalyticsDetailDTO = {
+  user: UserDTO;
+  analytics: ClientUserAnalyticsDTO;
+  history: HistorySessionSummaryDTO[];
 };
 
 export type UserCreatePayload = {

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.identity.service import CurrentSession
 from app.internal_admin.dependencies import get_internal_admin_service, require_internal_admin_session
 from app.internal_admin.schemas import (
+    AdminUserAnalyticsDetailDTO,
     AuditLogDTO,
     LLMProviderConfigCreateRequest,
     LLMProviderConfigDTO,
@@ -120,6 +121,19 @@ def list_users(
 ) -> list[UserDTO]:
     try:
         return service.list_users(organization_id)
+    except Exception as error:
+        _handle_error(error)
+
+
+@router.get("/organizations/{organization_id}/users/{user_id}/analytics", response_model=AdminUserAnalyticsDetailDTO)
+def get_organization_user_analytics(
+    organization_id: UUID,
+    user_id: UUID,
+    service: InternalAdminService = Depends(get_internal_admin_service),
+    _: CurrentSession = Depends(require_internal_admin_session),
+) -> AdminUserAnalyticsDetailDTO:
+    try:
+        return service.get_user_analytics_detail(organization_id=organization_id, user_id=user_id)
     except Exception as error:
         _handle_error(error)
 

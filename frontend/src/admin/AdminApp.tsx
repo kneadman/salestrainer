@@ -2,6 +2,7 @@ import { AdminDashboard } from "./AdminDashboard";
 import { AdminLayout } from "./AdminLayout";
 import { AuditLogPage } from "./AuditLogPage";
 import { HistoryPage } from "./HistoryPage";
+import { AdminUserAnalyticsPage } from "./UserAnalyticsPage";
 import { OrganizationDetailPage } from "./OrganizationDetailPage";
 import { OrganizationsPage } from "./OrganizationsPage";
 import type { AdminAppProps } from "./types";
@@ -36,7 +37,10 @@ export function AdminApp({ user, path, onNavigate, onLogout }: AdminAppProps) {
       {route.route === "dashboard" ? <AdminDashboard onNavigate={onNavigate} /> : null}
       {route.route === "organizations" ? <OrganizationsPage onNavigate={onNavigate} /> : null}
       {route.route === "organization-detail" && route.organizationId ? (
-        <OrganizationDetailPage organizationId={route.organizationId} onNavigate={onNavigate} />
+        <OrganizationDetailPage organizationId={route.organizationId} initialTab={route.tab} onNavigate={onNavigate} />
+      ) : null}
+      {route.route === "organization-user-analytics" && route.organizationId && route.userId ? (
+        <AdminUserAnalyticsPage organizationId={route.organizationId} userId={route.userId} onNavigate={onNavigate} />
       ) : null}
       {route.route === "history" ? <HistoryPage onNavigate={onNavigate} /> : null}
       {route.route === "history-detail" ? <HistoryPage sessionId={route.sessionId} onNavigate={onNavigate} /> : null}

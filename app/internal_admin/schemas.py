@@ -7,6 +7,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints, field_validator
 
+from app.client_portal.schemas import ClientUserAnalyticsDTO
+from app.history.schemas import HistorySessionSummaryDTO
+
 NameStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
 PasswordStr = Annotated[str, StringConstraints(min_length=8, max_length=256)]
 SlugStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=80, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
@@ -66,6 +69,12 @@ class UserDTO(BaseModel):
     created_at: datetime
     updated_at: datetime
     client_account: ClientAccountBriefDTO | None = None
+
+
+class AdminUserAnalyticsDetailDTO(BaseModel):
+    user: UserDTO
+    analytics: ClientUserAnalyticsDTO
+    history: list[HistorySessionSummaryDTO]
 
 
 class UserCreateRequest(BaseModel):
