@@ -112,7 +112,7 @@ class TrainingConfigCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: NameStr
-    default_scenario_id: ScenarioIdStr
+    default_scenario_id: ScenarioIdStr | None = None
     persona_generation_context: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
@@ -121,8 +121,8 @@ class TrainingConfigCreateRequest(BaseModel):
 
     @field_validator("default_scenario_id")
     @classmethod
-    def validate_scenario_id(cls, value: str) -> str:
-        if value not in SUPPORTED_SCENARIO_IDS:
+    def validate_scenario_id(cls, value: str | None) -> str | None:
+        if value is not None and value not in SUPPORTED_SCENARIO_IDS:
             raise ValueError("Unknown scenario_id.")
         return value
 

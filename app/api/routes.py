@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.access.models import LandingLead
-from app.api.dependencies import get_persona_generation_service, get_report_service, get_session_service, get_turn_service
+from app.api.dependencies import get_app_settings, get_persona_generation_service, get_report_service, get_session_service, get_turn_service
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
 from app.api.schemas import (
@@ -51,6 +51,7 @@ from app.history.dependencies import get_history_service
 from app.history.events import UsageEventType
 from app.history.service import HistoryService
 from app.infrastructure.db import get_db_session
+from app.infrastructure.config import Settings
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -112,17 +113,18 @@ def submit_landing_lead(
 
 @router.get("/scenarios", response_model=list[ScenarioOptionDTO], responses=ERROR_RESPONSES)
 def get_scenarios(
+    settings: Settings = Depends(get_app_settings),
     access_service: AccessService = Depends(get_access_service),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> list[ScenarioOptionDTO]:
     scenarios = list_scenarios()
     if not is_internal_admin(current_session.user.role):
         try:
-            training_config = access_service.get_default_training_config_for_user(current_session.user.id)
+            access_service.get_default_training_config_for_user(current_session.user.id)
         except LookupError as error:
             raise not_found(str(error)) from error
-        allowed_ids = {normalize_scenario_id(scenario_id) for scenario_id in training_config.allowed_scenario_ids()}
-        scenarios = [scenario for scenario in scenarios if scenario.id in allowed_ids]
+        default_scenario_id = normalize_scenario_id(settings.default_training_scenario_id)
+        scenarios = [scenario for scenario in scenarios if scenario.id == default_scenario_id]
 
     return [
         ScenarioOptionDTO(

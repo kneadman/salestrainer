@@ -257,6 +257,72 @@ def test_training_config_create_and_update_work_without_llm_provider_config() ->
     session.close()
 
 
+def test_training_config_create_accepts_minimal_payload() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+
+    response = client.post(
+        f"/api/internal/organizations/{organization['id']}/training-configs",
+        json={
+            "name": "Accounting outsourcing",
+            "persona_generation_context": "Final decision-maker for accounting outsourcing with objections about control.",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["name"] == "Accounting outsourcing"
+    assert payload["persona_generation_context"].startswith("Final decision-maker")
+    assert payload["default_scenario_id"] == "first_contact_discovery"
+    assert payload["persona_policy"] == {}
+    assert payload["ui_config"] == {}
+    assert payload["limits"] == {}
+    session.close()
+
+
+def test_training_config_create_accepts_legacy_payload() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+
+    response = client.post(
+        f"/api/internal/organizations/{organization['id']}/training-configs",
+        json={
+            "name": "Legacy compatible",
+            "default_scenario_id": "generic_b2b_first_contact",
+            "persona_generation_context": "Legacy frontend adapter payload.",
+            "persona_policy": {},
+            "ui_config": {},
+            "limits": {},
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["default_scenario_id"] == "generic_b2b_first_contact"
+    session.close()
+
+
+def test_training_config_update_accepts_minimal_payload() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+    config = _create_training_config(client, str(organization["id"]))
+
+    response = client.patch(
+        f"/api/internal/training-configs/{config['id']}",
+        json={
+            "name": "Updated",
+            "persona_generation_context": "Updated context",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Updated"
+    assert response.json()["persona_generation_context"] == "Updated context"
+    session.close()
+
+
 def test_llm_provider_config_secret_masking_storage_update_disable() -> None:
     session = _create_session()
     client = _admin_client(session)
