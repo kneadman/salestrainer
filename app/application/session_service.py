@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PUBLIC_BRIEF = (
     "Вы начали первичный B2B-диалог с потенциальным клиентом. "
-    "Роль, полномочия и контекст клиента неизвестны. "
-    "Выясните их через вопросы и выведите разговор к следующему шагу."
+    "Роль, полномочия и ситуация клиента неизвестны. "
+    "Задавайте правильные вопросы и отрабатывайте возражения, чтобы склонить клиента на свою сторону."
 )
 
 
@@ -30,7 +30,7 @@ def build_initial_client_state(persona: PersonaProfile, starting_interest: int) 
         irritation=10,
         urgency=persona.urgency,
         price_sensitivity=persona.price_sensitivity,
-        open_objections=persona.typical_objections[:1],
+        open_objections=[],
         known_pains=[],
         buying_signals=[],
         red_flags=[],
