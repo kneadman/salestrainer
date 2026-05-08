@@ -10,9 +10,12 @@ export type AdminRoute =
   | "history-detail"
   | "audit-log";
 
+export type OrganizationDetailTab = "overview" | "users" | "configs" | "history" | "usage" | "audit";
+
 export type AdminRouteState = {
   route: AdminRoute;
   organizationId?: string;
+  tab?: OrganizationDetailTab;
   userId?: string;
   sessionId?: string;
 };

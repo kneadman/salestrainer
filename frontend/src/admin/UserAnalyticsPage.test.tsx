@@ -108,6 +108,18 @@ describe("AdminUserAnalyticsPage", () => {
     expect(onNavigate).toHaveBeenCalledWith("/admin/history/sessions/session-1");
   });
 
+  it("navigates back to the organization users tab", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    vi.mocked(getOrganizationUserAnalytics).mockResolvedValue(detail);
+
+    render(<AdminUserAnalyticsPage organizationId="org-1" userId="user-1" onNavigate={onNavigate} />);
+
+    await user.click(await screen.findByRole("button", { name: "← Пользователи" }));
+
+    expect(onNavigate).toHaveBeenCalledWith("/admin/organizations/org-1?tab=users");
+  });
+
   it("renders error state when the analytics endpoint fails", async () => {
     vi.mocked(getOrganizationUserAnalytics).mockRejectedValue(new Error("boom"));
 

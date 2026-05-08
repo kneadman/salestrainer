@@ -1,6 +1,6 @@
 import { ApiError } from "../apiClient";
 import { formatDate as formatSharedDate, statusLabel as sharedStatusLabel } from "../labels";
-import type { AdminRouteState, JsonObject } from "./types";
+import type { AdminRouteState, JsonObject, OrganizationDetailTab } from "./types";
 
 export const FALLBACK_SCENARIOS = [
   "first_contact_discovery",
@@ -13,9 +13,14 @@ export const FALLBACK_SCENARIOS = [
   "follow_up_after_pause",
 ];
 
+const ORGANIZATION_DETAIL_TABS = new Set<OrganizationDetailTab>(["overview", "users", "configs", "history", "usage", "audit"]);
+
 export function parseAdminPath(path: string): AdminRouteState {
   /** Convert the browser path into the small route state used by AdminApp. */
-  const segments = path.split("/").filter(Boolean);
+  const [pathname, queryString] = path.split("?");
+  const segments = pathname.split("/").filter(Boolean);
+  const params = new URLSearchParams(queryString ?? "");
+  const organizationTab = params.get("tab");
   if (segments[0] !== "admin") {
     return { route: "dashboard" };
   }
@@ -23,7 +28,13 @@ export function parseAdminPath(path: string): AdminRouteState {
     return { route: "organization-user-analytics", organizationId: segments[2], userId: segments[4] };
   }
   if (segments[1] === "organizations" && segments[2]) {
-    return { route: "organization-detail", organizationId: segments[2] };
+    return {
+      route: "organization-detail",
+      organizationId: segments[2],
+      tab: organizationTab && ORGANIZATION_DETAIL_TABS.has(organizationTab as OrganizationDetailTab)
+        ? (organizationTab as OrganizationDetailTab)
+        : undefined,
+    };
   }
   if (segments[1] === "organizations") {
     return { route: "organizations" };

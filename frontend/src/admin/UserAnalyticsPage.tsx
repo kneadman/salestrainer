@@ -45,7 +45,7 @@ export function AdminUserAnalyticsPage({ organizationId, userId, onNavigate }: A
           <button
             type="button"
             className="admin-link-button"
-            onClick={() => onNavigate(`/admin/organizations/${organizationId}`)}
+            onClick={() => onNavigate(`/admin/organizations/${organizationId}?tab=users`)}
           >
             ← Пользователи
           </button>
