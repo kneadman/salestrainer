@@ -218,23 +218,18 @@ class InternalAdminService:
         actor_user_id: UUID,
         organization_id: UUID,
         name: str,
-        default_scenario_id: str | None = None,
         persona_generation_context: str = "",
-        persona_policy: dict[str, object] | None = None,
-        ui_config: dict[str, object] | None = None,
-        limits: dict[str, object] | None = None,
-        llm_provider_config_id: UUID | None = None,
     ) -> TrainingConfigDTO:
         self._get_account(organization_id)
         config = ClientTrainingConfig(
             client_account_id=organization_id,
             name=name,
-            default_scenario_id=default_scenario_id or self._settings.default_training_scenario_id,
+            default_scenario_id=self._settings.default_training_scenario_id,
             persona_generation_context=persona_generation_context,
-            persona_policy=persona_policy or {},
-            ui_config=ui_config or {},
-            limits=limits or {},
-            llm_provider_config_id=llm_provider_config_id,
+            persona_policy={},
+            ui_config={},
+            limits={},
+            llm_provider_config_id=None,
             is_active=True,
         )
         self._session.add(config)
@@ -255,15 +250,7 @@ class InternalAdminService:
 
     def update_training_config(self, *, actor_user_id: UUID, config_id: UUID, **updates: object) -> TrainingConfigDTO:
         config = self._get_training_config(config_id)
-        for field in (
-            "name",
-            "default_scenario_id",
-            "persona_generation_context",
-            "persona_policy",
-            "ui_config",
-            "limits",
-            "llm_provider_config_id",
-        ):
+        for field in ("name", "persona_generation_context"):
             if field in updates:
                 setattr(config, field, updates[field])
         self._audit(
@@ -652,12 +639,7 @@ class InternalAdminService:
             client_account_id=config.client_account_id,
             name=config.name,
             is_active=config.is_active,
-            default_scenario_id=config.default_scenario_id,
             persona_generation_context=config.persona_generation_context,
-            persona_policy=config.persona_policy,
-            ui_config=config.ui_config,
-            limits=config.limits,
-            llm_provider_config_id=config.llm_provider_config_id,
             created_at=config.created_at,
             updated_at=config.updated_at,
         )

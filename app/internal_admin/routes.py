@@ -229,12 +229,7 @@ def create_training_config(
             actor_user_id=current_session.user.id,
             organization_id=organization_id,
             name=request.name,
-            default_scenario_id=request.default_scenario_id,
             persona_generation_context=request.persona_generation_context,
-            persona_policy=request.persona_policy,
-            ui_config=request.ui_config,
-            limits=request.limits,
-            llm_provider_config_id=request.llm_provider_config_id,
         )
     except Exception as error:
         _handle_error(error)
