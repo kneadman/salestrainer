@@ -4,8 +4,8 @@ import type { TurnPublicDTO } from "../types";
 
 const firstTurn: TurnPublicDTO = {
   turn_index: 1,
-  manager_message: "РџСЂРёРІРµС‚, С‡РµРј Р·Р°РЅРёРјР°РµС‚РµСЃСЊ?",
-  client_answer: "Р’РµРґСѓ СѓС‡С‘С‚ Рё РѕС‚С‡С‘С‚РЅРѕСЃС‚СЊ.",
+  manager_message: "Привет, чем занимаетесь?",
+  client_answer: "Веду учет и отчетность.",
   interest_before: 40,
   interest_delta: 3,
   interest_after: 43,
@@ -16,8 +16,8 @@ const firstTurn: TurnPublicDTO = {
 
 const secondTurn: TurnPublicDTO = {
   turn_index: 2,
-  manager_message: "РљР°Рє СЃРµР№С‡Р°СЃ СѓСЃС‚СЂРѕРµРЅ РїСЂРѕС†РµСЃСЃ?",
-  client_answer: "РњРЅРѕРіРѕ СЂСѓС‡РЅРѕР№ СЂР°Р±РѕС‚С‹.",
+  manager_message: "Как сейчас устроен процесс?",
+  client_answer: "Много ручной работы.",
   interest_before: 43,
   interest_delta: 4,
   interest_after: 47,
@@ -39,11 +39,11 @@ describe("ChatWindow", () => {
   it("scrolls to the bottom when turns change", () => {
     const scrollIntoView = mockScrollIntoView();
 
-    const { rerender } = render(<ChatWindow turns={[firstTurn]} loading={false} publicBrief="РљСЂР°С‚РєРёР№ Р±СЂРёС„" />);
+    const { rerender } = render(<ChatWindow turns={[firstTurn]} loading={false} publicBrief="Краткий бриф" />);
 
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
 
-    rerender(<ChatWindow turns={[firstTurn, secondTurn]} loading={false} publicBrief="РљСЂР°С‚РєРёР№ Р±СЂРёС„" />);
+    rerender(<ChatWindow turns={[firstTurn, secondTurn]} loading={false} publicBrief="Краткий бриф" />);
 
     expect(scrollIntoView).toHaveBeenCalledTimes(2);
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: "smooth", block: "end" });

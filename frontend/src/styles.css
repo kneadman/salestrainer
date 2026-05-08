@@ -1820,6 +1820,12 @@ button:disabled {
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  .client-shell--trainer .client-main-shell {
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .client-sidebar {
     position: static;
     height: auto;

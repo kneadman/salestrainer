@@ -98,8 +98,8 @@ const activeSession = {
 
 const makeTurn = (turnIndex: number) => ({
   turn_index: turnIndex,
-  manager_message: `Р’РѕРїСЂРѕСЃ ${turnIndex}`,
-  client_answer: `РћС‚РІРµС‚ ${turnIndex}`,
+  manager_message: `Вопрос ${turnIndex}`,
+  client_answer: `Ответ ${turnIndex}`,
   interest_before: 40 + turnIndex,
   interest_delta: 1,
   interest_after: 41 + turnIndex,
@@ -231,7 +231,7 @@ describe("TrainerPage", () => {
 
     const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
 
-    await screen.findByText("РћС‚РІРµС‚ 32");
+    await screen.findByText("Ответ 32");
 
     const trainerChatPanel = container.querySelector(".trainer-chat-panel");
     const trainerChatBody = container.querySelector(".trainer-chat-body");
