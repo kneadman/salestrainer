@@ -44,6 +44,11 @@ class ClientPortalService:
         user = self._get_user(user_id)
         return self._user_analytics(user)
 
+    def get_user_analytics_for_admin(self, *, user_id: UUID) -> ClientUserAnalyticsDTO:
+        """Return analytics for one user so internal admin services can reuse one analytics source."""
+        user = self._get_user(user_id)
+        return self._user_analytics(user)
+
     def list_team_users(self, *, requester: User) -> list[TeamUserDTO]:
         """Return same-organization users for a client lead."""
         self._require_client_lead(requester)

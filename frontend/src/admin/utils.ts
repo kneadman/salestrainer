@@ -19,6 +19,9 @@ export function parseAdminPath(path: string): AdminRouteState {
   if (segments[0] !== "admin") {
     return { route: "dashboard" };
   }
+  if (segments[1] === "organizations" && segments[2] && segments[3] === "users" && segments[4] && segments[5] === "analytics") {
+    return { route: "organization-user-analytics", organizationId: segments[2], userId: segments[4] };
+  }
   if (segments[1] === "organizations" && segments[2]) {
     return { route: "organization-detail", organizationId: segments[2] };
   }

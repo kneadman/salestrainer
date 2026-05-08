@@ -319,6 +319,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
           onToggle={toggleUser}
           onReset={resetPassword}
           onAssignment={handleAssignment}
+          onOpenAnalytics={(userId) => onNavigate(`/admin/organizations/${organizationId}/users/${userId}/analytics`)}
         />
       ) : null}
       {activeTab === "configs" ? (
@@ -375,6 +376,7 @@ function UsersSection(props: {
   onToggle: (user: UserDTO) => void;
   onReset: (user: UserDTO) => void;
   onAssignment: (userId: string, configId: string, action: "assign" | "default" | "unassign") => void;
+  onOpenAnalytics: (userId: string) => void;
 }) {
   /** Render user form, assignments, and reset-password actions. */
   return (
@@ -431,6 +433,7 @@ function UsersSection(props: {
                     </td>
                     <td>
                       <div className="admin-row-actions">
+                        <button type="button" className="admin-link-button" onClick={() => props.onOpenAnalytics(user.id)}>Аналитика</button>
                         <button type="button" className="admin-link-button" onClick={() => {
                           props.setEditingUserId(user.id);
                           props.setUserForm({ email: user.email, password: "", role: user.role === "client_lead" ? "client_lead" : "client_manager" });

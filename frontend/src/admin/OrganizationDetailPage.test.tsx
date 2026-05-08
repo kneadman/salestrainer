@@ -10,7 +10,7 @@ import {
   listUserTrainingConfigs,
   listUsers,
 } from "./api";
-import type { AuditLogDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO, UsageSummaryDTO } from "./types";
+import type { AuditLogDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO, UsageSummaryDTO, UserDTO } from "./types";
 
 vi.mock("./api", async () => {
   const actual = await vi.importActual<typeof import("./api")>("./api");
@@ -33,8 +33,8 @@ const organization: OrganizationDTO = {
   is_active: true,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
-  users_count: 0,
-  active_users_count: 0,
+  users_count: 1,
+  active_users_count: 1,
   training_configs_count: 1,
 };
 
@@ -46,6 +46,22 @@ const trainingConfig: TrainingConfigDTO = {
   persona_generation_context: "Existing persona context",
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
+};
+
+const organizationUser: UserDTO = {
+  id: "user-1",
+  client_account_id: "org-1",
+  email: "manager@example.com",
+  role: "client_manager",
+  is_active: true,
+  must_change_password: false,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-02T00:00:00Z",
+  client_account: {
+    id: "org-1",
+    name: "Acme",
+    slug: "acme",
+  },
 };
 
 function setupApiMocks(): void {
@@ -108,5 +124,18 @@ describe("OrganizationDetailPage training configs", () => {
     expect(screen.queryByText("Дополнительные правила личности")).not.toBeInTheDocument();
     expect(screen.queryByText("Настройки интерфейса")).not.toBeInTheDocument();
     expect(screen.queryByText("Лимиты")).not.toBeInTheDocument();
+  });
+
+  it("renders analytics action for a user and navigates to the dedicated analytics screen", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    vi.mocked(listUsers).mockResolvedValue([organizationUser]);
+
+    render(<OrganizationDetailPage organizationId="org-1" onNavigate={onNavigate} />);
+
+    await user.click(await screen.findByRole("button", { name: "Пользователи" }));
+    await user.click(await screen.findByRole("button", { name: "Аналитика" }));
+
+    expect(onNavigate).toHaveBeenCalledWith("/admin/organizations/org-1/users/user-1/analytics");
   });
 });

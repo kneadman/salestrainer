@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select
@@ -10,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.access.models import AuditLog, ClientTrainingConfig, LLMProviderConfig, UserTrainingConfig
 from app.api.main import create_app
+from app.history.models import TrainingReportRecord, TrainingSessionRecord
 from app.identity.dependencies import get_db_session
 from app.identity.models import User
 from app.identity.repository import IdentityRepository
@@ -104,6 +106,67 @@ def _create_training_config(client: TestClient, organization_id: str, name: str 
     return response.json()
 
 
+def _add_history(
+    session: Session,
+    *,
+    user_id: UUID,
+    client_account_id: UUID,
+    training_config_id: UUID | None,
+    status: str = "finished",
+    final_interest_score: int | None = 72,
+    turn_count: int = 3,
+    started_at: datetime | None = None,
+) -> TrainingSessionRecord:
+    now = started_at or datetime.now(UTC)
+    record = TrainingSessionRecord(
+        id=uuid4(),
+        client_account_id=client_account_id,
+        user_id=user_id,
+        training_config_id=training_config_id,
+        scenario_id="generic_b2b_first_contact",
+        status=status,
+        started_at=now,
+        finished_at=now if status == "finished" else None,
+        last_activity_at=now,
+        turn_count=turn_count,
+        final_interest_score=final_interest_score,
+        final_stage="needs_analysis",
+        persona_snapshot={"hidden_persona": "secret"},
+        initial_state_snapshot={"raw_llm_payload": "secret"},
+        final_state_snapshot={"raw_llm_response": "secret"},
+        public_brief="brief",
+        summary="summary",
+    )
+    session.add(record)
+    session.commit()
+    return record
+
+
+def _add_report(session: Session, *, session_id: UUID, overall_score: int) -> None:
+    session.add(
+        TrainingReportRecord(
+            session_id=session_id,
+            report_text="Saved report",
+            report_payload={
+                "schema_version": 1,
+                "overall_score": overall_score,
+                "overall_grade": "good",
+                "outcome": "meeting",
+                "executive_summary": "Summary",
+                "bento_blocks": [],
+                "skill_scores": [],
+                "key_strengths": [],
+                "key_weaknesses": [],
+                "missed_opportunities": [],
+                "recommendations": [],
+                "final_verdict": "Verdict",
+                "risk_flags": [],
+            },
+        )
+    )
+    session.commit()
+
+
 def test_client_roles_cannot_access_internal_admin_api() -> None:
     for role in ("client_manager", "client_lead"):
         session = _create_session()
@@ -193,6 +256,84 @@ def test_user_management_create_roles_reject_admin_reset_disable_enable() -> Non
     assert enabled.status_code == 200
     assert login_enabled.status_code == 200
     session.close()
+
+
+def test_internal_admin_can_open_user_analytics_detail_for_organization_user() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+    user_response = client.post(
+        f"/api/internal/organizations/{organization['id']}/users",
+        json={"email": "manager@example.com", "password": "temporary", "role": "client_manager"},
+    )
+    user_payload = user_response.json()
+    config = _create_training_config(client, str(organization["id"]), "Default")
+    current_session = _add_history(
+        session,
+        user_id=UUID(user_payload["id"]),
+        client_account_id=UUID(str(organization["id"])),
+        training_config_id=UUID(config["id"]),
+        status="finished",
+        final_interest_score=81,
+        turn_count=4,
+        started_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    previous_session = _add_history(
+        session,
+        user_id=UUID(user_payload["id"]),
+        client_account_id=UUID(str(organization["id"])),
+        training_config_id=UUID(config["id"]),
+        status="active",
+        final_interest_score=None,
+        turn_count=2,
+        started_at=datetime.now(UTC) - timedelta(days=9),
+    )
+    _add_report(session, session_id=current_session.id, overall_score=87)
+    _add_report(session, session_id=previous_session.id, overall_score=63)
+
+    response = client.get(f"/api/internal/organizations/{organization['id']}/users/{user_payload['id']}/analytics")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user"]["email"] == "manager@example.com"
+    assert payload["analytics"]["total_sessions"] == 2
+    assert "trends_7d" in payload["analytics"]
+    assert isinstance(payload["history"], list)
+    assert len(payload["history"]) == 2
+    first_history = payload["history"][0]
+    assert "persona_snapshot" not in first_history
+    assert "raw_llm_payload" not in first_history
+    assert "raw_llm_response" not in first_history
+
+
+def test_internal_admin_user_analytics_returns_404_for_other_organization_user() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization_a = _create_org(client, "org-a")
+    organization_b = _create_org(client, "org-b")
+    other_user = client.post(
+        f"/api/internal/organizations/{organization_b['id']}/users",
+        json={"email": "other@example.com", "password": "temporary", "role": "client_manager"},
+    ).json()
+
+    response = client.get(f"/api/internal/organizations/{organization_a['id']}/users/{other_user['id']}/analytics")
+
+    assert response.status_code == 404
+
+
+def test_client_roles_cannot_access_internal_admin_user_analytics_endpoint() -> None:
+    for role in ("client_manager", "client_lead"):
+        session = _create_session()
+        _seed_user(session, email=f"{role}@example.com", role=role, slug=f"{role}-org")
+        client = _create_client(session)
+        _login(client, email=f"{role}@example.com")
+        random_org_id = "11111111-1111-1111-1111-111111111111"
+        random_user_id = "22222222-2222-2222-2222-222222222222"
+
+        response = client.get(f"/api/internal/organizations/{random_org_id}/users/{random_user_id}/analytics")
+
+        assert response.status_code == 403
+        session.close()
 
 
 def test_training_config_management_assignment_cross_org_and_default() -> None:

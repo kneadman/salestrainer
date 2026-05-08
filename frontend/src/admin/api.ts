@@ -1,5 +1,6 @@
 import { request } from "../apiClient";
 import type {
+  AdminUserAnalyticsDetailDTO,
   AuditLogDTO,
   HistorySessionDetailDTO,
   HistorySessionSummaryDTO,
@@ -67,6 +68,11 @@ export function disableOrganization(organizationId: string): Promise<Organizatio
 export function listUsers(organizationId: string): Promise<UserDTO[]> {
   /** Load users for one organization. */
   return request<UserDTO[]>(`/api/internal/organizations/${organizationId}/users`);
+}
+
+export function getOrganizationUserAnalytics(organizationId: string, userId: string): Promise<AdminUserAnalyticsDetailDTO> {
+  /** Load one organization user's analytics and recent history for internal admin review. */
+  return request<AdminUserAnalyticsDetailDTO>(`/api/internal/organizations/${organizationId}/users/${userId}/analytics`);
 }
 
 export function createUser(organizationId: string, payload: UserCreatePayload): Promise<UserDTO> {
