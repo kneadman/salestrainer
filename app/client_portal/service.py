@@ -178,51 +178,52 @@ class ClientPortalService:
         now = datetime.now(UTC)
         current_start = now - timedelta(days=7)
         previous_start = now - timedelta(days=14)
-        statement = (
-            select(TrainingSessionRecord, TrainingReportRecord.report_payload)
-            .outerjoin(TrainingReportRecord, TrainingReportRecord.session_id == TrainingSessionRecord.id)
-            .where(
-                TrainingSessionRecord.user_id == user_id,
-                TrainingSessionRecord.started_at >= previous_start,
-            )
+        current_session_metrics = self._session_window_metrics(user_id=user_id, start_at=current_start)
+        previous_session_metrics = self._session_window_metrics(
+            user_id=user_id,
+            start_at=previous_start,
+            end_at=current_start,
         )
-        current_metrics = self._window_metrics(
-            rows=self._session.execute(statement.where(TrainingSessionRecord.started_at >= current_start)),
-        )
-        previous_metrics = self._window_metrics(
-            rows=self._session.execute(
-                statement.where(
-                    TrainingSessionRecord.started_at >= previous_start,
-                    TrainingSessionRecord.started_at < current_start,
-                )
-            ),
+        current_judgement_metrics = self._judgement_window_metrics(user_id=user_id, start_at=current_start)
+        previous_judgement_metrics = self._judgement_window_metrics(
+            user_id=user_id,
+            start_at=previous_start,
+            end_at=current_start,
         )
         return ClientAnalyticsTrendsDTO(
-            total_sessions=self._trend_metric(current_metrics["total_sessions"], previous_metrics["total_sessions"], value_type="int"),
+            total_sessions=self._trend_metric(
+                current_session_metrics["total_sessions"],
+                previous_session_metrics["total_sessions"],
+                value_type="int",
+            ),
             finished_sessions=self._trend_metric(
-                current_metrics["finished_sessions"],
-                previous_metrics["finished_sessions"],
+                current_session_metrics["finished_sessions"],
+                previous_session_metrics["finished_sessions"],
                 value_type="int",
             ),
             completion_rate=self._trend_metric(
-                current_metrics["completion_rate"],
-                previous_metrics["completion_rate"],
+                current_session_metrics["completion_rate"],
+                previous_session_metrics["completion_rate"],
                 value_type="float",
             ),
             avg_final_interest_score=self._trend_metric(
-                current_metrics["avg_final_interest_score"],
-                previous_metrics["avg_final_interest_score"],
+                current_session_metrics["avg_final_interest_score"],
+                previous_session_metrics["avg_final_interest_score"],
                 value_type="float",
             ),
-            avg_turn_count=self._trend_metric(current_metrics["avg_turn_count"], previous_metrics["avg_turn_count"], value_type="float"),
+            avg_turn_count=self._trend_metric(
+                current_session_metrics["avg_turn_count"],
+                previous_session_metrics["avg_turn_count"],
+                value_type="float",
+            ),
             avg_judgement_score=self._trend_metric(
-                current_metrics["avg_judgement_score"],
-                previous_metrics["avg_judgement_score"],
+                current_judgement_metrics["avg_judgement_score"],
+                previous_judgement_metrics["avg_judgement_score"],
                 value_type="float",
             ),
             sessions_with_judgement=self._trend_metric(
-                current_metrics["sessions_with_judgement"],
-                previous_metrics["sessions_with_judgement"],
+                current_judgement_metrics["sessions_with_judgement"],
+                previous_judgement_metrics["sessions_with_judgement"],
                 value_type="int",
             ),
         )
@@ -298,29 +299,68 @@ class ClientPortalService:
         except ValidationError:
             return None
 
-    def _window_metrics(self, *, rows) -> dict[str, float | int | None]:
-        """Aggregate one analytics time window from joined session/report rows."""
+    def _session_window_metrics(
+        self,
+        *,
+        user_id: UUID,
+        start_at: datetime,
+        end_at: datetime | None = None,
+    ) -> dict[str, float | int | None]:
+        """Aggregate one time window from session rows only, without report joins."""
+        statement = select(TrainingSessionRecord).where(
+            TrainingSessionRecord.user_id == user_id,
+            TrainingSessionRecord.started_at >= start_at,
+        )
+        if end_at is not None:
+            statement = statement.where(TrainingSessionRecord.started_at < end_at)
         total_sessions = 0
         finished_sessions = 0
         turn_counts: list[int] = []
         interest_scores: list[int] = []
-        judgement_scores: list[float] = []
-        for session_record, report_payload in rows:
+        for session_record in self._session.scalars(statement):
             total_sessions += 1
             if session_record.status == "finished":
                 finished_sessions += 1
             turn_counts.append(int(session_record.turn_count))
             if session_record.final_interest_score is not None:
                 interest_scores.append(int(session_record.final_interest_score))
-            parsed_payload = self._parse_judge_payload(report_payload)
-            if parsed_payload is not None:
-                judgement_scores.append(float(parsed_payload.overall_score))
         return {
             "total_sessions": total_sessions,
             "finished_sessions": finished_sessions,
             "completion_rate": (finished_sessions / total_sessions) if total_sessions else None,
             "avg_final_interest_score": self._average_or_none(interest_scores),
             "avg_turn_count": self._average_or_none(turn_counts),
+        }
+
+    def _judgement_window_metrics(
+        self,
+        *,
+        user_id: UUID,
+        start_at: datetime,
+        end_at: datetime | None = None,
+    ) -> dict[str, float | int | None]:
+        """Aggregate one time window from report payloads only, deduplicated by session id."""
+        statement = (
+            select(TrainingReportRecord.session_id, TrainingReportRecord.report_payload)
+            .join(TrainingSessionRecord, TrainingReportRecord.session_id == TrainingSessionRecord.id)
+            .where(
+                TrainingSessionRecord.user_id == user_id,
+                TrainingSessionRecord.started_at >= start_at,
+                TrainingReportRecord.report_payload.is_not(None),
+            )
+        )
+        if end_at is not None:
+            statement = statement.where(TrainingSessionRecord.started_at < end_at)
+        seen_session_ids: set[UUID] = set()
+        judgement_scores: list[float] = []
+        for session_id, report_payload in self._session.execute(statement):
+            if session_id in seen_session_ids:
+                continue
+            seen_session_ids.add(session_id)
+            parsed_payload = self._parse_judge_payload(report_payload)
+            if parsed_payload is not None:
+                judgement_scores.append(float(parsed_payload.overall_score))
+        return {
             "avg_judgement_score": self._average_or_none(judgement_scores),
             "sessions_with_judgement": len(judgement_scores),
         }

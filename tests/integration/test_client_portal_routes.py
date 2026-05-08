@@ -463,6 +463,63 @@ def test_personal_analytics_returns_none_delta_percent_when_previous_window_is_z
     db_session.close()
 
 
+def test_personal_analytics_keeps_session_window_counts_without_report_payloads() -> None:
+    """Session-window metrics should not depend on whether reports exist for sessions in the same window."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="report-optional-trends",
+        users=[("manager@example.com", "client_manager")],
+    )
+    now = datetime.now(UTC).replace(microsecond=0)
+    reported_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=82,
+        turn_count=4,
+        started_at=now - timedelta(days=1),
+    )
+    _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=64,
+        turn_count=6,
+        started_at=now - timedelta(days=2),
+    )
+    previous_reported_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=55,
+        turn_count=7,
+        started_at=now - timedelta(days=10),
+    )
+    _add_report_payload(db_session, session_id=reported_session.id, payload=_valid_judge_payload(overall_score=91, skill_score=71))
+    _add_report_payload(db_session, session_id=previous_reported_session.id, payload=_valid_judge_payload(overall_score=73, skill_score=53))
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/analytics/me")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["trends_7d"]["total_sessions"]["current_7d"] == 2
+    assert payload["trends_7d"]["finished_sessions"]["current_7d"] == 2
+    assert payload["trends_7d"]["sessions_with_judgement"]["current_7d"] == 1
+    assert payload["trends_7d"]["avg_judgement_score"]["current_7d"] == 91.0
+    assert payload["trends_7d"]["total_sessions"]["previous_7d"] == 1
+    assert payload["trends_7d"]["sessions_with_judgement"]["previous_7d"] == 1
+    db_session.close()
+
+
 def test_client_lead_cannot_read_other_org_user_detail() -> None:
     """Verify a lead cannot inspect users from another organization."""
     db_session = _create_db_session()
