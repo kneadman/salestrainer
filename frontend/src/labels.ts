@@ -5,7 +5,7 @@ export function roleLabel(role: string): string {
     client_manager: "Менеджер",
     client_user: "Менеджер",
   };
-  return labels[role] ?? role;
+  return labels[role] ?? "Пользователь";
 }
 
 export function statusLabel(value: string | boolean | null | undefined): string {
@@ -19,7 +19,7 @@ export function statusLabel(value: string | boolean | null | undefined): string 
     disabled: "Отключено",
     enabled: "Включено",
   };
-  return value ? labels[value] ?? value : "Не указано";
+  return value ? labels[value] ?? "Неизвестный статус" : "Не указано";
 }
 
 export function scenarioLabel(id: string | null | undefined): string {
@@ -36,16 +36,16 @@ export function scenarioLabel(id: string | null | undefined): string {
     sales_audit_cold_outreach: "Первичный контакт и разведка",
     accounting_outsource_cold_outreach: "Первичный контакт и разведка",
   };
-  return id ? labels[id] ?? id : "Не указано";
+  return id ? labels[id] ?? "Другой сценарий" : "Не указано";
 }
 
 export function providerLabel(value: string | null | undefined): string {
   const labels: Record<string, string> = {
     yandex_compatible: "Yandex AI Studio",
-    openai_compatible: "OpenAI-compatible",
+    openai_compatible: "Совместимый провайдер",
     fake: "Локальная тестовая модель",
   };
-  return value ? labels[value] ?? value : "Не указано";
+  return value ? labels[value] ?? "Другой провайдер" : "Не указано";
 }
 
 export function metricNameLabel(key: string): string {
@@ -57,8 +57,67 @@ export function metricNameLabel(key: string): string {
     training_config_id: "ID конфига",
     scenario_id: "Сценарий",
     status: "Статус",
+    sessions_by_status: "Тренировки по статусам",
+    sessions_by_scenario: "Тренировки по сценариям",
+    sessions_by_training_config: "Тренировки по настройкам",
   };
-  return labels[key] ?? key.replace(/_/g, " ");
+  return labels[key] ?? "Метрика";
+}
+
+export function auditActionLabel(action: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    organization_created: "Организация создана",
+    organization_updated: "Организация обновлена",
+    organization_disabled: "Организация отключена",
+    organization_enabled: "Организация включена",
+    user_created: "Пользователь создан",
+    user_updated: "Пользователь обновлён",
+    user_disabled: "Пользователь отключён",
+    user_enabled: "Пользователь включён",
+    password_reset: "Пароль сброшен",
+    training_config_created: "Настройка тренировки создана",
+    training_config_updated: "Настройка тренировки обновлена",
+    training_config_disabled: "Настройка тренировки отключена",
+    training_config_enabled: "Настройка тренировки включена",
+    training_config_assigned: "Настройка назначена",
+    training_config_unassigned: "Настройка снята",
+    default_training_config_changed: "Настройка по умолчанию изменена",
+    llm_provider_config_created: "Провайдер модели создан",
+    llm_provider_config_updated: "Провайдер модели обновлён",
+    llm_provider_config_enabled: "Провайдер модели включён",
+    llm_provider_config_disabled: "Провайдер модели отключён",
+    login_success: "Вход выполнен",
+    login_failed: "Ошибка входа",
+    logout: "Выход",
+  };
+  return action ? labels[action] ?? "Системное событие" : "Системное событие";
+}
+
+export function auditEntityLabel(entityType: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    organization: "Организация",
+    user: "Пользователь",
+    training_config: "Настройка тренировки",
+    client_training_config: "Настройка тренировки",
+    user_training_config: "Назначение настройки",
+    llm_provider_config: "Провайдер модели",
+    login_session: "Сессия входа",
+  };
+  return entityType ? labels[entityType] ?? "Системный объект" : "Системный объект";
+}
+
+export function usageKeyLabel(key: string): string {
+  const labels: Record<string, string> = {
+    total_sessions: "Всего тренировок",
+    finished_sessions: "Завершённые",
+    active_sessions: "Активные",
+    unique_users: "Пользователи",
+    total_turns: "Сообщения",
+    avg_final_interest_score: "Средний интерес",
+    avg_turn_count: "Среднее число ходов",
+    usage_events_count: "События использования",
+  };
+  return labels[key] ?? "Показатель";
 }
 
 export function formatDate(value: string | null | undefined): string {

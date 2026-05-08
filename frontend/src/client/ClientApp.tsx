@@ -26,7 +26,7 @@ export function ClientApp({ user, path, onNavigate, onLogout, onUserUpdated }: C
   if (isLeadOnlyRoute && user.role !== "client_lead") {
     return (
       <ClientLayout user={user} path={path} onNavigate={onNavigate} onLogout={onLogout}>
-        <ClientState title="Нет доступа" detail="Командные разделы доступны только роли client_lead." tone="error" />
+        <ClientState title="Нет доступа" detail="Командные разделы доступны только руководителю команды." tone="error" />
       </ClientLayout>
     );
   }
@@ -40,7 +40,7 @@ export function ClientApp({ user, path, onNavigate, onLogout, onUserUpdated }: C
       {route.route === "team" ? <TeamPage onNavigate={onNavigate} /> : null}
       {route.route === "team-detail" ? <TeamPage userId={route.userId} onNavigate={onNavigate} /> : null}
       {route.route === "team-analytics" ? <TeamAnalyticsPage /> : null}
-      {route.route === "balance" ? <BalancePage user={user} /> : null}
+      {route.route === "balance" ? <BalancePage user={user} onNavigate={onNavigate} /> : null}
       {route.route === "settings" ? <SettingsPage user={user} onUserUpdated={onUserUpdated} /> : null}
     </ClientLayout>
   );

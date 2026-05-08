@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { auditActionLabel, auditEntityLabel } from "../labels";
 import { listAuditLog, listOrganizations } from "./api";
 import { EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO } from "./types";
@@ -76,7 +77,31 @@ export function AuditLogPage() {
       </section>
       <section className="admin-panel">
         {events.length === 0 ? <EmptyState title="Событий аудита нет" /> : (
-          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Создано</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{formatDate(event.created_at)}</td><td>{event.action}</td><td>{event.entity_type}<br /><span className="admin-muted">{event.entity_id ?? ""}</span></td><td>{event.actor_user_id ?? "система"}</td><td><pre className="admin-json-cell">{compactJson(event.payload)}</pre></td></tr>)}</tbody></table></div>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Создано</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead>
+              <tbody>
+                {events.map((event) => (
+                  <tr key={event.id}>
+                    <td>{formatDate(event.created_at)}</td>
+                    <td>{auditActionLabel(event.action)}</td>
+                    <td>{auditEntityLabel(event.entity_type)}</td>
+                    <td>{event.actor_user_id ? "Администратор" : "Система"}</td>
+                    <td>
+                      <details className="admin-technical-details">
+                        <summary>Показать технические данные</summary>
+                        <pre className="admin-json-cell">{compactJson({
+                          entity_id: event.entity_id,
+                          actor_user_id: event.actor_user_id,
+                          payload: event.payload,
+                        })}</pre>
+                      </details>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

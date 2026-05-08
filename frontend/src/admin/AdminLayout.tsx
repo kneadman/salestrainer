@@ -1,4 +1,5 @@
 import type { AuthUser } from "../types";
+import { PRODUCT_NAME } from "../branding";
 import { roleLabel } from "../labels";
 import { BrandLogo } from "../components/BrandLogo";
 
@@ -13,25 +14,27 @@ type AdminLayoutProps = {
 const NAV_ITEMS = [
   { label: "Обзор", path: "/admin" },
   { label: "Организации", path: "/admin/organizations" },
-  { label: "Пользователи", path: "/admin/organizations" },
-  { label: "Тренировочные конфиги", path: "/admin/organizations" },
   { label: "История тренировок", path: "/admin/history" },
-  { label: "Аналитика", path: "/admin/organizations" },
   { label: "Аудит", path: "/admin/audit-log" },
 ];
+
+function isActiveNavItem(activePath: string, itemPath: string): boolean {
+  /** Keep parent admin sections highlighted on detail routes. */
+  return itemPath === "/admin" ? activePath === itemPath : activePath === itemPath || activePath.startsWith(`${itemPath}/`);
+}
 
 export function AdminLayout({ user, activePath, children, onNavigate, onLogout }: AdminLayoutProps) {
   /** Render the protected internal admin shell with sidebar and topbar. */
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <BrandLogo className="admin-sidebar__brand" imageClassName="admin-sidebar__brand-mark" textClassName="admin-sidebar__brand-text" title="Replikor" subtitle="Internal admin" />
+        <BrandLogo className="admin-sidebar__brand" imageClassName="admin-sidebar__brand-mark" textClassName="admin-sidebar__brand-text" title={PRODUCT_NAME} subtitle="Администрирование" />
         <nav className="admin-nav" aria-label="Навигация администратора">
           {NAV_ITEMS.map((item) => (
             <button
               key={`${item.label}-${item.path}`}
               type="button"
-              className={activePath === item.path ? "admin-nav__item admin-nav__item--active" : "admin-nav__item"}
+              className={isActiveNavItem(activePath, item.path) ? "admin-nav__item admin-nav__item--active" : "admin-nav__item"}
               onClick={() => onNavigate(item.path)}
             >
               {item.label}

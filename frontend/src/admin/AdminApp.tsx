@@ -17,7 +17,7 @@ export function AdminApp({ user, path, onNavigate, onLogout }: AdminAppProps) {
         <section className="admin-panel admin-denied__card">
           <span className="admin-kicker">Нет доступа</span>
           <h1>Нет доступа</h1>
-          <p>Внутренний кабинет доступен только владельцу платформы с ролью internal_admin.</p>
+          <p>Внутренний кабинет доступен только администратору платформы.</p>
           <div className="admin-actions">
             <button type="button" className="admin-button admin-button--primary" onClick={() => onNavigate("/app", true)}>
               Перейти в тренажер

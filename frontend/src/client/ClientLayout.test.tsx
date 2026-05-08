@@ -1,5 +1,6 @@
 import { render } from "@testing-library/react";
 import { ClientLayout } from "./ClientLayout";
+import { PRODUCT_NAME } from "../branding";
 import type { AuthUser } from "../types";
 
 const user: AuthUser = {
@@ -22,6 +23,7 @@ describe("ClientLayout", () => {
       </ClientLayout>,
     );
 
+    expect(container.querySelector(".client-shell--trainer")).toBeInTheDocument();
     expect(container.querySelector("main.client-content--trainer")).toBeInTheDocument();
   });
 
@@ -35,6 +37,7 @@ describe("ClientLayout", () => {
     const main = container.querySelector("main.client-content");
     expect(main).toBeInTheDocument();
     expect(main).not.toHaveClass("client-content--trainer");
+    expect(container.querySelector(".client-shell")).not.toHaveClass("client-shell--trainer");
   });
 
   it("renders the shared logo in the client sidebar", () => {
@@ -45,5 +48,17 @@ describe("ClientLayout", () => {
     );
 
     expect(container.querySelector('img[src="/logo.svg"]')).toBeInTheDocument();
+  });
+
+  it("uses product branding and hides the balance section from navigation", () => {
+    const { queryByRole, getByText, queryByText } = render(
+      <ClientLayout user={user} path="/app" onNavigate={vi.fn()} onLogout={vi.fn()}>
+        <div>dashboard</div>
+      </ClientLayout>,
+    );
+
+    expect(getByText(PRODUCT_NAME)).toBeInTheDocument();
+    expect(queryByRole("button", { name: "Баланс" })).not.toBeInTheDocument();
+    expect(queryByText("client_manager")).not.toBeInTheDocument();
   });
 });

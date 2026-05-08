@@ -96,6 +96,18 @@ const activeSession = {
   stage: "discovery",
 };
 
+const makeTurn = (turnIndex: number) => ({
+  turn_index: turnIndex,
+  manager_message: `Вопрос ${turnIndex}`,
+  client_answer: `Ответ ${turnIndex}`,
+  interest_before: 40 + turnIndex,
+  interest_delta: 1,
+  interest_after: 41 + turnIndex,
+  stage_before: "discovery",
+  stage_after: "discovery",
+  created_at: `2026-05-08T00:${turnIndex.toString().padStart(2, "0")}:00Z`,
+});
+
 describe("TrainerPage", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -207,5 +219,31 @@ describe("TrainerPage", () => {
     expect(trainerChatBody).toContainElement(errorBanner);
     expect(trainerChatBody).toContainElement(chatWindow as HTMLElement);
     expect(trainerChatPanel?.lastElementChild).toBe(composer);
+  });
+
+  it("keeps chat-window inside trainer-chat-body for long conversations", async () => {
+    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+
+    apiMocks.getSession.mockResolvedValue({
+      session: activeSession,
+      turns: Array.from({ length: 32 }, (_, index) => makeTurn(index + 1)),
+    });
+
+    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+
+    await screen.findByText("Ответ 32");
+
+    const trainerChatPanel = container.querySelector(".trainer-chat-panel");
+    const trainerChatBody = container.querySelector(".trainer-chat-body");
+    const chatWindow = container.querySelector(".chat-window");
+    const composer = container.querySelector(".composer");
+
+    expect(trainerChatPanel).not.toBeNull();
+    expect(trainerChatBody).not.toBeNull();
+    expect(chatWindow).not.toBeNull();
+    expect(composer).not.toBeNull();
+    expect(trainerChatBody).toContainElement(chatWindow as HTMLElement);
+    expect(trainerChatBody?.nextElementSibling).toBe(composer);
+    expect(trainerChatPanel).toContainElement(trainerChatBody as HTMLElement);
   });
 });

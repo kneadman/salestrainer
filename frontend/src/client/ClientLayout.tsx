@@ -1,4 +1,5 @@
 import type { AuthUser } from "../types";
+import { PRODUCT_NAME } from "../branding";
 import { roleLabel } from "../labels";
 import { BrandLogo } from "../components/BrandLogo";
 import { ClientBadge } from "./components/ClientPrimitives";
@@ -16,7 +17,6 @@ const MANAGER_NAV = [
   { label: "Тренажер", path: "/app/trainer" },
   { label: "История", path: "/app/history" },
   { label: "Моя аналитика", path: "/app/analytics" },
-  { label: "Баланс", path: "/app/balance" },
   { label: "Настройки", path: "/app/settings" },
 ];
 
@@ -27,14 +27,17 @@ const LEAD_EXTRA_NAV = [
 
 export function ClientLayout({ user, path, children, onNavigate, onLogout }: ClientLayoutProps) {
   /** Render the client cabinet shell with role-aware navigation. */
+  // Balance section is temporarily hidden from navigation until billing/usage limits are product-ready.
   const nav = user.role === "client_lead"
     ? [...MANAGER_NAV.slice(0, 4), ...LEAD_EXTRA_NAV, ...MANAGER_NAV.slice(4)]
     : MANAGER_NAV;
-  const contentClassName = path.startsWith("/app/trainer") ? "client-content client-content--trainer" : "client-content";
+  const isTrainerRoute = path.startsWith("/app/trainer");
+  const shellClassName = isTrainerRoute ? "client-shell client-shell--trainer" : "client-shell";
+  const contentClassName = isTrainerRoute ? "client-content client-content--trainer" : "client-content";
   return (
-    <div className="client-shell">
+    <div className={shellClassName}>
       <aside className="client-sidebar">
-        <BrandLogo className="client-brand" imageClassName="client-brand__mark" textClassName="client-brand__text" title="Replikor" subtitle={user.client_account.name} />
+        <BrandLogo className="client-brand" imageClassName="client-brand__mark" textClassName="client-brand__text" title={PRODUCT_NAME} subtitle={user.client_account.name} />
         <nav className="client-nav" aria-label="Навигация клиентского кабинета">
           {nav.map((item) => (
             <button

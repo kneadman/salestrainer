@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
+import { auditActionLabel, auditEntityLabel, metricNameLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
 import {
   assignTrainingConfig,
   createTrainingConfig,
@@ -71,7 +71,7 @@ const DEFAULT_CONFIG_FORM: ConfigForm = {
 const TAB_LABELS: Record<DetailTab, string> = {
   overview: "Обзор",
   users: "Пользователи",
-  configs: "Конфиги",
+  configs: "Настройки",
   history: "История",
   usage: "Использование",
   audit: "Аудит",
@@ -230,10 +230,10 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
     try {
       if (configForm.id) {
         await updateTrainingConfig(configForm.id, configPayload());
-        setSuccess("Тренировочный конфиг обновлён.");
+        setSuccess("Настройка тренировки обновлена.");
       } else {
         await createTrainingConfig(organizationId, configPayload());
-        setSuccess("Тренировочный конфиг создан.");
+        setSuccess("Настройка тренировки создана.");
       }
       setConfigForm(DEFAULT_CONFIG_FORM);
       await loadAll();
@@ -246,7 +246,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
 
   const toggleConfig = async (config: TrainingConfigDTO) => {
     /** Enable or disable one training config after confirmation for disable. */
-    if (config.is_active && !window.confirm(`Отключить тренировочный конфиг ${config.name}?`)) {
+    if (config.is_active && !window.confirm(`Отключить настройку тренировки ${config.name}?`)) {
       return;
     }
     setBusy(true);
@@ -257,7 +257,7 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       } else {
         await enableTrainingConfig(config.id);
       }
-      setSuccess(config.is_active ? "Тренировочный конфиг отключён." : "Тренировочный конфиг включён.");
+      setSuccess(config.is_active ? "Настройка тренировки отключена." : "Настройка тренировки включена.");
       await loadAll();
     } catch (toggleError) {
       setError(getErrorMessage(toggleError));
@@ -365,21 +365,21 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
 }
 
 function OverviewSection({ organization, usage }: { organization: OrganizationDTO; usage: UsageSummaryDTO | null }) {
-  /** Render organization summary cards and MVP LLM architecture note. */
+  /** Render organization summary cards and a product-level training architecture note. */
   return (
     <>
       <section className="admin-stats-grid">
         <StatCard label="Пользователи" value={organization.users_count} detail={`${organization.active_users_count} активны`} />
-        <StatCard label="Тренировочные конфиги" value={organization.training_configs_count} />
+        <StatCard label="Настройки тренировок" value={organization.training_configs_count} />
         <StatCard label="Всего сессий" value={usage?.total_sessions ?? "—"} />
         <StatCard label="Завершено сессий" value={usage?.finished_sessions ?? "—"} />
         <StatCard label="Всего сообщений" value={usage?.total_turns ?? "—"} />
       </section>
       <section className="admin-panel">
-        <div className="admin-panel__header"><h2>MVP LLM flow</h2></div>
+        <div className="admin-panel__header"><h2>Как устроена тренировка</h2></div>
         <p className="admin-muted">
-          Для MVP организация настраивает только бизнес-контекст тренировки. Глобальные Yandex API key, persona agent и
-          dialogue agent берутся из конфигурации приложения и не редактируются в UI организации.
+          Организация задаёт бизнес-контекст и сценарий. Диалог, оценка и история работают через защищённые серверные
+          контракты, поэтому скрытая персона и служебные данные не попадают в клиентский кабинет.
         </p>
       </section>
     </>
@@ -487,7 +487,7 @@ function ConfigsSection(props: {
   /** Render training config form, prompt field, JSON fields, and config list. */
   return (
     <section className="admin-panel">
-      <div className="admin-panel__header"><h2>Тренировочные конфиги</h2></div>
+      <div className="admin-panel__header"><h2>Настройки тренировок</h2></div>
       <form className="admin-form admin-form--stacked" onSubmit={props.onSubmit}>
         <div className="admin-form-grid">
           <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
@@ -501,17 +501,17 @@ function ConfigsSection(props: {
             onChange={(event) => props.setForm({ ...props.form, persona_generation_context: event.target.value })}
           />
           <small className="admin-muted">
-            Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения. Этот текст будет отправлен в глобальный Yandex Persona Generator Agent как бизнес-контекст. Master prompt и JSON-контракт хранятся в самом Yandex Agent.
+            Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения.
           </small>
         </label>
         <div className="admin-json-grid">
-          <label><span>Дополнительные JSON-настройки личности</span><textarea value={props.form.persona_policy} onChange={(event) => props.setForm({ ...props.form, persona_policy: event.target.value })} /></label>
-          <label><span>UI-конфиг JSON</span><textarea value={props.form.ui_config} onChange={(event) => props.setForm({ ...props.form, ui_config: event.target.value })} /></label>
-          <label><span>Лимиты JSON</span><textarea value={props.form.limits} onChange={(event) => props.setForm({ ...props.form, limits: event.target.value })} /></label>
+          <label><span>Дополнительные правила личности</span><textarea value={props.form.persona_policy} onChange={(event) => props.setForm({ ...props.form, persona_policy: event.target.value })} /></label>
+          <label><span>Настройки интерфейса</span><textarea value={props.form.ui_config} onChange={(event) => props.setForm({ ...props.form, ui_config: event.target.value })} /></label>
+          <label><span>Лимиты</span><textarea value={props.form.limits} onChange={(event) => props.setForm({ ...props.form, limits: event.target.value })} /></label>
         </div>
-        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Обновить конфиг" : "Создать конфиг"}</button>
+        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Обновить настройку" : "Создать настройку"}</button>
       </form>
-      {props.configs.length === 0 ? <EmptyState title="Тренировочных конфигов нет" /> : (
+      {props.configs.length === 0 ? <EmptyState title="Настроек тренировок нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead><tr><th>Название</th><th>Формат</th><th>Контекст</th><th>Статус</th><th>Действия</th></tr></thead>
@@ -563,9 +563,31 @@ function HistorySection({ history, onNavigate }: { history: HistorySessionSummar
 function UsageSection({ usage }: { usage: UsageSummaryDTO | null }) {
   /** Render basic usage analytics from the persistent history summary endpoint. */
   if (!usage) {
-    return <EmptyState title="Сводка использования недоступна" detail="Backend не вернул сводку использования для этой организации." />;
+    return <EmptyState title="Сводка использования недоступна" detail="Сервис не вернул сводку использования для этой организации." />;
   }
-  return <section className="admin-panel"><div className="admin-panel__header"><h2>Аналитика использования</h2></div><div className="admin-stats-grid"><StatCard label="Всего сессий" value={usage.total_sessions} /><StatCard label="Завершено" value={usage.finished_sessions} /><StatCard label="Активно" value={usage.active_sessions} /><StatCard label="Уникальные пользователи" value={usage.unique_users} /><StatCard label="Всего сообщений" value={usage.total_turns} /><StatCard label="Средний интерес" value={usage.avg_final_interest_score ?? "—"} /><StatCard label="Среднее число ходов" value={usage.avg_turn_count ?? "—"} /><StatCard label="События использования" value={usage.usage_events_count} /></div><pre className="admin-json-block">{compactJson({ sessions_by_status: usage.sessions_by_status, sessions_by_scenario: usage.sessions_by_scenario, sessions_by_training_config: usage.sessions_by_training_config })}</pre></section>;
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel__header"><h2>Аналитика использования</h2></div>
+      <div className="admin-stats-grid">
+        <StatCard label="Всего сессий" value={usage.total_sessions} />
+        <StatCard label="Завершено" value={usage.finished_sessions} />
+        <StatCard label="Активно" value={usage.active_sessions} />
+        <StatCard label="Уникальные пользователи" value={usage.unique_users} />
+        <StatCard label="Всего сообщений" value={usage.total_turns} />
+        <StatCard label="Средний интерес" value={usage.avg_final_interest_score ?? "—"} />
+        <StatCard label="Среднее число ходов" value={usage.avg_turn_count ?? "—"} />
+        <StatCard label="События использования" value={usage.usage_events_count} />
+      </div>
+      <details className="admin-technical-details">
+        <summary>Показать технические данные</summary>
+        <pre className="admin-json-block">{compactJson({
+          [metricNameLabel("sessions_by_status")]: usage.sessions_by_status,
+          [metricNameLabel("sessions_by_scenario")]: usage.sessions_by_scenario,
+          [metricNameLabel("sessions_by_training_config")]: usage.sessions_by_training_config,
+        })}</pre>
+      </details>
+    </section>
+  );
 }
 
 function AuditSection({ audit }: { audit: AuditLogDTO[] }) {
@@ -573,5 +595,30 @@ function AuditSection({ audit }: { audit: AuditLogDTO[] }) {
   if (audit.length === 0) {
     return <EmptyState title="Событий аудита нет" />;
   }
-  return <section className="admin-panel"><div className="admin-panel__header"><h2>Аудит</h2></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Время</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead><tbody>{audit.map((event) => <tr key={event.id}><td>{formatDate(event.created_at)}</td><td>{event.action}</td><td>{event.entity_type}</td><td>{event.actor_user_id ?? "система"}</td><td><pre className="admin-json-cell">{compactJson(event.payload)}</pre></td></tr>)}</tbody></table></div></section>;
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel__header"><h2>Аудит</h2></div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Время</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead>
+          <tbody>
+            {audit.map((event) => (
+              <tr key={event.id}>
+                <td>{formatDate(event.created_at)}</td>
+                <td>{auditActionLabel(event.action)}</td>
+                <td>{auditEntityLabel(event.entity_type)}</td>
+                <td>{event.actor_user_id ? "Администратор" : "Система"}</td>
+                <td>
+                  <details className="admin-technical-details">
+                    <summary>Показать</summary>
+                    <pre className="admin-json-cell">{compactJson({ id: event.actor_user_id, payload: event.payload })}</pre>
+                  </details>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
