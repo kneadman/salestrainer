@@ -53,7 +53,12 @@ const structuredReportPayload: JudgeSessionOutputDTO = {
   risk_flags: [],
 };
 
-function makeDetail(reportPayload: ReportPayload | null): HistorySessionDetailDTO {
+function makeDetail(
+  reportPayload: ReportPayload | null,
+  overrides: Partial<Pick<HistorySessionDetailDTO, "public_brief">> & {
+    session?: Partial<HistorySessionDetailDTO["session"]>;
+  } = {},
+): HistorySessionDetailDTO {
   return {
     session: {
       session_id: "session-123456",
@@ -70,8 +75,9 @@ function makeDetail(reportPayload: ReportPayload | null): HistorySessionDetailDT
       final_interest_score: 72,
       final_stage: "next_step",
       summary: "Сводка",
+      ...overrides.session,
     },
-    public_brief: "Публичный бриф",
+    public_brief: "public_brief" in overrides ? overrides.public_brief ?? null : "Публичный бриф",
     turns: [],
     report: {
       session_id: "session-123456",
@@ -83,6 +89,98 @@ function makeDetail(reportPayload: ReportPayload | null): HistorySessionDetailDT
     },
   };
 }
+
+describe("HistoryPage summary rendering", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders plain string summary as normal text", async () => {
+    apiMocks.getHistorySessionDetail.mockResolvedValue(
+      makeDetail(null, {
+        session: { summary: "Менеджер выявил боль и договорился о следующем шаге." },
+        public_brief: null,
+      }),
+    );
+
+    render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("Менеджер выявил боль и договорился о следующем шаге.")).toBeInTheDocument();
+    expect(screen.getByText("Сводка тренировки")).toBeInTheDocument();
+    expect(screen.queryByText(/"Менеджер выявил боль/)).not.toBeInTheDocument();
+  });
+
+  it("renders JSON object summary with readable labels and values", async () => {
+    const summary = JSON.stringify({
+      final_interest_score: 74,
+      turn_count: 6,
+      key_takeaway: "Менеджер выявил боль, но поздно зафиксировал следующий шаг",
+      status: "finished",
+      scenario_id: "generic_b2b_first_contact",
+    });
+    apiMocks.getHistorySessionDetail.mockResolvedValue(makeDetail(null, { session: { summary }, public_brief: null }));
+
+    render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("Итоговый интерес")).toBeInTheDocument();
+    expect(screen.getByText("74")).toBeInTheDocument();
+    expect(screen.getByText("Сообщений")).toBeInTheDocument();
+    expect(screen.getByText("6")).toBeInTheDocument();
+    expect(screen.getByText("Ключевой вывод")).toBeInTheDocument();
+    expect(screen.getByText("Менеджер выявил боль, но поздно зафиксировал следующий шаг")).toBeInTheDocument();
+    expect(screen.getAllByText("Завершена").length).toBeGreaterThan(0);
+    expect(screen.getByText("Первичный контакт и разведка")).toBeInTheDocument();
+    expect(screen.queryByText("final_interest_score")).not.toBeInTheDocument();
+    expect(screen.queryByText("generic_b2b_first_contact")).not.toBeInTheDocument();
+    expect(screen.queryByText(summary)).not.toBeInTheDocument();
+  });
+
+  it("renders invalid JSON summary as safe plain text", async () => {
+    apiMocks.getHistorySessionDetail.mockResolvedValue(
+      makeDetail(null, { session: { summary: "{bad json" }, public_brief: null }),
+    );
+
+    render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("{bad json")).toBeInTheDocument();
+  });
+
+  it("renders an empty state when summary is missing or empty", async () => {
+    apiMocks.getHistorySessionDetail.mockResolvedValue(makeDetail(null, { session: { summary: "" }, public_brief: null }));
+
+    render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("Сводка тренировки пока недоступна.")).toBeInTheDocument();
+  });
+
+  it("renders public brief only when it is present", async () => {
+    apiMocks.getHistorySessionDetail.mockResolvedValue(
+      makeDetail(null, {
+        session: { summary: "Короткая сводка" },
+        public_brief: "Контекст для менеджера",
+      }),
+    );
+
+    render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("Контекст тренировки")).toBeInTheDocument();
+    expect(screen.getByText("Контекст для менеджера")).toBeInTheDocument();
+  });
+
+  it("does not render public brief block when it is missing", async () => {
+    apiMocks.getHistorySessionDetail.mockResolvedValue(
+      makeDetail(null, {
+        session: { summary: "Короткая сводка" },
+        public_brief: null,
+      }),
+    );
+
+    render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    await screen.findByText("Короткая сводка");
+    expect(screen.queryByText("Контекст тренировки")).not.toBeInTheDocument();
+  });
+});
 
 describe("HistoryPage report rendering", () => {
   beforeEach(() => {
