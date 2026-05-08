@@ -1,5 +1,6 @@
 import type { AuthUser } from "../types";
 import { roleLabel } from "../labels";
+import { BrandLogo } from "../components/BrandLogo";
 import { ClientBadge } from "./components/ClientPrimitives";
 
 type ClientLayoutProps = {
@@ -33,13 +34,7 @@ export function ClientLayout({ user, path, children, onNavigate, onLogout }: Cli
   return (
     <div className="client-shell">
       <aside className="client-sidebar">
-        <div className="client-brand">
-          <span>ST</span>
-          <div>
-            <strong>Тренажер продаж</strong>
-            <small>{user.client_account.name}</small>
-          </div>
-        </div>
+        <BrandLogo className="client-brand" imageClassName="client-brand__mark" textClassName="client-brand__text" title="Replikor" subtitle={user.client_account.name} />
         <nav className="client-nav" aria-label="Навигация клиентского кабинета">
           {nav.map((item) => (
             <button

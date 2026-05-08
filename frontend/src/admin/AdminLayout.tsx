@@ -1,5 +1,6 @@
 import type { AuthUser } from "../types";
 import { roleLabel } from "../labels";
+import { BrandLogo } from "../components/BrandLogo";
 
 type AdminLayoutProps = {
   user: AuthUser;
@@ -24,13 +25,7 @@ export function AdminLayout({ user, activePath, children, onNavigate, onLogout }
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="admin-sidebar__brand">
-          <span>ST</span>
-          <div>
-            <strong>Администрирование</strong>
-            <small>Внутренний кабинет</small>
-          </div>
-        </div>
+        <BrandLogo className="admin-sidebar__brand" imageClassName="admin-sidebar__brand-mark" textClassName="admin-sidebar__brand-text" title="Replikor" subtitle="Internal admin" />
         <nav className="admin-nav" aria-label="Навигация администратора">
           {NAV_ITEMS.map((item) => (
             <button
