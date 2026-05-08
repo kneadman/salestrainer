@@ -1637,6 +1637,63 @@ button:disabled {
   background: rgba(239, 68, 68, 0.18);
 }
 
+.client-summary-card {
+  display: grid;
+  gap: 14px;
+}
+
+.client-summary-text,
+.client-summary-brief p {
+  margin: 0;
+  color: #dbe7f6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.client-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.client-summary-item {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.26);
+}
+
+.client-summary-item small,
+.client-summary-brief h3 {
+  color: #9aa9bf;
+}
+
+.client-summary-item span,
+.client-summary-item li {
+  overflow-wrap: anywhere;
+}
+
+.client-summary-item ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.client-summary-brief {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.client-summary-brief h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 .client-form {
   display: grid;
   gap: 12px;

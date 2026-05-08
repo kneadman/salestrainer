@@ -103,7 +103,6 @@ class AccessRepository:
                 "client_account_id": training_config.client_account_id,
                 "name": training_config.name,
                 "default_scenario_id": training_config.default_scenario_id,
-                "allowed_scenarios": training_config.ui_config.get("allowed_scenarios"),
                 "persona_generation_context": training_config.persona_generation_context,
                 "persona_policy": training_config.persona_policy,
                 "ui_config": training_config.ui_config,

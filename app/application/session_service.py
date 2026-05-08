@@ -59,14 +59,12 @@ class TrainingSessionService:
     ) -> TrainingSessionState:
         """Start a runtime session with either generated, preset, or externally generated persona."""
         resolved_scenario_id = scenario_id or self._default_scenario_id
-        if training_config is not None:
-            resolved_scenario_id = scenario_id or training_config.default_scenario_id
 
         scenario = get_scenario(resolved_scenario_id)
         if persona_override is not None:
             persona = persona_override
         elif training_config is not None:
-            persona = self._persona_generator.generate(scenario=scenario, persona_policy=training_config.persona_policy)
+            persona = self._persona_generator.generate(scenario=scenario, persona_policy={})
         else:
             persona = (
                 get_persona(persona_id)

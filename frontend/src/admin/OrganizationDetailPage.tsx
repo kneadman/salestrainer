@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { auditActionLabel, auditEntityLabel, metricNameLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
 import {
   assignTrainingConfig,
@@ -12,7 +12,6 @@ import {
   listAuditLog,
   listOrganizationHistory,
   listOrganizations,
-  listScenarios,
   listTrainingConfigs,
   listUserTrainingConfigs,
   listUsers,
@@ -27,14 +26,12 @@ import type {
   AuditLogDTO,
   HistorySessionSummaryDTO,
   OrganizationDTO,
-  ScenarioOptionDTO,
   TrainingConfigDTO,
-  TrainingConfigPayload,
   UsageSummaryDTO,
   UserDTO,
   UserTrainingConfigAssignmentDTO,
 } from "./types";
-import { FALLBACK_SCENARIOS, compactJson, formatDate, getErrorMessage, parseJsonObject, statusLabel, stringifyJson } from "./utils";
+import { compactJson, formatDate, getErrorMessage, statusLabel } from "./utils";
 
 type OrganizationDetailPageProps = {
   organizationId: string;
@@ -52,20 +49,12 @@ type UserForm = {
 type ConfigForm = {
   id?: string;
   name: string;
-  default_scenario_id: string;
   persona_generation_context: string;
-  persona_policy: string;
-  ui_config: string;
-  limits: string;
 };
 
 const DEFAULT_CONFIG_FORM: ConfigForm = {
   name: "",
-  default_scenario_id: "first_contact_discovery",
   persona_generation_context: "",
-  persona_policy: "{}",
-  ui_config: "{}",
-  limits: "{}",
 };
 
 const TAB_LABELS: Record<DetailTab, string> = {
@@ -86,7 +75,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [usage, setUsage] = useState<UsageSummaryDTO | null>(null);
   const [audit, setAudit] = useState<AuditLogDTO[]>([]);
-  const [scenarios, setScenarios] = useState<ScenarioOptionDTO[]>([]);
   const [assignmentsByUser, setAssignmentsByUser] = useState<Record<string, UserTrainingConfigAssignmentDTO[]>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -96,11 +84,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [resetPasswordByUser, setResetPasswordByUser] = useState<Record<string, string>>({});
   const [configForm, setConfigForm] = useState<ConfigForm>(DEFAULT_CONFIG_FORM);
-
-  const scenarioIds = useMemo(() => {
-    /** Prefer backend scenario options but keep known ids when the list endpoint is unavailable. */
-    return scenarios.length > 0 ? scenarios.map((scenario) => scenario.scenario_id) : FALLBACK_SCENARIOS;
-  }, [scenarios]);
 
   const loadAll = async () => {
     /** Load all organization detail data from internal admin endpoints. */
@@ -113,20 +96,18 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       if (!selectedOrg) {
         throw new Error("Организация не найдена.");
       }
-      const [loadedUsers, loadedConfigs, loadedHistory, loadedUsage, loadedAudit, loadedScenarios] = await Promise.all([
+      const [loadedUsers, loadedConfigs, loadedHistory, loadedUsage, loadedAudit] = await Promise.all([
         listUsers(organizationId),
         listTrainingConfigs(organizationId),
         listOrganizationHistory(organizationId, { limit: 50, offset: 0 }).catch(() => []),
         getUsageSummary(organizationId).catch(() => null),
         listAuditLog({ organization_id: organizationId, limit: 50, offset: 0 }).catch(() => []),
-        listScenarios().catch(() => []),
       ]);
       setUsers(loadedUsers);
       setConfigs(loadedConfigs);
       setHistory(loadedHistory);
       setUsage(loadedUsage);
       setAudit(loadedAudit);
-      setScenarios(loadedScenarios);
       const assignmentEntries = await Promise.all(
         loadedUsers.map(async (user) => [user.id, await listUserTrainingConfigs(user.id).catch(() => [])] as const),
       );
@@ -209,30 +190,24 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
     }
   };
 
-  const configPayload = (): TrainingConfigPayload => {
-    /** Build a training config payload after validating JSON textareas. */
-    return {
-      name: configForm.name,
-      default_scenario_id: configForm.default_scenario_id,
-      persona_generation_context: configForm.persona_generation_context,
-      persona_policy: parseJsonObject(configForm.persona_policy, "persona_policy"),
-      ui_config: parseJsonObject(configForm.ui_config, "ui_config"),
-      limits: parseJsonObject(configForm.limits, "limits"),
-    };
-  };
-
   const submitConfig = async (event: FormEvent<HTMLFormElement>) => {
-    /** Create or update a training config with client-side JSON validation. */
+    /** Create or update the visible training config fields. */
     event.preventDefault();
     setBusy(true);
     setError(null);
     setSuccess(null);
     try {
       if (configForm.id) {
-        await updateTrainingConfig(configForm.id, configPayload());
+        await updateTrainingConfig(configForm.id, {
+          name: configForm.name,
+          persona_generation_context: configForm.persona_generation_context,
+        });
         setSuccess("Настройка тренировки обновлена.");
       } else {
-        await createTrainingConfig(organizationId, configPayload());
+        await createTrainingConfig(organizationId, {
+          name: configForm.name,
+          persona_generation_context: configForm.persona_generation_context,
+        });
         setSuccess("Настройка тренировки создана.");
       }
       setConfigForm(DEFAULT_CONFIG_FORM);
@@ -349,7 +324,6 @@ export function OrganizationDetailPage({ organizationId, onNavigate }: Organizat
       {activeTab === "configs" ? (
         <ConfigsSection
           configs={configs}
-          scenarioIds={scenarioIds}
           form={configForm}
           setForm={setConfigForm}
           busy={busy}
@@ -477,21 +451,19 @@ function UsersSection(props: {
 
 function ConfigsSection(props: {
   configs: TrainingConfigDTO[];
-  scenarioIds: string[];
   form: ConfigForm;
   setForm: (form: ConfigForm) => void;
   busy: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggle: (config: TrainingConfigDTO) => void;
 }) {
-  /** Render training config form, prompt field, JSON fields, and config list. */
+  /** Render simplified training config form and config list. */
   return (
     <section className="admin-panel">
       <div className="admin-panel__header"><h2>Настройки тренировок</h2></div>
       <form className="admin-form admin-form--stacked" onSubmit={props.onSubmit}>
         <div className="admin-form-grid">
           <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
-          <label><span>Формат тренировки</span><select value={props.form.default_scenario_id} onChange={(event) => props.setForm({ ...props.form, default_scenario_id: event.target.value })}>{props.scenarioIds.map((id) => <option key={id} value={id}>{scenarioLabel(id)}</option>)}</select></label>
         </div>
         <label>
           <span>Контекст генерации личности</span>
@@ -504,22 +476,16 @@ function ConfigsSection(props: {
             Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения.
           </small>
         </label>
-        <div className="admin-json-grid">
-          <label><span>Дополнительные правила личности</span><textarea value={props.form.persona_policy} onChange={(event) => props.setForm({ ...props.form, persona_policy: event.target.value })} /></label>
-          <label><span>Настройки интерфейса</span><textarea value={props.form.ui_config} onChange={(event) => props.setForm({ ...props.form, ui_config: event.target.value })} /></label>
-          <label><span>Лимиты</span><textarea value={props.form.limits} onChange={(event) => props.setForm({ ...props.form, limits: event.target.value })} /></label>
-        </div>
         <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Обновить настройку" : "Создать настройку"}</button>
       </form>
       {props.configs.length === 0 ? <EmptyState title="Настроек тренировок нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Название</th><th>Формат</th><th>Контекст</th><th>Статус</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Название</th><th>Контекст</th><th>Статус</th><th>Действия</th></tr></thead>
             <tbody>
               {props.configs.map((config) => (
                 <tr key={config.id}>
                   <td>{config.name}</td>
-                  <td>{scenarioLabel(config.default_scenario_id)}</td>
                   <td>{config.persona_generation_context ? `${config.persona_generation_context.slice(0, 120)}${config.persona_generation_context.length > 120 ? "..." : ""}` : "—"}</td>
                   <td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td>
                   <td>
@@ -530,11 +496,7 @@ function ConfigsSection(props: {
                         onClick={() => props.setForm({
                           id: config.id,
                           name: config.name,
-                          default_scenario_id: config.default_scenario_id,
                           persona_generation_context: config.persona_generation_context,
-                          persona_policy: stringifyJson(config.persona_policy),
-                          ui_config: stringifyJson(config.ui_config),
-                          limits: stringifyJson(config.limits),
                         })}
                       >
                         Изменить

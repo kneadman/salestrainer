@@ -142,6 +142,7 @@ def test_fake_llm_role_answer_is_readable_russian() -> None:
         "партнёр",
         "бухгалтер",
         "продаж",
+        "закуп",
     ]
 
     assert "я " in normalized_answer

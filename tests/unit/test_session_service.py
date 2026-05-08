@@ -62,11 +62,12 @@ def test_generated_personas_without_seed_can_vary() -> None:
     assert len(roles) > 1
 
 
-def test_start_session_with_training_config_uses_config_defaults_and_generated_persona() -> None:
+def test_start_session_with_training_config_uses_service_default_and_ignores_policy() -> None:
     repository = InMemorySessionRepository()
     service = TrainingSessionService(
         repository,
         persona_generator=UniversalFakePersonaGenerator(seed=13),
+        default_scenario_id="first_contact_discovery",
     )
     training_config = RuntimeTrainingConfig(
         id=uuid4(),
@@ -78,7 +79,26 @@ def test_start_session_with_training_config_uses_config_defaults_and_generated_p
 
     session = service.start_session(training_config=training_config, persona_id="purchase_manager")
 
-    assert session.scenario_id == "qualification_and_authority"
-    assert session.persona.role == "owner"
-    assert session.persona.target_action == "confirm_decision_process"
+    assert session.scenario_id == "first_contact_discovery"
+    assert session.persona.target_action == "confirm_next_step"
     assert session.persona.id.startswith("generated_")
+
+
+def test_start_session_with_training_config_prefers_explicit_scenario() -> None:
+    repository = InMemorySessionRepository()
+    service = TrainingSessionService(
+        repository,
+        persona_generator=UniversalFakePersonaGenerator(seed=13),
+        default_scenario_id="first_contact_discovery",
+    )
+    training_config = RuntimeTrainingConfig(
+        id=uuid4(),
+        client_account_id=uuid4(),
+        name="Default",
+        default_scenario_id="qualification_and_authority",
+        persona_policy={"allowed_roles": ["owner"]},
+    )
+
+    session = service.start_session(scenario_id="objection_handling", training_config=training_config)
+
+    assert session.scenario_id == "objection_handling"

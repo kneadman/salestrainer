@@ -76,20 +76,19 @@ class PersonaGenerationService:
         scenario_id: str | None = None,
     ) -> PersonaGenerationInput:
         """Normalize training-config business context into the persona-generator contract."""
-        resolved_scenario_id = scenario_id or training_config.default_scenario_id
-        persona_policy = dict(training_config.persona_policy or {})
+        resolved_scenario_id = scenario_id or self._settings.default_training_scenario_id
         return PersonaGenerationInput(
             scenario=get_scenario(resolved_scenario_id),
             training_config_name=training_config.name,
             persona_generation_context=training_config.persona_generation_context.strip(),
-            persona_policy=persona_policy,
-            organization_context=self._dict_policy_value(persona_policy, "organization_context"),
-            target_action=self._string_policy_value(persona_policy, "target_action"),
-            allowed_roles=self._string_list_policy_value(persona_policy, "allowed_roles"),
-            manager_training_goal=self._string_policy_value(persona_policy, "manager_training_goal"),
-            difficulty_level=self._string_policy_value(persona_policy, "difficulty_level"),
-            randomization_seed=self._int_policy_value(persona_policy, "randomization_seed"),
-            constraints=self._dict_policy_value(persona_policy, "constraints"),
+            persona_policy={},
+            organization_context={},
+            target_action=None,
+            allowed_roles=None,
+            manager_training_goal=None,
+            difficulty_level=None,
+            randomization_seed=None,
+            constraints={},
             schema_version=1,
         )
 
@@ -118,32 +117,6 @@ class PersonaGenerationService:
     def _allow_local_fallback(self) -> bool:
         """Allow local persona fallback only in local/debug-compatible environments."""
         return self._settings.allow_fake_llm_fallback or self._settings.is_local_env
-
-    def _string_policy_value(self, persona_policy: dict[str, object], key: str) -> str | None:
-        """Extract a non-empty string policy value from free-form JSON."""
-        value = persona_policy.get(key)
-        return value.strip() if isinstance(value, str) and value.strip() else None
-
-    def _string_list_policy_value(self, persona_policy: dict[str, object], key: str) -> list[str] | None:
-        """Extract string-list policy values while ignoring unsupported entries."""
-        value = persona_policy.get(key)
-        if not isinstance(value, list):
-            return None
-        items = [item for item in value if isinstance(item, str) and item.strip()]
-        return items or None
-
-    def _dict_policy_value(self, persona_policy: dict[str, object], key: str) -> dict[str, object]:
-        """Extract object-like policy values and keep invalid shapes out of the LLM input."""
-        value = persona_policy.get(key)
-        return dict(value) if isinstance(value, dict) else {}
-
-    def _int_policy_value(self, persona_policy: dict[str, object], key: str) -> int | None:
-        """Extract integer policy values without accepting booleans as integers."""
-        value = persona_policy.get(key)
-        if isinstance(value, bool):
-            return None
-        return value if isinstance(value, int) else None
-
 
 class PersonaGeneratorClientFactory:
     def __init__(self, *, settings: Settings) -> None:

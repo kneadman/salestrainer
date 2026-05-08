@@ -185,14 +185,8 @@ class RuntimeTrainingConfig(BaseModel):
     client_account_id: UUID
     name: str
     default_scenario_id: str
-    allowed_scenarios: list[str] | None = None
     persona_generation_context: str = ""
     persona_policy: dict[str, object] = Field(default_factory=dict)
     ui_config: dict[str, object] = Field(default_factory=dict)
     limits: dict[str, object] = Field(default_factory=dict)
     llm_provider_config_id: UUID | None = None
-
-    def allowed_scenario_ids(self) -> list[str]:
-        if self.allowed_scenarios:
-            return list(dict.fromkeys(self.allowed_scenarios))
-        return [self.default_scenario_id]

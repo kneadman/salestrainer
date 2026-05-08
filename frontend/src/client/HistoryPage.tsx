@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { getHistorySessionDetail, getHistorySessions } from "./api";
 import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
+import { SessionSummaryCard } from "./SessionSummaryCard";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, HistoryTurnDTO } from "./types";
 import { scenarioLabel, statusLabel } from "../labels";
 import { formatClientDate, getClientErrorMessage } from "./utils";
@@ -96,7 +97,8 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
   }
   return (
     <div className="client-page">
-      <div className="client-page__header"><div><button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>← История</button><h1>Тренировка {detail.session.session_id.slice(0, 8)}</h1><p>{detail.session.summary ?? "Сводки нет."}</p></div><ClientBadge>{statusLabel(detail.session.status)}</ClientBadge></div>
+      <div className="client-page__header"><div><button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>← История</button><h1>Тренировка {detail.session.session_id.slice(0, 8)}</h1></div><ClientBadge>{statusLabel(detail.session.status)}</ClientBadge></div>
+      <SessionSummaryCard summary={detail.session.summary} publicBrief={detail.public_brief} />
       <HistoryTurnsList turns={detail.turns} />
       <section className="client-panel">
         <h2>Отчёт</h2>

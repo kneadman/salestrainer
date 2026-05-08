@@ -16,23 +16,51 @@ def _training_config(*, prompt: str = "Generate a beauty retail decision-maker p
         id=uuid4(),
         client_account_id=uuid4(),
         name="Default config",
-        default_scenario_id="first_contact_discovery",
+        default_scenario_id="needs_diagnosis",
         persona_generation_context=prompt,
-        persona_policy={"allowed_roles": ["owner"], "target_action": "book_intro_call"},
+        persona_policy={
+            "allowed_roles": ["owner"],
+            "target_action": "book_intro_call",
+            "randomization_seed": 123,
+            "organization_context": {"secret": "legacy"},
+            "constraints": {"region": "legacy"},
+        },
         ui_config={},
         limits={},
         llm_provider_config_id=None,
     )
 
 
-def test_persona_generation_service_build_input_uses_training_config_prompt() -> None:
-    service = PersonaGenerationService(db_session=None, settings=Settings())  # type: ignore[arg-type]
+def test_persona_generation_service_build_input_uses_prompt_and_settings_default_scenario() -> None:
+    service = PersonaGenerationService(  # type: ignore[arg-type]
+        db_session=None,
+        settings=Settings(default_training_scenario_id="first_contact_discovery"),
+    )
 
     payload = service.build_input(training_config=_training_config())
 
+    assert payload.scenario.id == "first_contact_discovery"
+    assert payload.training_config_name == "Default config"
     assert payload.persona_generation_context == "Generate a beauty retail decision-maker persona."
-    assert payload.allowed_roles == ["owner"]
-    assert payload.target_action == "book_intro_call"
+    assert payload.persona_policy == {}
+    assert payload.organization_context == {}
+    assert payload.target_action is None
+    assert payload.allowed_roles is None
+    assert payload.manager_training_goal is None
+    assert payload.difficulty_level is None
+    assert payload.randomization_seed is None
+    assert payload.constraints == {}
+
+
+def test_persona_generation_service_build_input_prefers_explicit_scenario() -> None:
+    service = PersonaGenerationService(  # type: ignore[arg-type]
+        db_session=None,
+        settings=Settings(default_training_scenario_id="first_contact_discovery"),
+    )
+
+    payload = service.build_input(training_config=_training_config(), scenario_id="objection_handling")
+
+    assert payload.scenario.id == "objection_handling"
 
 
 def test_persona_generation_client_factory_uses_global_persona_yandex_settings(monkeypatch) -> None:
@@ -72,7 +100,19 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
 
     persona = service.generate_for_training_config(training_config=_training_config(prompt=""))
 
-    assert persona.role == "owner"
+    assert persona.id.startswith("generated_first_contact_discovery_")
+    assert persona.role in {
+        "owner",
+        "founder",
+        "ceo",
+        "general_director",
+        "managing_partner",
+        "commercial_director",
+        "cfo",
+        "operations_director",
+        "sales_director",
+        "purchase_manager",
+    }
     assert persona.authority_level == "final_decider"
 
 

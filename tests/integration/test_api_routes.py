@@ -544,7 +544,7 @@ def test_owner_user_can_send_message_to_own_session() -> None:
     assert response.json()["turn_index"] == 1
 
 
-def test_api_create_session_uses_users_default_training_config_and_creates_ownership() -> None:
+def test_api_create_session_uses_settings_default_scenario_and_creates_ownership() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
     user, training_config = _seed_authenticated_user(
@@ -564,7 +564,7 @@ def test_api_create_session_uses_users_default_training_config_and_creates_owner
     session_id = response.json()["session"]["session_id"]
     saved_session = repository.get(session_id)
     assert saved_session is not None
-    assert saved_session.scenario_id == "qualification_and_authority"
+    assert saved_session.scenario_id == "first_contact_discovery"
     assert saved_session.persona.authority_level == "final_decider"
     ownership = db_session.scalar(select(TrainingSessionOwnership).where(TrainingSessionOwnership.session_id == saved_session.session_id))
     assert ownership is not None
@@ -832,7 +832,7 @@ def test_api_personas_allowed_for_internal_admin() -> None:
     db_session.close()
 
 
-def test_api_scenarios_for_client_user_returns_default_scenario_when_allowed_scenarios_not_set() -> None:
+def test_api_scenarios_for_client_user_returns_settings_default_scenario() -> None:
     db_session = _create_db_session()
     _seed_authenticated_user(
         db_session,
@@ -844,12 +844,12 @@ def test_api_scenarios_for_client_user_returns_default_scenario_when_allowed_sce
     response = client.get("/api/scenarios")
 
     assert response.status_code == 200
-    assert [scenario["scenario_id"] for scenario in response.json()] == ["qualification_and_authority"]
+    assert [scenario["scenario_id"] for scenario in response.json()] == ["first_contact_discovery"]
 
     db_session.close()
 
 
-def test_api_scenarios_for_client_user_returns_allowed_scenarios() -> None:
+def test_api_scenarios_for_client_user_ignores_ui_allowed_scenarios() -> None:
     db_session = _create_db_session()
     _seed_authenticated_user(
         db_session,
@@ -867,10 +867,7 @@ def test_api_scenarios_for_client_user_returns_allowed_scenarios() -> None:
     response = client.get("/api/scenarios")
 
     assert response.status_code == 200
-    assert [scenario["scenario_id"] for scenario in response.json()] == [
-        "qualification_and_authority",
-        "objection_handling",
-    ]
+    assert [scenario["scenario_id"] for scenario in response.json()] == ["first_contact_discovery"]
 
     db_session.close()
 
