@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -97,9 +98,10 @@ def _add_history(
     status: str = "finished",
     final_interest_score: int | None = 72,
     turn_count: int = 3,
+    started_at: datetime | None = None,
 ) -> TrainingSessionRecord:
     """Insert one persistent history row for analytics endpoint tests."""
-    now = datetime.now(UTC)
+    now = started_at or datetime.now(UTC)
     record = TrainingSessionRecord(
         id=uuid4(),
         client_account_id=client_account_id,
@@ -297,6 +299,224 @@ def test_team_usage_summary_aggregates_saved_judgement_payloads() -> None:
     payload = response.json()
     assert payload["sessions_with_judgement"] == 1
     assert payload["avg_judgement_score"] == 78.0
+    db_session.close()
+
+
+def test_personal_analytics_returns_real_7d_trends_for_current_and_previous_windows() -> None:
+    """Personal analytics should expose current and previous 7-day windows without frontend-derived deltas."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="trend-analytics",
+        users=[("manager@example.com", "client_manager")],
+    )
+    now = datetime.now(UTC).replace(microsecond=0)
+    current_finished = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=80,
+        turn_count=4,
+        started_at=now,
+    )
+    _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="active",
+        final_interest_score=None,
+        turn_count=2,
+        started_at=now - timedelta(days=3),
+    )
+    previous_finished = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=40,
+        turn_count=6,
+        started_at=now - timedelta(days=10),
+    )
+    _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="active",
+        final_interest_score=None,
+        turn_count=8,
+        started_at=now - timedelta(days=12),
+    )
+    _add_report_payload(db_session, session_id=current_finished.id, payload=_valid_judge_payload(overall_score=90, skill_score=70))
+    _add_report_payload(db_session, session_id=previous_finished.id, payload=_valid_judge_payload(overall_score=60, skill_score=50))
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/analytics/me")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_sessions"] == 4
+    assert payload["trends_7d"]["total_sessions"] == {
+        "current_7d": 2,
+        "previous_7d": 2,
+        "delta": 0,
+        "delta_percent": 0.0,
+        "direction": "flat",
+    }
+    assert payload["trends_7d"]["finished_sessions"] == {
+        "current_7d": 1,
+        "previous_7d": 1,
+        "delta": 0,
+        "delta_percent": 0.0,
+        "direction": "flat",
+    }
+    assert payload["trends_7d"]["completion_rate"] == {
+        "current_7d": 0.5,
+        "previous_7d": 0.5,
+        "delta": 0.0,
+        "delta_percent": 0.0,
+        "direction": "flat",
+    }
+    assert payload["trends_7d"]["avg_turn_count"] == {
+        "current_7d": 3.0,
+        "previous_7d": 7.0,
+        "delta": -4.0,
+        "delta_percent": pytest.approx(-57.14285714285714),
+        "direction": "down",
+    }
+    assert payload["trends_7d"]["avg_final_interest_score"] == {
+        "current_7d": 80.0,
+        "previous_7d": 40.0,
+        "delta": 40.0,
+        "delta_percent": 100.0,
+        "direction": "up",
+    }
+    assert payload["trends_7d"]["avg_judgement_score"] == {
+        "current_7d": 90.0,
+        "previous_7d": 60.0,
+        "delta": 30.0,
+        "delta_percent": 50.0,
+        "direction": "up",
+    }
+    assert payload["trends_7d"]["sessions_with_judgement"] == {
+        "current_7d": 1,
+        "previous_7d": 1,
+        "delta": 0,
+        "delta_percent": 0.0,
+        "direction": "flat",
+    }
+    db_session.close()
+
+
+def test_personal_analytics_returns_none_delta_percent_when_previous_window_is_zero() -> None:
+    """Personal analytics should avoid dividing by zero when the previous 7-day window is empty."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="current-only-trends",
+        users=[("manager@example.com", "client_manager")],
+    )
+    current_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=77,
+        turn_count=5,
+        started_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    _add_report_payload(db_session, session_id=current_session.id, payload=_valid_judge_payload(overall_score=88, skill_score=66))
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/analytics/me")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["trends_7d"]["total_sessions"] == {
+        "current_7d": 1,
+        "previous_7d": 0,
+        "delta": 1,
+        "delta_percent": None,
+        "direction": "up",
+    }
+    assert payload["trends_7d"]["completion_rate"] == {
+        "current_7d": 1.0,
+        "previous_7d": None,
+        "delta": 1.0,
+        "delta_percent": None,
+        "direction": "up",
+    }
+    assert payload["trends_7d"]["avg_judgement_score"] == {
+        "current_7d": 88.0,
+        "previous_7d": None,
+        "delta": 88.0,
+        "delta_percent": None,
+        "direction": "up",
+    }
+    db_session.close()
+
+
+def test_personal_analytics_keeps_session_window_counts_without_report_payloads() -> None:
+    """Session-window metrics should not depend on whether reports exist for sessions in the same window."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="report-optional-trends",
+        users=[("manager@example.com", "client_manager")],
+    )
+    now = datetime.now(UTC).replace(microsecond=0)
+    reported_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=82,
+        turn_count=4,
+        started_at=now - timedelta(days=1),
+    )
+    _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=64,
+        turn_count=6,
+        started_at=now - timedelta(days=2),
+    )
+    previous_reported_session = _add_history(
+        db_session,
+        user=users["manager@example.com"],
+        client_account_id=account.id,
+        training_config_id=config.id,
+        status="finished",
+        final_interest_score=55,
+        turn_count=7,
+        started_at=now - timedelta(days=10),
+    )
+    _add_report_payload(db_session, session_id=reported_session.id, payload=_valid_judge_payload(overall_score=91, skill_score=71))
+    _add_report_payload(db_session, session_id=previous_reported_session.id, payload=_valid_judge_payload(overall_score=73, skill_score=53))
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/analytics/me")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["trends_7d"]["total_sessions"]["current_7d"] == 2
+    assert payload["trends_7d"]["finished_sessions"]["current_7d"] == 2
+    assert payload["trends_7d"]["sessions_with_judgement"]["current_7d"] == 1
+    assert payload["trends_7d"]["avg_judgement_score"]["current_7d"] == 91.0
+    assert payload["trends_7d"]["total_sessions"]["previous_7d"] == 1
+    assert payload["trends_7d"]["sessions_with_judgement"]["previous_7d"] == 1
     db_session.close()
 
 

@@ -20,6 +20,24 @@ export type ClientRouteState = {
 
 export type JsonObject = Record<string, unknown>;
 
+export type MetricTrendDTO = {
+  current_7d: number | null;
+  previous_7d: number | null;
+  delta: number | null;
+  delta_percent: number | null;
+  direction: "up" | "down" | "flat" | "none";
+};
+
+export type ClientAnalyticsTrendsDTO = {
+  total_sessions: MetricTrendDTO;
+  finished_sessions: MetricTrendDTO;
+  completion_rate: MetricTrendDTO;
+  avg_final_interest_score: MetricTrendDTO;
+  avg_turn_count: MetricTrendDTO;
+  avg_judgement_score: MetricTrendDTO;
+  sessions_with_judgement: MetricTrendDTO;
+};
+
 export type ClientUserAnalyticsDTO = {
   user_id: string;
   user_email: string;
@@ -37,6 +55,7 @@ export type ClientUserAnalyticsDTO = {
   last_activity_at: string | null;
   sessions_by_status: Record<string, number>;
   sessions_by_scenario: Record<string, number>;
+  trends_7d: ClientAnalyticsTrendsDTO;
 };
 
 export type HistorySessionSummaryDTO = {

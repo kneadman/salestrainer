@@ -1593,6 +1593,69 @@ button:disabled {
   gap: 12px;
 }
 
+.analytics-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.analytics-bento-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.86);
+}
+
+.analytics-bento-card--wide {
+  grid-column: span 2;
+}
+
+.analytics-bento-card--accent {
+  border-color: rgba(125, 211, 252, 0.32);
+  background:
+    radial-gradient(circle at top right, rgba(125, 211, 252, 0.14), transparent 36%),
+    rgba(15, 23, 42, 0.92);
+}
+
+.analytics-bento-card__label,
+.analytics-bento-card__meta span:first-child {
+  color: #9aa9bf;
+}
+
+.analytics-bento-card__value {
+  font-size: 1.9rem;
+  line-height: 1.1;
+}
+
+.analytics-bento-card__meta {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.analytics-bento-card__trend {
+  font-size: 0.92rem;
+}
+
+.analytics-bento-card__trend--up {
+  color: #4ade80;
+}
+
+.analytics-bento-card__trend--down {
+  color: #fbbf24;
+}
+
+.analytics-bento-card__trend--flat {
+  color: #80d8ff;
+}
+
+.analytics-bento-card__trend--none {
+  color: #9aa9bf;
+}
+
 .client-stat strong {
   font-size: 1.65rem;
 }
@@ -1635,63 +1698,6 @@ button:disabled {
 .client-badge--danger {
   color: #fecaca;
   background: rgba(239, 68, 68, 0.18);
-}
-
-.client-summary-card {
-  display: grid;
-  gap: 14px;
-}
-
-.client-summary-text,
-.client-summary-brief p {
-  margin: 0;
-  color: #dbe7f6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.client-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-}
-
-.client-summary-item {
-  min-width: 0;
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.26);
-}
-
-.client-summary-item small,
-.client-summary-brief h3 {
-  color: #9aa9bf;
-}
-
-.client-summary-item span,
-.client-summary-item li {
-  overflow-wrap: anywhere;
-}
-
-.client-summary-item ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.client-summary-brief {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border-radius: 8px;
-  background: rgba(148, 163, 184, 0.08);
-}
-
-.client-summary-brief h3 {
-  margin: 0;
-  font-size: 0.9rem;
 }
 
 .client-form {
@@ -1899,6 +1905,10 @@ button:disabled {
   .client-panel__header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .analytics-bento-card--wide {
+    grid-column: span 1;
   }
 
   .client-content {

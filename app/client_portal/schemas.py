@@ -1,11 +1,30 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from app.history.schemas import HistorySessionSummaryDTO, UsageSummaryDTO
+
+
+class MetricTrendDTO(BaseModel):
+    current_7d: float | int | None
+    previous_7d: float | int | None
+    delta: float | int | None
+    delta_percent: float | None
+    direction: Literal["up", "down", "flat", "none"]
+
+
+class ClientAnalyticsTrendsDTO(BaseModel):
+    total_sessions: MetricTrendDTO
+    finished_sessions: MetricTrendDTO
+    completion_rate: MetricTrendDTO
+    avg_final_interest_score: MetricTrendDTO
+    avg_turn_count: MetricTrendDTO
+    avg_judgement_score: MetricTrendDTO
+    sessions_with_judgement: MetricTrendDTO
 
 
 class ClientUserAnalyticsDTO(BaseModel):
@@ -25,6 +44,7 @@ class ClientUserAnalyticsDTO(BaseModel):
     last_activity_at: datetime | None
     sessions_by_status: dict[str, int]
     sessions_by_scenario: dict[str, int]
+    trends_7d: ClientAnalyticsTrendsDTO
 
 
 class TeamUserDTO(BaseModel):

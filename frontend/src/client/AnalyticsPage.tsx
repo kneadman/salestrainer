@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { getMyAnalytics } from "./api";
-import { ClientState, ClientStat, SimpleBars } from "./components/ClientPrimitives";
-import type { ClientUserAnalyticsDTO } from "./types";
+import { ClientState, SimpleBars } from "./components/ClientPrimitives";
+import type { ClientUserAnalyticsDTO, MetricTrendDTO } from "./types";
 import { scenarioLabel, statusLabel } from "../labels";
 import { formatClientDate, getClientErrorMessage, percent } from "./utils";
+
+type AnalyticsCardProps = {
+  label: string;
+  value: string;
+  trend?: MetricTrendDTO;
+  wide?: boolean;
+  accent?: boolean;
+  hideDelta?: boolean;
+  footer?: string;
+};
 
 export function AnalyticsPage() {
   /** Render personal analytics for the current manager or lead. */
@@ -42,16 +52,50 @@ export function AnalyticsPage() {
           <h1>Прогресс</h1>
         </div>
       </div>
-      <section className="client-stats-grid">
-        <ClientStat label="Всего" value={analytics.total_sessions} />
-        <ClientStat label="Завершено" value={analytics.finished_sessions} />
-        <ClientStat label="Доля завершённых" value={percent(analytics.completion_rate)} />
-        <ClientStat label="Средний интерес" value={analytics.avg_final_interest_score?.toFixed(1) ?? "—"} />
-        <ClientStat label="Среднее число ходов" value={analytics.avg_turn_count?.toFixed(1) ?? "—"} />
-        <ClientStat label="Средняя оценка тренировки" value={analytics.avg_judgement_score?.toFixed(1) ?? "—"} />
-        <ClientStat label="С оценкой тренировки" value={analytics.sessions_with_judgement} />
-        <ClientStat label="Слабейший навык" value={analytics.weakest_skill_title ?? "—"} />
-        <ClientStat label="Последняя активность" value={formatClientDate(analytics.last_activity_at)} />
+      <section className="analytics-bento-grid">
+        <AnalyticsBentoCard
+          label="Всего тренировок"
+          value={String(analytics.total_sessions)}
+          trend={analytics.trends_7d.total_sessions}
+          accent
+        />
+        <AnalyticsBentoCard
+          label="Завершено"
+          value={String(analytics.finished_sessions)}
+          trend={analytics.trends_7d.finished_sessions}
+        />
+        <AnalyticsBentoCard
+          label="Доля завершённых"
+          value={percent(analytics.completion_rate)}
+          trend={analytics.trends_7d.completion_rate}
+        />
+        <AnalyticsBentoCard
+          label="Средний интерес"
+          value={formatMetricValue(analytics.avg_final_interest_score)}
+          trend={analytics.trends_7d.avg_final_interest_score}
+        />
+        <AnalyticsBentoCard
+          label="Среднее число ходов"
+          value={formatMetricValue(analytics.avg_turn_count)}
+          trend={analytics.trends_7d.avg_turn_count}
+        />
+        <AnalyticsBentoCard
+          label="Средняя оценка тренировки"
+          value={formatMetricValue(analytics.avg_judgement_score)}
+          trend={analytics.trends_7d.avg_judgement_score}
+        />
+        <AnalyticsBentoCard
+          label="С оценкой тренировки"
+          value={String(analytics.sessions_with_judgement)}
+          trend={analytics.trends_7d.sessions_with_judgement}
+        />
+        <AnalyticsBentoCard
+          label="Последняя активность"
+          value={formatClientDate(analytics.last_activity_at)}
+          footer="последнее действие"
+          hideDelta
+          wide
+        />
       </section>
       <section className="client-panel">
         <h2>По статусам</h2>
@@ -61,17 +105,57 @@ export function AnalyticsPage() {
         <h2>По сценариям</h2>
         <SimpleBars values={analytics.sessions_by_scenario} labelFormatter={scenarioLabel} />
       </section>
-      <section className="client-panel">
-        <h2>Оценки навыков</h2>
-        <ClientState
-          title={analytics.weakest_skill_title ?? "Данных по навыкам пока нет"}
-          detail={
-            analytics.weakest_skill_title
-              ? `Средняя оценка: ${analytics.weakest_skill_avg_score?.toFixed(1) ?? "—"}`
-              : undefined
-          }
-        />
-      </section>
     </div>
   );
+}
+
+function AnalyticsBentoCard({ label, value, trend, wide = false, accent = false, hideDelta = false, footer }: AnalyticsCardProps) {
+  /** Render one analytics card with all-time value plus real backend 7-day context. */
+  const trendLabel = trendWindowLabel(trend);
+  const deltaLabel = hideDelta ? footer : trendDeltaLabel(trend);
+  const cardClassName = [
+    "analytics-bento-card",
+    wide ? "analytics-bento-card--wide" : "",
+    accent ? "analytics-bento-card--accent" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <section className={cardClassName}>
+      <span className="analytics-bento-card__label">{label}</span>
+      <strong className="analytics-bento-card__value">{value}</strong>
+      <div className="analytics-bento-card__meta">
+        <span>{trendLabel}</span>
+        <span className={`analytics-bento-card__trend analytics-bento-card__trend--${trend?.direction ?? "none"}`}>{deltaLabel}</span>
+      </div>
+    </section>
+  );
+}
+
+function formatMetricValue(value: number | null): string {
+  /** Keep compact one-decimal formatting for average metrics and a clear dash for nulls. */
+  return value === null ? "—" : value.toFixed(1);
+}
+
+function trendWindowLabel(trend: MetricTrendDTO | undefined): string {
+  /** Show the real current 7-day value or a neutral no-data label. */
+  if (!trend || trend.current_7d === null) {
+    return "за 7 дней: —";
+  }
+  return `за 7 дней: ${formatTrendNumber(trend.current_7d)}`;
+}
+
+function trendDeltaLabel(trend: MetricTrendDTO | undefined): string {
+  /** Show comparison against the previous 7-day window only when backend provided data. */
+  if (!trend || trend.delta === null) {
+    return "нет данных за 7 дней";
+  }
+  const deltaPrefix = trend.delta > 0 ? "+" : "";
+  const percentLabel = trend.delta_percent === null ? "" : ` (${deltaPrefix}${formatTrendNumber(trend.delta_percent)}%)`;
+  return `Δ ${deltaPrefix}${formatTrendNumber(trend.delta)} к прошлым 7 дням${percentLabel}`;
+}
+
+function formatTrendNumber(value: number): string {
+  /** Trim analytics trend numbers down to readable integers or one decimal place. */
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
