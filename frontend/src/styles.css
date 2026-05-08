@@ -1417,6 +1417,12 @@ button:disabled {
   color: #e6edf7;
 }
 
+.client-shell--trainer {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .client-sidebar {
   position: sticky;
   top: 0;
@@ -1514,6 +1520,12 @@ button:disabled {
   flex-direction: column;
 }
 
+.client-shell--trainer .client-main-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .client-topbar {
   flex: 0 0 auto;
   min-height: 68px;
@@ -1529,6 +1541,8 @@ button:disabled {
 }
 
 .client-content--trainer {
+  flex: 1 1 auto;
+  height: 100%;
   display: flex;
   min-height: 0;
   overflow: hidden;
@@ -1748,10 +1762,12 @@ button:disabled {
   gap: 20px;
   align-items: stretch;
   justify-content: stretch;
+  overflow: hidden;
 }
 
 .trainer-side-panels {
   min-width: 0;
+  min-height: 0;
   max-height: 100%;
   overflow-y: auto;
   display: grid;
@@ -1762,7 +1778,9 @@ button:disabled {
 .trainer-chat-area {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
+  overflow: hidden;
 }
 
 .trainer-chat-panel {
@@ -1770,8 +1788,8 @@ button:disabled {
   min-width: 0;
   height: 100%;
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: linear-gradient(180deg, rgba(12, 20, 34, 0.96) 0%, rgba(8, 14, 24, 0.98) 100%);
@@ -1780,19 +1798,26 @@ button:disabled {
 }
 
 .trainer-chat-body {
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .trainer-chat-body .chat-window {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
 }
 
 @media (max-width: 860px) {
   .client-shell {
     grid-template-columns: 1fr;
+  }
+
+  .client-shell--trainer {
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .client-sidebar {
@@ -1820,24 +1845,24 @@ button:disabled {
 
 @media (max-width: 1100px) {
   .client-content--trainer {
-    overflow-y: auto;
     padding: 16px 16px 10px;
   }
 
   .client-trainer-layout {
-    height: auto;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .trainer-side-panels {
-    max-height: none;
-    overflow: visible;
+    max-height: min(220px, 28dvh);
+    overflow-y: auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .trainer-chat-area {
-    min-height: min(760px, calc(100dvh - 160px));
+    min-height: 0;
   }
 }
 
@@ -1851,7 +1876,7 @@ button:disabled {
   }
 
   .trainer-chat-area {
-    min-height: calc(100dvh - 120px);
+    min-height: 0;
   }
 
   .trainer-chat-panel {

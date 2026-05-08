@@ -23,6 +23,7 @@ describe("ClientLayout", () => {
       </ClientLayout>,
     );
 
+    expect(container.querySelector(".client-shell--trainer")).toBeInTheDocument();
     expect(container.querySelector("main.client-content--trainer")).toBeInTheDocument();
   });
 
@@ -36,6 +37,7 @@ describe("ClientLayout", () => {
     const main = container.querySelector("main.client-content");
     expect(main).toBeInTheDocument();
     expect(main).not.toHaveClass("client-content--trainer");
+    expect(container.querySelector(".client-shell")).not.toHaveClass("client-shell--trainer");
   });
 
   it("renders the shared logo in the client sidebar", () => {

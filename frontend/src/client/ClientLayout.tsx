@@ -31,9 +31,11 @@ export function ClientLayout({ user, path, children, onNavigate, onLogout }: Cli
   const nav = user.role === "client_lead"
     ? [...MANAGER_NAV.slice(0, 4), ...LEAD_EXTRA_NAV, ...MANAGER_NAV.slice(4)]
     : MANAGER_NAV;
-  const contentClassName = path.startsWith("/app/trainer") ? "client-content client-content--trainer" : "client-content";
+  const isTrainerRoute = path.startsWith("/app/trainer");
+  const shellClassName = isTrainerRoute ? "client-shell client-shell--trainer" : "client-shell";
+  const contentClassName = isTrainerRoute ? "client-content client-content--trainer" : "client-content";
   return (
-    <div className="client-shell">
+    <div className={shellClassName}>
       <aside className="client-sidebar">
         <BrandLogo className="client-brand" imageClassName="client-brand__mark" textClassName="client-brand__text" title={PRODUCT_NAME} subtitle={user.client_account.name} />
         <nav className="client-nav" aria-label="Навигация клиентского кабинета">
