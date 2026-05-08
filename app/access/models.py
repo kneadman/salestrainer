@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Boolean, DateTime, ForeignKey, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON, Uuid
@@ -22,35 +22,11 @@ class ClientTrainingConfig(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
-    default_scenario_id: Mapped[str] = mapped_column(Text, nullable=False)
     persona_generation_context: Mapped[str] = mapped_column(
         Text,
         nullable=False,
         default="",
         server_default=text("''"),
-    )
-    persona_policy: Mapped[dict[str, object]] = mapped_column(
-        JSON,
-        nullable=False,
-        default=dict,
-        server_default=text("'{}'"),
-    )
-    ui_config: Mapped[dict[str, object]] = mapped_column(
-        JSON,
-        nullable=False,
-        default=dict,
-        server_default=text("'{}'"),
-    )
-    limits: Mapped[dict[str, object]] = mapped_column(
-        JSON,
-        nullable=False,
-        default=dict,
-        server_default=text("'{}'"),
-    )
-    llm_provider_config_id: Mapped[UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("llm_provider_configs.id"),
-        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -184,9 +160,4 @@ class RuntimeTrainingConfig(BaseModel):
     id: UUID
     client_account_id: UUID
     name: str
-    default_scenario_id: str
     persona_generation_context: str = ""
-    persona_policy: dict[str, object] = Field(default_factory=dict)
-    ui_config: dict[str, object] = Field(default_factory=dict)
-    limits: dict[str, object] = Field(default_factory=dict)
-    llm_provider_config_id: UUID | None = None

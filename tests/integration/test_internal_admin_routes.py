@@ -4,7 +4,7 @@ from collections.abc import Generator
 from uuid import UUID
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -281,11 +281,17 @@ def test_training_config_create_accepts_minimal_payload() -> None:
     }
     stored = session.get(ClientTrainingConfig, UUID(str(payload["id"])))
     assert stored is not None
-    assert stored.default_scenario_id == Settings().default_training_scenario_id
-    assert stored.persona_policy == {}
-    assert stored.ui_config == {}
-    assert stored.limits == {}
-    assert stored.llm_provider_config_id is None
+    column_names = {column["name"] for column in inspect(session.bind).get_columns("client_training_configs")}
+    assert "default_scenario_id" not in column_names
+    assert "persona_policy" not in column_names
+    assert "ui_config" not in column_names
+    assert "limits" not in column_names
+    assert "llm_provider_config_id" not in column_names
+    assert "default_scenario_id" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "persona_policy" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "ui_config" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "limits" not in ClientTrainingConfig.__table__.columns.keys()
+    assert "llm_provider_config_id" not in ClientTrainingConfig.__table__.columns.keys()
     session.close()
 
 
@@ -303,6 +309,7 @@ def test_training_config_create_rejects_legacy_payload() -> None:
             "persona_policy": {},
             "ui_config": {},
             "limits": {},
+            "llm_provider_config_id": "11111111-1111-1111-1111-111111111111",
         },
     )
 
@@ -348,6 +355,7 @@ def test_training_config_update_rejects_legacy_fields() -> None:
             "persona_policy": {},
             "ui_config": {},
             "limits": {},
+            "llm_provider_config_id": "11111111-1111-1111-1111-111111111111",
         },
     )
 

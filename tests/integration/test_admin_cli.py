@@ -170,23 +170,13 @@ def test_assign_config_sets_default_config() -> None:
         email="manager@romashka.test",
         password_hash=hash_password("password"),
     )
-    other_config = access_repository.create_training_config(
-        client_account_id=client.id,
-        name="Other Config",
-        default_scenario_id="generic_b2b_first_contact",
-        persona_policy={},
-    )
+    other_config = access_repository.create_training_config(client_account_id=client.id, name="Other Config")
     access_repository.assign_training_config_to_user(
         user_id=user.id,
         training_config_id=other_config.id,
         is_default=True,
     )
-    target_config = access_repository.create_training_config(
-        client_account_id=client.id,
-        name="Accounting Config",
-        default_scenario_id="generic_b2b_first_contact",
-        persona_policy={},
-    )
+    target_config = access_repository.create_training_config(client_account_id=client.id, name="Accounting Config")
 
     _assign_config(
         identity_repository=identity_repository,
@@ -205,21 +195,17 @@ def test_assign_config_sets_default_config() -> None:
     session.close()
 
 
-def test_create_config_writes_audit_log(tmp_path) -> None:
+def test_create_config_writes_audit_log() -> None:
     session = _create_session()
     identity_repository = IdentityRepository(session)
     access_repository = AccessRepository(session)
     client = identity_repository.create_client_account(name="Romashka", slug="romashka")
-    policy_file = tmp_path / "persona_policy.json"
-    policy_file.write_text("{}", encoding="utf-8")
 
     _create_config(
         identity_repository=identity_repository,
         access_repository=access_repository,
         client_slug=client.slug,
         name="Accounting Config",
-        scenario_id="generic_b2b_first_contact",
-        persona_policy_file=str(policy_file),
     )
 
     audit_record = session.scalar(select(AuditLog).where(AuditLog.action == "config_created"))
@@ -233,12 +219,7 @@ def test_update_config_writes_audit_log() -> None:
     identity_repository = IdentityRepository(session)
     access_repository = AccessRepository(session)
     client = identity_repository.create_client_account(name="Romashka", slug="romashka")
-    config = access_repository.create_training_config(
-        client_account_id=client.id,
-        name="Accounting Config",
-        default_scenario_id="generic_b2b_first_contact",
-        persona_policy={},
-    )
+    config = access_repository.create_training_config(client_account_id=client.id, name="Accounting Config")
 
     _update_config(
         identity_repository=identity_repository,

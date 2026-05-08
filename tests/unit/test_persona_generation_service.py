@@ -16,18 +16,7 @@ def _training_config(*, prompt: str = "Generate a beauty retail decision-maker p
         id=uuid4(),
         client_account_id=uuid4(),
         name="Default config",
-        default_scenario_id="needs_diagnosis",
         persona_generation_context=prompt,
-        persona_policy={
-            "allowed_roles": ["owner"],
-            "target_action": "book_intro_call",
-            "randomization_seed": 123,
-            "organization_context": {"secret": "legacy"},
-            "constraints": {"region": "legacy"},
-        },
-        ui_config={},
-        limits={},
-        llm_provider_config_id=None,
     )
 
 

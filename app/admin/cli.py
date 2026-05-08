@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError
 
@@ -18,22 +16,6 @@ from app.infrastructure.db import get_session_factory
 
 class AdminCLIError(Exception):
     pass
-
-
-def _load_persona_policy(path: str) -> dict[str, object]:
-    file_path = Path(path)
-    if not file_path.exists():
-        raise AdminCLIError(f"persona policy file not found: {file_path}")
-
-    try:
-        payload = json.loads(file_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise AdminCLIError(f"invalid JSON in persona policy file: {file_path}") from error
-
-    if not isinstance(payload, dict):
-        raise AdminCLIError("persona policy must be a JSON object")
-
-    return payload
 
 
 def _create_client(
@@ -123,8 +105,6 @@ def _create_config(
     access_repository: AccessRepository,
     client_slug: str,
     name: str,
-    scenario_id: str,
-    persona_policy_file: str,
 ) -> str:
     client = identity_repository.get_client_account_by_slug(client_slug)
     if client is None:
@@ -137,12 +117,9 @@ def _create_config(
     if matching_configs:
         raise AdminCLIError(f"config already exists for client '{client_slug}': {name}")
 
-    persona_policy = _load_persona_policy(persona_policy_file)
     config = access_repository.create_training_config(
         client_account_id=client.id,
         name=name,
-        default_scenario_id=scenario_id,
-        persona_policy=persona_policy,
     )
     access_repository.create_audit_log_record(
         action="config_created",
@@ -199,8 +176,6 @@ def _update_config(
     client_slug: str,
     config_name: str,
     new_name: str | None = None,
-    scenario_id: str | None = None,
-    persona_policy_file: str | None = None,
 ) -> str:
     client = identity_repository.get_client_account_by_slug(client_slug)
     if client is None:
@@ -215,12 +190,9 @@ def _update_config(
     if len(matching_configs) > 1:
         raise AdminCLIError(f"multiple configs found with name '{config_name}' for client '{client_slug}'")
 
-    persona_policy = _load_persona_policy(persona_policy_file) if persona_policy_file else None
     config = access_repository.update_training_config(
         training_config_id=matching_configs[0].id,
         name=new_name,
-        default_scenario_id=scenario_id,
-        persona_policy=persona_policy,
     )
     if config is None:
         raise AdminCLIError(f"config not found: {config_name}")
@@ -316,8 +288,6 @@ def _build_parser() -> argparse.ArgumentParser:
     create_config_parser = subparsers.add_parser("create-config")
     create_config_parser.add_argument("--client", required=True)
     create_config_parser.add_argument("--name", required=True)
-    create_config_parser.add_argument("--scenario", required=True)
-    create_config_parser.add_argument("--persona-policy-file", required=True)
 
     assign_config_parser = subparsers.add_parser("assign-config")
     assign_config_parser.add_argument("--email", required=True)
@@ -328,8 +298,6 @@ def _build_parser() -> argparse.ArgumentParser:
     update_config_parser.add_argument("--client", required=True)
     update_config_parser.add_argument("--config", required=True)
     update_config_parser.add_argument("--name")
-    update_config_parser.add_argument("--scenario")
-    update_config_parser.add_argument("--persona-policy-file")
 
     reset_password_parser = subparsers.add_parser("reset-password")
     reset_password_parser.add_argument("--email", required=True)
@@ -383,8 +351,6 @@ def run_cli(argv: list[str] | None = None) -> int:
                     access_repository=access_repository,
                     client_slug=args.client,
                     name=args.name,
-                    scenario_id=args.scenario,
-                    persona_policy_file=args.persona_policy_file,
                 )
             elif args.command == "assign-config":
                 message = _assign_config(
@@ -401,8 +367,6 @@ def run_cli(argv: list[str] | None = None) -> int:
                     client_slug=args.client,
                     config_name=args.config,
                     new_name=args.name,
-                    scenario_id=args.scenario,
-                    persona_policy_file=args.persona_policy_file,
                 )
             elif args.command == "reset-password":
                 message = _reset_password(

@@ -68,9 +68,6 @@ def _seed_authenticated_user(
     role: str = "client_user",
     client_account_name: str = "Acme",
     client_account_slug: str = "acme",
-    default_scenario_id: str = "first_contact_discovery",
-    persona_policy: dict[str, object] | None = None,
-    ui_config: dict[str, object] | None = None,
 ) -> tuple[object, object]:
     identity_repository = IdentityRepository(db_session)
     access_repository = AccessRepository(db_session)
@@ -88,9 +85,6 @@ def _seed_authenticated_user(
     training_config = access_repository.create_training_config(
         client_account_id=client_account.id,
         name="Default config",
-        default_scenario_id=default_scenario_id,
-        persona_policy=persona_policy or {},
-        ui_config=ui_config or {},
     )
     access_repository.assign_training_config_to_user(
         user_id=user.id,
@@ -547,14 +541,7 @@ def test_owner_user_can_send_message_to_own_session() -> None:
 def test_api_create_session_uses_settings_default_scenario_and_creates_ownership() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
-    user, training_config = _seed_authenticated_user(
-        db_session,
-        default_scenario_id="qualification_and_authority",
-        persona_policy={
-            "allowed_roles": ["owner"],
-            "target_action": "confirm_decision_process",
-        },
-    )
+    user, training_config = _seed_authenticated_user(db_session)
     client = _create_client(db_session, repository=repository)
     _login(client)
 
@@ -578,16 +565,11 @@ def test_api_create_session_uses_settings_default_scenario_and_creates_ownership
 def test_api_create_session_uses_persona_generation_service_for_client_config() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
-    _, training_config = _seed_authenticated_user(
-        db_session,
-        default_scenario_id="needs_diagnosis",
-        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_diagnostic_call"},
-    )
+    _, training_config = _seed_authenticated_user(db_session)
     access_repository = AccessRepository(db_session)
     access_repository.update_training_config(
         training_config_id=training_config.id,
         persona_generation_context="Buyer for a cosmetics retail business with low repeat sales and poor diagnostics.",
-        persona_policy={"allowed_roles": ["cfo"], "target_action": "book_diagnostic_call"},
     )
     app = create_app(
         settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
@@ -601,7 +583,6 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
         def generate_for_training_config(self, *, training_config, scenario_id):
             """Return a known generated persona so the API wiring is observable."""
             captured["persona_generation_context"] = training_config.persona_generation_context
-            captured["llm_provider_config_id"] = training_config.llm_provider_config_id
             captured["scenario_id"] = scenario_id
             return PersonaProfile(
                 id="llm_generated_cfo_cash_gap",
@@ -648,7 +629,6 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert saved_session.persona.role == "cfo"
     assert saved_session.interest_score == 31
     assert captured["persona_generation_context"] == "Buyer for a cosmetics retail business with low repeat sales and poor diagnostics."
-    assert captured["llm_provider_config_id"] is None
     assert captured["scenario_id"] is None
     assert "llm_generated_cfo_cash_gap" not in response.text
 
@@ -834,10 +814,7 @@ def test_api_personas_allowed_for_internal_admin() -> None:
 
 def test_api_scenarios_for_client_user_returns_settings_default_scenario() -> None:
     db_session = _create_db_session()
-    _seed_authenticated_user(
-        db_session,
-        default_scenario_id="qualification_and_authority",
-    )
+    _seed_authenticated_user(db_session)
     client = _create_client(db_session)
     _login(client)
 
@@ -849,18 +826,9 @@ def test_api_scenarios_for_client_user_returns_settings_default_scenario() -> No
     db_session.close()
 
 
-def test_api_scenarios_for_client_user_ignores_ui_allowed_scenarios() -> None:
+def test_api_scenarios_for_client_user_uses_settings_default_only() -> None:
     db_session = _create_db_session()
-    _seed_authenticated_user(
-        db_session,
-        default_scenario_id="qualification_and_authority",
-        ui_config={
-            "allowed_scenarios": [
-                "qualification_and_authority",
-                "objection_handling",
-            ]
-        },
-    )
+    _seed_authenticated_user(db_session)
     client = _create_client(db_session)
     _login(client)
 
@@ -875,13 +843,7 @@ def test_api_scenarios_for_client_user_ignores_ui_allowed_scenarios() -> None:
 def test_api_create_session_rejects_request_persona_id_in_client_auth_mode() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
-    _seed_authenticated_user(
-        db_session,
-        persona_policy={
-            "allowed_roles": ["owner"],
-            "target_action": "book_intro_call",
-        },
-    )
+    _seed_authenticated_user(db_session)
     client = _create_client(db_session, repository=repository)
     _login(client)
 
@@ -900,14 +862,7 @@ def test_api_create_session_rejects_request_persona_id_in_client_auth_mode() -> 
 def test_api_create_session_allows_request_persona_id_for_internal_admin() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
-    _seed_authenticated_user(
-        db_session,
-        role="internal_admin",
-        persona_policy={
-            "allowed_roles": ["owner"],
-            "target_action": "book_intro_call",
-        },
-    )
+    _seed_authenticated_user(db_session, role="internal_admin")
     app = create_app(
         settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
         repository=repository,

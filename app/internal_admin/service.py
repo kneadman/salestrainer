@@ -224,12 +224,7 @@ class InternalAdminService:
         config = ClientTrainingConfig(
             client_account_id=organization_id,
             name=name,
-            default_scenario_id=self._settings.default_training_scenario_id,
             persona_generation_context=persona_generation_context,
-            persona_policy={},
-            ui_config={},
-            limits={},
-            llm_provider_config_id=None,
             is_active=True,
         )
         self._session.add(config)
@@ -536,15 +531,6 @@ class InternalAdminService:
         if config is None:
             raise NotFoundError("LLM provider config not found.")
         return config
-
-    def _validate_llm_config_for_training_config(self, organization_id: UUID, config_id: UUID | None) -> None:
-        if config_id is None:
-            return
-        config = self._get_llm_provider_config(config_id)
-        if config.client_account_id != organization_id:
-            raise ValidationError("LLM provider config belongs to another organization.")
-        if not config.is_active:
-            raise ValidationError("Disabled LLM provider config cannot be assigned.")
 
     def _get_or_create_assignment(self, *, user_id: UUID, config_id: UUID) -> UserTrainingConfig:
         assignment = self._session.get(UserTrainingConfig, {"user_id": user_id, "training_config_id": config_id})
