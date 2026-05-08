@@ -7,6 +7,7 @@ import type {
   OrganizationPayload,
   ScenarioOptionDTO,
   TrainingConfigDTO,
+  TrainingConfigFormPayload,
   TrainingConfigPayload,
   UsageSummaryDTO,
   UserCreatePayload,
@@ -14,6 +15,8 @@ import type {
   UserTrainingConfigAssignmentDTO,
   UserUpdatePayload,
 } from "./types";
+
+const BACKEND_COMPAT_DEFAULT_SCENARIO_ID = "first_contact_discovery";
 
 function queryString(params: Record<string, string | number | null | undefined>): string {
   /** Convert optional filter params to a stable query string. */
@@ -114,19 +117,39 @@ export function listTrainingConfigs(organizationId: string): Promise<TrainingCon
   return request<TrainingConfigDTO[]>(`/api/internal/organizations/${organizationId}/training-configs`);
 }
 
-export function createTrainingConfig(organizationId: string, payload: TrainingConfigPayload): Promise<TrainingConfigDTO> {
-  /** Create a training config with validated JSON policy fields. */
+export function buildCreateTrainingConfigPayload(payload: TrainingConfigFormPayload): TrainingConfigPayload {
+  /** Backend still requires legacy training-config fields; keep compatibility here until backend cleanup iteration. */
+  return {
+    name: payload.name,
+    persona_generation_context: payload.persona_generation_context,
+    default_scenario_id: BACKEND_COMPAT_DEFAULT_SCENARIO_ID,
+    persona_policy: {},
+    ui_config: {},
+    limits: {},
+  };
+}
+
+export function buildUpdateTrainingConfigPayload(payload: Partial<TrainingConfigFormPayload>): Partial<TrainingConfigFormPayload> {
+  /** Keep hidden legacy fields out of updates so existing backend values are not overwritten. */
+  return {
+    ...(payload.name !== undefined ? { name: payload.name } : {}),
+    ...(payload.persona_generation_context !== undefined ? { persona_generation_context: payload.persona_generation_context } : {}),
+  };
+}
+
+export function createTrainingConfig(organizationId: string, payload: TrainingConfigFormPayload): Promise<TrainingConfigDTO> {
+  /** Create a training config from the simplified admin form. */
   return request<TrainingConfigDTO>(`/api/internal/organizations/${organizationId}/training-configs`, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(buildCreateTrainingConfigPayload(payload)),
   });
 }
 
-export function updateTrainingConfig(configId: string, payload: Partial<TrainingConfigPayload>): Promise<TrainingConfigDTO> {
-  /** Update a training config with validated JSON policy fields. */
+export function updateTrainingConfig(configId: string, payload: Partial<TrainingConfigFormPayload>): Promise<TrainingConfigDTO> {
+  /** Update only visible training config fields. */
   return request<TrainingConfigDTO>(`/api/internal/training-configs/${configId}`, {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(buildUpdateTrainingConfigPayload(payload)),
   });
 }
 

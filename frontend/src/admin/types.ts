@@ -91,6 +91,11 @@ export type TrainingConfigPayload = {
   limits: JsonObject;
 };
 
+export type TrainingConfigFormPayload = {
+  name: string;
+  persona_generation_context: string;
+};
+
 export type UserTrainingConfigAssignmentDTO = {
   user_id: string;
   training_config_id: string;
