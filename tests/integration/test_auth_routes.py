@@ -223,7 +223,24 @@ def test_change_password_rejects_too_short() -> None:
     )
 
     assert response.status_code == 422
-    assert "at least 8 characters" in response.json()["error"]["message"]
+    assert response.json()["error"]["message"] == "Request validation failed."
+    session.close()
+
+
+def test_change_password_rejects_too_long() -> None:
+    session = _create_session()
+    _create_user(session, must_change_password=True)
+    client = _create_client(session)
+    client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    _set_csrf_header(client)
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": "password", "new_password": "A" * 257},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["message"] == "Request validation failed."
     session.close()
 
 

@@ -51,3 +51,8 @@ def test_validate_permanent_password_rejects_cyrillic() -> None:
 
 def test_validate_permanent_password_accepts_exactly_eight_chars() -> None:
     validate_permanent_password("A1b2C3d4")
+
+
+def test_validate_permanent_password_rejects_too_long() -> None:
+    with pytest.raises(PasswordValidationError, match="at most 256 characters"):
+        validate_permanent_password("A" * 257)

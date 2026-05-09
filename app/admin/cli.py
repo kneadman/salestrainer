@@ -47,6 +47,11 @@ def _create_user(
     if existing_user is not None:
         raise AdminCLIError(f"duplicate email: {email}")
 
+    try:
+        validate_permanent_password(password)
+    except PasswordValidationError as error:
+        raise AdminCLIError(str(error)) from error
+
     password_hash = hash_password(password)
     user = identity_repository.create_user(
         client_account_id=client.id,
@@ -77,6 +82,11 @@ def _create_internal_admin(
     existing_user = identity_repository.get_user_by_email(email)
     if existing_user is not None:
         raise AdminCLIError(f"duplicate email: {email}")
+
+    try:
+        validate_permanent_password(password)
+    except PasswordValidationError as error:
+        raise AdminCLIError(str(error)) from error
 
     user = identity_repository.create_user(
         client_account_id=client.id,

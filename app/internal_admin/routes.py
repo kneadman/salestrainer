@@ -24,6 +24,7 @@ from app.internal_admin.schemas import (
     UserTrainingConfigAssignmentDTO,
     UserUpdateRequest,
 )
+from app.identity.security import PasswordValidationError
 from app.internal_admin.service import ConflictError, InternalAdminService, NotFoundError, ValidationError
 
 router = APIRouter(prefix="/api/internal", tags=["internal-admin"])
@@ -34,7 +35,7 @@ def _handle_error(error: Exception) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     if isinstance(error, ConflictError):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
-    if isinstance(error, ValidationError):
+    if isinstance(error, (ValidationError, PasswordValidationError)):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
     raise error
 

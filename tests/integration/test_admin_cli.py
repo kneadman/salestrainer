@@ -54,13 +54,13 @@ def test_create_user_stores_hash_not_raw_password() -> None:
         identity_repository=identity_repository,
         client_slug=client.slug,
         email="manager@romashka.test",
-        password="temporary-password",
+        password="TempPass123",
     )
 
     created_user = identity_repository.get_user_by_email("manager@romashka.test")
     assert created_user is not None
-    assert created_user.password_hash != "temporary-password"
-    assert verify_password("temporary-password", created_user.password_hash)
+    assert created_user.password_hash != "TempPass123"
+    assert verify_password("TempPass123", created_user.password_hash)
     session.close()
 
 
@@ -75,7 +75,7 @@ def test_create_internal_admin_bootstraps_first_admin_only() -> None:
         client_name="Platform",
         client_slug="platform",
         email="admin@example.test",
-        password="temporary-password",
+        password="TempPass123",
     )
     created_user = identity_repository.get_user_by_email("admin@example.test")
 
@@ -93,7 +93,7 @@ def test_create_internal_admin_bootstraps_first_admin_only() -> None:
             client_name="Platform",
             client_slug="platform",
             email="other-admin@example.test",
-            password="temporary-password",
+            password="TempPass123",
         )
     except Exception as error:
         assert "internal admin already exists" in str(error)
@@ -150,6 +150,46 @@ def test_reset_password_rejects_invalid_permanent_password() -> None:
             identity_repository=identity_repository,
             access_repository=access_repository,
             email=user.email,
+            password="short",
+        )
+    except Exception as error:
+        assert "at least 8 characters" in str(error)
+    else:
+        raise AssertionError("expected password validation error")
+    session.close()
+
+
+def test_create_user_rejects_invalid_password() -> None:
+    session = _create_session()
+    identity_repository = IdentityRepository(session)
+    client = identity_repository.create_client_account(name="Romashka", slug="romashka")
+
+    try:
+        _create_user(
+            identity_repository=identity_repository,
+            client_slug=client.slug,
+            email="manager@romashka.test",
+            password="short",
+        )
+    except Exception as error:
+        assert "at least 8 characters" in str(error)
+    else:
+        raise AssertionError("expected password validation error")
+    session.close()
+
+
+def test_create_internal_admin_rejects_invalid_password() -> None:
+    session = _create_session()
+    identity_repository = IdentityRepository(session)
+    access_repository = AccessRepository(session)
+
+    try:
+        _create_internal_admin(
+            identity_repository=identity_repository,
+            access_repository=access_repository,
+            client_name="Platform",
+            client_slug="platform",
+            email="admin@example.test",
             password="short",
         )
     except Exception as error:

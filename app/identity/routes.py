@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.identity.dependencies import get_auth_service, get_auth_settings, get_current_session
 from app.identity.csrf import clear_csrf_cookie, generate_csrf_token, set_csrf_cookie
@@ -45,8 +45,8 @@ class CsrfResponse(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
 
 
 @router.post("/login", response_model=AuthUserResponse)

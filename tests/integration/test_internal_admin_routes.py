@@ -258,6 +258,20 @@ def test_user_management_create_roles_reject_admin_reset_disable_enable() -> Non
     session.close()
 
 
+def test_internal_admin_create_user_rejects_invalid_password() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+
+    create = client.post(
+        f"/api/internal/organizations/{organization['id']}/users",
+        json={"email": "manager@example.com", "password": "short", "role": "client_manager"},
+    )
+
+    assert create.status_code == 422
+    session.close()
+
+
 def test_internal_admin_reset_password_rejects_invalid_password() -> None:
     session = _create_session()
     client = _admin_client(session)
@@ -269,6 +283,22 @@ def test_internal_admin_reset_password_rejects_invalid_password() -> None:
     user_id = manager.json()["id"]
 
     reset = client.post(f"/api/internal/users/{user_id}/reset-password", json={"password": "bad!"})
+
+    assert reset.status_code == 422
+    session.close()
+
+
+def test_internal_admin_reset_password_rejects_too_long_password() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+    manager = client.post(
+        f"/api/internal/organizations/{organization['id']}/users",
+        json={"email": "manager@example.com", "password": "temporary", "role": "client_manager"},
+    )
+    user_id = manager.json()["id"]
+
+    reset = client.post(f"/api/internal/users/{user_id}/reset-password", json={"password": "A" * 257})
 
     assert reset.status_code == 422
     session.close()
