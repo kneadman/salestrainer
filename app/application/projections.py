@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.api.schemas import InterestDTO, SessionPublicDTO, TurnPublicDTO
 from app.domain.interest import interest_band
-from app.domain.models import TrainingSessionState
+from app.domain.models import TrainingSessionState, Turn
 
 
 def build_session_public_dto(session: TrainingSessionState) -> SessionPublicDTO:
@@ -50,3 +50,24 @@ def build_turn_public_dto(session: TrainingSessionState) -> list[TurnPublicDTO]:
         )
         for turn in session.turns
     ]
+
+
+def build_turn_response_payload(
+    session: TrainingSessionState,
+    *,
+    turn: Turn,
+    interest_before: int,
+    stage_before: str,
+) -> dict[str, object]:
+    """Build the public-safe turn response payload used by both normal and idempotent replies."""
+    return {
+        "session": build_session_public_dto(session).model_dump(mode="json"),
+        "turns": [turn_dto.model_dump(mode="json") for turn_dto in build_turn_public_dto(session)],
+        "client_answer": turn.client_answer,
+        "interest_before": interest_before,
+        "interest_delta": turn.interest_delta,
+        "interest_after": turn.interest_after,
+        "stage_before": stage_before,
+        "stage_after": session.stage,
+        "turn_index": turn.index,
+    }

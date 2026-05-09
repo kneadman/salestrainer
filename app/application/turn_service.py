@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.application.evaluator import evaluate_turn
+from app.application.projections import build_turn_response_payload
 from app.application.session_service import MAX_RECENT_MESSAGE_SUBMISSIONS
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
 from app.domain.errors import (
@@ -248,56 +249,12 @@ class TurnService:
         stage_before: str,
     ) -> dict[str, Any]:
         """Build the public-safe turn response payload stored for idempotent retries."""
-        return {
-            "session": {
-                "session_id": str(session.session_id),
-                "scenario_id": session.scenario_id,
-                "status": session.status,
-                "persona_name": session.persona.display_name,
-                "public_brief": session.public_brief,
-                "stage": session.stage,
-                "interest": {
-                    "score": session.interest_score,
-                    "band": interest_band(session.interest_score),
-                },
-                "client_state_public": {
-                    "tone": session.client_state.tone,
-                    "trust": session.client_state.trust,
-                    "visible_objections": session.client_state.open_objections,
-                    "known_pains": session.client_state.known_pains,
-                    "buying_signals": session.client_state.buying_signals,
-                    "discovered_role": session.client_state.discovered_role,
-                    "discovered_authority_level": session.client_state.discovered_authority_level,
-                    "discovered_decision_criteria": session.client_state.discovered_decision_criteria,
-                    "discovered_constraints": session.client_state.discovered_constraints,
-                    "discovered_current_process": session.client_state.discovered_current_process,
-                },
-                "turn_count": session.turn_count,
-                "summary": session.summary,
-                "state_version": session.state_version,
-            },
-            "turns": [
-                {
-                    "turn_index": session_turn.index,
-                    "manager_message": session_turn.manager_message,
-                    "client_answer": session_turn.client_answer,
-                    "interest_before": session_turn.interest_before,
-                    "interest_delta": session_turn.interest_delta,
-                    "interest_after": session_turn.interest_after,
-                    "stage_before": session_turn.stage_before,
-                    "stage_after": session_turn.stage_after,
-                    "created_at": session_turn.created_at,
-                }
-                for session_turn in session.turns
-            ],
-            "client_answer": turn.client_answer,
-            "interest_before": interest_before,
-            "interest_delta": turn.interest_delta,
-            "interest_after": turn.interest_after,
-            "stage_before": stage_before,
-            "stage_after": session.stage,
-            "turn_index": turn.index,
-        }
+        return build_turn_response_payload(
+            session,
+            turn=turn,
+            interest_before=interest_before,
+            stage_before=stage_before,
+        )
 
     def _append_message_submission(
         self,
