@@ -31,6 +31,7 @@ from app.application.turn_service import TurnService
 from app.domain.errors import (
     SalesTrainerError,
     LLMProviderConfigurationError,
+    MessageIdempotencyPersistenceError,
     PersonaGenerationError,
     SessionHistorySyncPendingError,
     SessionNotActiveError,
@@ -68,7 +69,15 @@ ERROR_RESPONSES = {
 def raise_api_error(error: SalesTrainerError) -> None:
     if isinstance(error, (SessionNotFoundError, UnknownScenarioError, UnknownPersonaError)):
         raise not_found(str(error)) from error
-    if isinstance(error, (SessionNotActiveError, StateVersionConflictError, SessionHistorySyncPendingError)):
+    if isinstance(
+        error,
+        (
+            MessageIdempotencyPersistenceError,
+            SessionNotActiveError,
+            StateVersionConflictError,
+            SessionHistorySyncPendingError,
+        ),
+    ):
         raise conflict(str(error)) from error
     if isinstance(error, LLMProviderConfigurationError):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
@@ -351,7 +360,11 @@ def post_manager_message(
                     )
                 return TurnResponse.model_validate(existing_submission.response_payload)
         ownership = access_service.get_session_ownership(session_id)
-        turn_result = turn_service.process_message(session_id, request.manager_message)
+        turn_result = turn_service.process_message(
+            session_id,
+            request.manager_message,
+            idempotency_key=request.idempotency_key,
+        )
     except SalesTrainerError as error:
         raise_api_error(error)
     except LookupError as error:
@@ -359,29 +372,21 @@ def post_manager_message(
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after turn.")
-    response = TurnResponse(
-        session=build_session_public_dto(session),
-        turns=build_turn_public_dto(session),
-        client_answer=turn_result.client_answer,
-        interest_before=turn_result.interest_before,
-        interest_delta=turn_result.interest_delta,
-        interest_after=turn_result.interest_after,
-        stage_before=turn_result.stage_before,
-        stage_after=turn_result.stage_after,
-        turn_index=turn_result.turn_index,
+    response = (
+        TurnResponse.model_validate(turn_result.response_payload)
+        if turn_result.response_payload is not None
+        else TurnResponse(
+            session=build_session_public_dto(session),
+            turns=build_turn_public_dto(session),
+            client_answer=turn_result.client_answer,
+            interest_before=turn_result.interest_before,
+            interest_delta=turn_result.interest_delta,
+            interest_after=turn_result.interest_after,
+            stage_before=turn_result.stage_before,
+            stage_after=turn_result.stage_after,
+            turn_index=turn_result.turn_index,
+        )
     )
-    cached_response = response
-    if request.idempotency_key is not None:
-        try:
-            response_payload = session_service.save_message_submission(
-                session_id,
-                idempotency_key=request.idempotency_key,
-                manager_message=request.manager_message,
-                response_payload=response.model_dump(mode="json"),
-            )
-            cached_response = TurnResponse.model_validate(response_payload)
-        except Exception:
-            logger.critical("message_idempotency_cache_write_failed session_id=%s", session_id, exc_info=True)
     try:
         history_service.record_turn_processed(
             session=session,
@@ -400,7 +405,7 @@ def post_manager_message(
             "The turn was processed, but session history is still being reconciled. "
             "Please retry this action instead of resending the last message."
         ) from None
-    return cached_response
+    return response
 
 
 @router.post("/sessions/{session_id}/finish", response_model=FinishSessionResponse, responses=ERROR_RESPONSES)

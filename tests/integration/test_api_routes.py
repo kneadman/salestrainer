@@ -603,6 +603,61 @@ def test_api_message_idempotency_key_rejects_conflicting_payload_reuse() -> None
     db_session.close()
 
 
+def test_api_message_idempotency_persistence_failure_does_not_silently_degrade_to_best_effort() -> None:
+    db_session = _create_db_session()
+
+    class FailingIdempotencyRepository(InMemorySessionRepository):
+        def __init__(self) -> None:
+            """Fail the first runtime save that tries to persist an idempotency submission record."""
+            super().__init__()
+            self._fail_next_idempotent_turn_save = True
+
+        def save(self, session, *, expected_version=None) -> None:
+            """Simulate one atomic runtime-save failure before the turn and idempotency record are persisted."""
+            if self._fail_next_idempotent_turn_save and session.recent_message_submissions:
+                self._fail_next_idempotent_turn_save = False
+                raise RuntimeError("idempotency cache write failed")
+            return super().save(session, expected_version=expected_version)
+
+    repository = FailingIdempotencyRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    failed_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you qualify inbound leads today?", "idempotency_key": "msg-atomic-1"},
+    )
+    retry_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you qualify inbound leads today?", "idempotency_key": "msg-atomic-1"},
+    )
+
+    saved_session = repository.get(session_id)
+    turns = list(
+        db_session.scalars(
+            select(TrainingTurnRecord)
+            .where(TrainingTurnRecord.session_id == saved_session.session_id)
+            .order_by(TrainingTurnRecord.turn_index)
+        )
+    )
+
+    assert failed_response.status_code == 409
+    assert failed_response.json()["error"]["code"] == "conflict"
+    assert "Please retry this action instead of resending the last message." in failed_response.json()["error"]["message"]
+    assert retry_response.status_code == 200
+    assert retry_response.json()["turn_index"] == 1
+    assert saved_session is not None
+    assert saved_session.turn_count == 1
+    assert saved_session.history_sync_status == "ok"
+    assert len(saved_session.recent_message_submissions) == 1
+    assert len(turns) == 1
+    assert turns[0].turn_index == 1
+
+    db_session.close()
+
+
 def test_api_message_without_idempotency_key_keeps_legacy_repeat_behavior() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
