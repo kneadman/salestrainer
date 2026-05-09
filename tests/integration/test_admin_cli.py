@@ -119,17 +119,43 @@ def test_reset_password_changes_hash() -> None:
         identity_repository=identity_repository,
         access_repository=access_repository,
         email=user.email,
-        password="new-temporary-password",
+        password="newtemppass",
     )
 
     updated_user = identity_repository.get_user_by_email(user.email)
     assert updated_user is not None
     assert updated_user.password_hash != old_hash
     assert updated_user.must_change_password is True
-    assert verify_password("new-temporary-password", updated_user.password_hash)
+    assert verify_password("newtemppass", updated_user.password_hash)
     audit_record = session.scalar(select(AuditLog).where(AuditLog.action == "password_reset"))
     assert audit_record is not None
     assert audit_record.entity_id == user.id
+    session.close()
+
+
+def test_reset_password_rejects_invalid_permanent_password() -> None:
+    session = _create_session()
+    identity_repository = IdentityRepository(session)
+    client = identity_repository.create_client_account(name="Romashka", slug="romashka")
+    user = identity_repository.create_user(
+        client_account_id=client.id,
+        email="manager@romashka.test",
+        password_hash=hash_password("old-password"),
+        must_change_password=False,
+    )
+
+    access_repository = AccessRepository(session)
+    try:
+        _reset_password(
+            identity_repository=identity_repository,
+            access_repository=access_repository,
+            email=user.email,
+            password="short",
+        )
+    except Exception as error:
+        assert "at least 8 characters" in str(error)
+    else:
+        raise AssertionError("expected password validation error")
     session.close()
 
 

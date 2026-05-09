@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 
 from argon2 import PasswordHasher
@@ -8,6 +9,26 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError, Verificatio
 from argon2.low_level import Type
 
 _PASSWORD_HASHER = PasswordHasher(type=Type.ID)
+
+# Permanent passwords must contain only ASCII letters and digits.
+_PERMANENT_PASSWORD_PATTERN = re.compile(r"^[a-zA-Z0-9]+$")
+
+
+class PasswordValidationError(ValueError):
+    """Raised when a password does not meet the permanent password policy."""
+
+
+def validate_permanent_password(password: str) -> None:
+    """Validate a permanent user password against the product policy.
+
+    Rules:
+    - Minimum 8 characters.
+    - Only Latin letters and digits (no spaces, no special characters).
+    """
+    if len(password) < 8:
+        raise PasswordValidationError("Password must be at least 8 characters long.")
+    if not _PERMANENT_PASSWORD_PATTERN.match(password):
+        raise PasswordValidationError("Password must contain only Latin letters and digits.")
 
 
 def hash_password(password: str) -> str:

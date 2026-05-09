@@ -10,6 +10,7 @@ from app.identity.csrf import clear_csrf_cookie, generate_csrf_token, set_csrf_c
 from app.identity.models import User
 from app.identity.roles import role_value
 from app.identity.rate_limit import LoginRateLimitExceeded
+from app.identity.security import PasswordValidationError
 from app.identity.service import AuthService, AuthenticationError, CurrentSession
 from app.infrastructure.config import Settings
 
@@ -136,6 +137,8 @@ def change_password(
         )
     except AuthenticationError as error:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(error)) from error
+    except PasswordValidationError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
     return AuthUserResponse(user=_user_dto(user))
 
 

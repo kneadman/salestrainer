@@ -233,11 +233,11 @@ def test_user_management_create_roles_reject_admin_reset_disable_enable() -> Non
         json={"email": "legacy@example.com", "password": "temporary", "role": "client_user"},
     )
     user_id = manager.json()["id"]
-    reset = client.post(f"/api/internal/users/{user_id}/reset-password", json={"password": "new-temp"})
+    reset = client.post(f"/api/internal/users/{user_id}/reset-password", json={"password": "newtemp01"})
     disabled = client.post(f"/api/internal/users/{user_id}/disable")
-    login_disabled = client.post("/auth/login", json={"email": "manager@example.com", "password": "new-temp"})
+    login_disabled = client.post("/auth/login", json={"email": "manager@example.com", "password": "newtemp01"})
     enabled = client.post(f"/api/internal/users/{user_id}/enable")
-    login_enabled = client.post("/auth/login", json={"email": "manager@example.com", "password": "new-temp"})
+    login_enabled = client.post("/auth/login", json={"email": "manager@example.com", "password": "newtemp01"})
     user = session.scalar(select(User).where(User.email == "manager@example.com"))
 
     assert manager.status_code == 201
@@ -250,11 +250,27 @@ def test_user_management_create_roles_reject_admin_reset_disable_enable() -> Non
     assert reset.status_code == 200
     assert reset.json()["must_change_password"] is True
     assert user is not None
-    assert verify_password("new-temp", user.password_hash)
+    assert verify_password("newtemp01", user.password_hash)
     assert disabled.status_code == 200
     assert login_disabled.status_code == 401
     assert enabled.status_code == 200
     assert login_enabled.status_code == 200
+    session.close()
+
+
+def test_internal_admin_reset_password_rejects_invalid_password() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+    manager = client.post(
+        f"/api/internal/organizations/{organization['id']}/users",
+        json={"email": "manager@example.com", "password": "temporary", "role": "client_manager"},
+    )
+    user_id = manager.json()["id"]
+
+    reset = client.post(f"/api/internal/users/{user_id}/reset-password", json={"password": "bad!"})
+
+    assert reset.status_code == 422
     session.close()
 
 

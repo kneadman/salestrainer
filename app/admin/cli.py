@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.access.repository import AccessRepository
 from app.identity.repository import IdentityRepository
 from app.identity.roles import UserRole
-from app.identity.security import hash_password
+from app.identity.security import hash_password, PasswordValidationError, validate_permanent_password
 from app.infrastructure.config import get_settings
 from app.infrastructure.db import get_session_factory
 
@@ -216,6 +216,11 @@ def _reset_password(
     user = identity_repository.get_user_by_email(email)
     if user is None:
         raise AdminCLIError(f"user not found: {email}")
+
+    try:
+        validate_permanent_password(password)
+    except PasswordValidationError as error:
+        raise AdminCLIError(str(error)) from error
 
     password_hash = hash_password(password)
     updated_user = identity_repository.update_user_password(

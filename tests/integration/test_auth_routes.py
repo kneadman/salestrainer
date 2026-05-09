@@ -166,7 +166,7 @@ def test_change_password_clears_must_change_password() -> None:
 
     response = client.post(
         "/auth/change-password",
-        json={"current_password": "password", "new_password": "new-password"},
+        json={"current_password": "password", "new_password": "newpassword"},
     )
     me_response = client.get("/auth/me")
 
@@ -186,10 +186,61 @@ def test_change_password_rejects_wrong_current_password() -> None:
 
     response = client.post(
         "/auth/change-password",
-        json={"current_password": "wrong", "new_password": "new-password"},
+        json={"current_password": "wrong", "new_password": "newpassword"},
     )
 
     assert response.status_code == 401
+    session.close()
+
+
+def test_change_password_rejects_same_password() -> None:
+    session = _create_session()
+    _create_user(session, password="currentpass", must_change_password=True)
+    client = _create_client(session)
+    client.post("/auth/login", json={"email": "manager@example.com", "password": "currentpass"})
+    _set_csrf_header(client)
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": "currentpass", "new_password": "currentpass"},
+    )
+
+    assert response.status_code == 422
+    assert "different from the current" in response.json()["error"]["message"]
+    session.close()
+
+
+def test_change_password_rejects_too_short() -> None:
+    session = _create_session()
+    _create_user(session, must_change_password=True)
+    client = _create_client(session)
+    client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    _set_csrf_header(client)
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": "password", "new_password": "short1"},
+    )
+
+    assert response.status_code == 422
+    assert "at least 8 characters" in response.json()["error"]["message"]
+    session.close()
+
+
+def test_change_password_rejects_invalid_characters() -> None:
+    session = _create_session()
+    _create_user(session, must_change_password=True)
+    client = _create_client(session)
+    client.post("/auth/login", json={"email": "manager@example.com", "password": "password"})
+    _set_csrf_header(client)
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": "password", "new_password": "pass word"},
+    )
+
+    assert response.status_code == 422
+    assert "only Latin letters and digits" in response.json()["error"]["message"]
     session.close()
 
 

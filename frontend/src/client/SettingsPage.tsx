@@ -31,6 +31,14 @@ export function SettingsPage({ user, onUserUpdated }: SettingsPageProps) {
       setError("Новый пароль должен быть не короче 8 символов.");
       return;
     }
+    if (!/^[a-zA-Z0-9]+$/.test(newPassword)) {
+      setError("Новый пароль должен содержать только латинские буквы и цифры.");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setError("Новый пароль должен отличаться от текущего.");
+      return;
+    }
     setLoading(true);
     try {
       const response = await changePassword(currentPassword, newPassword);
