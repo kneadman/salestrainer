@@ -221,6 +221,62 @@ describe("TrainerPage", () => {
     expect(trainerChatPanel?.lastElementChild).toBe(composer);
   });
 
+  it("reuses the same idempotency key when the same failed message is retried", async () => {
+    const user = userEvent.setup();
+    const randomUuid = vi.fn()
+      .mockReturnValueOnce("msg-key-1")
+      .mockReturnValueOnce("msg-key-2");
+    const originalCrypto = globalThis.crypto;
+    try {
+      Object.defineProperty(globalThis, "crypto", {
+        configurable: true,
+        value: {
+          ...originalCrypto,
+          randomUUID: randomUuid,
+        },
+      });
+
+      localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+
+      apiMocks.getSession.mockResolvedValue({
+        session: activeSession,
+        turns: [],
+      });
+      apiMocks.sendMessage
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce({
+          session: activeSession,
+          turns: [makeTurn(1)],
+          client_answer: "РћС‚РІРµС‚ 1",
+          interest_before: 41,
+          interest_delta: 1,
+          interest_after: 42,
+          stage_before: "discovery",
+          stage_after: "discovery",
+          turn_index: 1,
+        });
+
+      const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+
+      const textarea = await screen.findByRole("textbox");
+      const sendButton = container.querySelector(".composer__send");
+      expect(sendButton).not.toBeNull();
+      await user.type(textarea, "РџСЂРёРІРµС‚");
+      await user.click(sendButton as HTMLElement);
+      await screen.findByText("network down");
+      await user.click(sendButton as HTMLElement);
+
+      expect(apiMocks.sendMessage).toHaveBeenNthCalledWith(1, activeSession.session_id, "РџСЂРёРІРµС‚", "msg-key-1");
+      expect(apiMocks.sendMessage).toHaveBeenNthCalledWith(2, activeSession.session_id, "РџСЂРёРІРµС‚", "msg-key-1");
+      expect(randomUuid).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", {
+        configurable: true,
+        value: originalCrypto,
+      });
+    }
+  });
+
   it("keeps chat-window inside trainer-chat-body for long conversations", async () => {
     localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
 

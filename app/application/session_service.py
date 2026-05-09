@@ -2,18 +2,20 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import logging
+from typing import Any
 from uuid import uuid4
 
 from app.access.models import RuntimeTrainingConfig
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.interest import interest_band
 from app.domain.errors import SessionHistorySyncPendingError, SessionNotActiveError, SessionNotFoundError
-from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
+from app.domain.models import ClientState, MessageSubmissionRecord, PersonaProfile, TrainingSessionState
 from app.domain.personas import get_persona
 from app.domain.scenarios import get_scenario
 from app.infrastructure.session_repository import SessionRepository
 
 logger = logging.getLogger(__name__)
+MAX_RECENT_MESSAGE_SUBMISSIONS = 20
 
 DEFAULT_PUBLIC_BRIEF = (
     "Вы начали первичный B2B-диалог с потенциальным клиентом. "
@@ -154,6 +156,51 @@ class TrainingSessionService:
                 "Please retry this action instead of resending the last message."
             )
         return session
+
+    def get_message_submission(self, session_id: str, idempotency_key: str) -> MessageSubmissionRecord | None:
+        """Return one saved message submission record for the runtime session when present."""
+        session = self._require_session(session_id)
+        for record in reversed(session.recent_message_submissions):
+            if record.idempotency_key == idempotency_key:
+                return record
+        return None
+
+    def save_message_submission(
+        self,
+        session_id: str,
+        *,
+        idempotency_key: str,
+        manager_message: str,
+        response_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Persist one recent idempotent message result and return the stored response payload."""
+        session = self._require_session(session_id)
+        expected_version = session.state_version
+        now = datetime.now(tz=UTC)
+        existing_records = [
+            record for record in session.recent_message_submissions
+            if record.idempotency_key != idempotency_key
+        ]
+        updated_payload = {
+            **response_payload,
+            "session": {
+                **dict(response_payload["session"]),
+                "state_version": expected_version + 1,
+            },
+        }
+        session.recent_message_submissions = [
+            *existing_records[-(MAX_RECENT_MESSAGE_SUBMISSIONS - 1):],
+            MessageSubmissionRecord(
+                idempotency_key=idempotency_key,
+                manager_message=manager_message,
+                response_payload=updated_payload,
+                created_at=now,
+            ),
+        ]
+        session.state_version = expected_version + 1
+        session.updated_at = now
+        self._repository.save(session, expected_version=expected_version)
+        return updated_payload
 
     def _require_session(self, session_id: str) -> TrainingSessionState:
         """Load a runtime session or raise a not-found domain error."""

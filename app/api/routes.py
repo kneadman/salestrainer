@@ -335,6 +335,14 @@ def post_manager_message(
 ) -> TurnResponse:
     try:
         access_service.require_session_access(session_id, current_session.user.id)
+        if request.idempotency_key is not None:
+            existing_submission = session_service.get_message_submission(session_id, request.idempotency_key)
+            if existing_submission is not None:
+                if existing_submission.manager_message != request.manager_message:
+                    raise conflict(
+                        "This idempotency key was already used for a different manager_message."
+                    )
+                return TurnResponse.model_validate(existing_submission.response_payload)
         _reconcile_pending_history_sync(
             session_id=session_id,
             session_service=session_service,
@@ -351,6 +359,25 @@ def post_manager_message(
     session = session_service.get_session(session_id)
     if session is None:
         raise not_found("Session not found after turn.")
+    response = TurnResponse(
+        session=build_session_public_dto(session),
+        turns=build_turn_public_dto(session),
+        client_answer=turn_result.client_answer,
+        interest_before=turn_result.interest_before,
+        interest_delta=turn_result.interest_delta,
+        interest_after=turn_result.interest_after,
+        stage_before=turn_result.stage_before,
+        stage_after=turn_result.stage_after,
+        turn_index=turn_result.turn_index,
+    )
+    if request.idempotency_key is not None:
+        response_payload = session_service.save_message_submission(
+            session_id,
+            idempotency_key=request.idempotency_key,
+            manager_message=request.manager_message,
+            response_payload=response.model_dump(mode="json"),
+        )
+        response = TurnResponse.model_validate(response_payload)
     try:
         history_service.record_turn_processed(
             session=session,
@@ -369,17 +396,7 @@ def post_manager_message(
             "The turn was processed, but session history is still being reconciled. "
             "Please retry this action instead of resending the last message."
         ) from None
-    return TurnResponse(
-        session=build_session_public_dto(session),
-        turns=build_turn_public_dto(session),
-        client_answer=turn_result.client_answer,
-        interest_before=turn_result.interest_before,
-        interest_delta=turn_result.interest_delta,
-        interest_after=turn_result.interest_after,
-        stage_before=turn_result.stage_before,
-        stage_after=turn_result.stage_after,
-        turn_index=turn_result.turn_index,
-    )
+    return response
 
 
 @router.post("/sessions/{session_id}/finish", response_model=FinishSessionResponse, responses=ERROR_RESPONSES)

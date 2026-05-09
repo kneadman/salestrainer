@@ -541,6 +541,104 @@ def test_owner_user_can_send_message_to_own_session() -> None:
     assert response.json()["turn_index"] == 1
 
 
+def test_api_message_idempotency_key_returns_saved_result_for_duplicate_request() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    first_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you qualify leads now?", "idempotency_key": "msg-1"},
+    )
+    duplicate_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you qualify leads now?", "idempotency_key": "msg-1"},
+    )
+
+    saved_session = repository.get(session_id)
+    turns = list(db_session.scalars(select(TrainingTurnRecord).where(TrainingTurnRecord.session_id == saved_session.session_id)))
+
+    assert first_response.status_code == 200
+    assert duplicate_response.status_code == 200
+    assert duplicate_response.json() == first_response.json()
+    assert saved_session is not None
+    assert saved_session.turn_count == 1
+    assert len(saved_session.recent_message_submissions) == 1
+    assert len(turns) == 1
+
+    db_session.close()
+
+
+def test_api_message_idempotency_key_rejects_conflicting_payload_reuse() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    first_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "What does the current process look like?", "idempotency_key": "msg-2"},
+    )
+    conflict_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Who approves the budget?", "idempotency_key": "msg-2"},
+    )
+
+    saved_session = repository.get(session_id)
+    turns = list(db_session.scalars(select(TrainingTurnRecord).where(TrainingTurnRecord.session_id == saved_session.session_id)))
+
+    assert first_response.status_code == 200
+    assert conflict_response.status_code == 409
+    assert conflict_response.json()["error"]["code"] == "conflict"
+    assert conflict_response.json()["error"]["message"] == "This idempotency key was already used for a different manager_message."
+    assert saved_session is not None
+    assert saved_session.turn_count == 1
+    assert len(turns) == 1
+
+    db_session.close()
+
+
+def test_api_message_without_idempotency_key_keeps_legacy_repeat_behavior() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    first_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Tell me about the current workflow."},
+    )
+    second_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Tell me about the current workflow."},
+    )
+
+    saved_session = repository.get(session_id)
+    turns = list(
+        db_session.scalars(
+            select(TrainingTurnRecord)
+            .where(TrainingTurnRecord.session_id == saved_session.session_id)
+            .order_by(TrainingTurnRecord.turn_index)
+        )
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json()["turn_index"] == 1
+    assert second_response.json()["turn_index"] == 2
+    assert saved_session is not None
+    assert saved_session.turn_count == 2
+    assert len(saved_session.recent_message_submissions) == 0
+    assert [turn.turn_index for turn in turns] == [1, 2]
+
+
 def test_api_create_session_uses_settings_default_scenario_and_creates_ownership() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()

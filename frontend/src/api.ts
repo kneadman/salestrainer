@@ -47,11 +47,14 @@ export function getSession(sessionId: string): Promise<SessionDetailResponse> {
   return request<SessionDetailResponse>(`/api/sessions/${sessionId}`);
 }
 
-export function sendMessage(sessionId: string, managerMessage: string): Promise<TurnResponse> {
+export function sendMessage(sessionId: string, managerMessage: string, idempotencyKey?: string): Promise<TurnResponse> {
   /** Send one manager message to the training simulator. */
   return request<TurnResponse>(`/api/sessions/${sessionId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ manager_message: managerMessage }),
+    body: JSON.stringify({
+      manager_message: managerMessage,
+      ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+    }),
   });
 }
 
