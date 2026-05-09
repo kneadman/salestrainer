@@ -4,7 +4,7 @@ import pytest
 
 from app.access.models import RuntimeTrainingConfig
 from app.application.session_service import TrainingSessionService
-from app.domain.errors import SessionNotFoundError
+from app.domain.errors import SessionHistorySyncPendingError, SessionNotFoundError
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.infrastructure.session_repository import InMemorySessionRepository
 
@@ -26,6 +26,16 @@ def test_resume_session_rejects_missing_session() -> None:
 
     with pytest.raises(SessionNotFoundError, match="not found"):
         service.resume_session("missing-session-id")
+
+
+def test_require_history_sync_ready_rejects_pending_runtime_session() -> None:
+    repository = InMemorySessionRepository()
+    service = TrainingSessionService(repository)
+    session = service.start_session("first_contact_discovery", "owner")
+    service.mark_history_sync_pending(str(session.session_id), reason="test")
+
+    with pytest.raises(SessionHistorySyncPendingError, match="retry this action"):
+        service.require_history_sync_ready(str(session.session_id))
 
 
 def test_start_session_without_persona_uses_generated_profile() -> None:

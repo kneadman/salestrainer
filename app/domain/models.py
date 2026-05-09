@@ -198,6 +198,8 @@ class TrainingSessionState(BaseModel):
     recent_turns: list[Turn] = Field(default_factory=list)
     turn_count: int = 0
     state_version: int = 1
+    history_sync_status: Literal["ok", "pending_retry"] = "ok"
+    history_sync_error: str | None = None
     created_at: datetime
     updated_at: datetime
 

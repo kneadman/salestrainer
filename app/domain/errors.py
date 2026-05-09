@@ -17,6 +17,10 @@ class StateVersionConflictError(SalesTrainerError):
     """Raised when a stale session update would overwrite newer state."""
 
 
+class SessionHistorySyncPendingError(SalesTrainerError):
+    """Raised when runtime state is waiting for persistent history reconciliation."""
+
+
 class UnknownScenarioError(SalesTrainerError):
     """Raised when a scenario_id is unknown."""
 

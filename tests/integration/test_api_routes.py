@@ -14,7 +14,10 @@ from app.access.repository import AccessRepository
 from app.api.dependencies import get_persona_generation_service
 from app.api.main import create_app
 from app.domain.models import PersonaProfile
+from app.history.dependencies import get_history_service
 from app.history.models import TrainingTurnRecord, UsageEventRecord
+from app.history.repository import HistoryRepository
+from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
 from app.identity.repository import IdentityRepository
 from app.identity.security import hash_password
@@ -768,8 +771,6 @@ def test_api_create_session_compensates_runtime_and_ownership_when_history_fails
         yield db_session
 
     app.dependency_overrides[get_db_session] = override_get_db_session
-    from app.history.dependencies import get_history_service
-
     app.dependency_overrides[get_history_service] = lambda: FailingHistoryService()
     client = TestClient(app, raise_server_exceptions=False)
     _login(client)
@@ -780,6 +781,180 @@ def test_api_create_session_compensates_runtime_and_ownership_when_history_fails
     assert response.status_code == 500
     assert repository._store == {}
     assert ownership_count is None
+
+    db_session.close()
+
+
+def test_api_message_history_failure_marks_runtime_pending_and_returns_controlled_conflict() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    class FlakyHistoryService(HistoryService):
+        def __init__(self, repository: HistoryRepository) -> None:
+            """Fail the first turn write and delegate all other history operations."""
+            super().__init__(repository)
+            self._fail_next_turn_write = True
+
+        def record_turn_processed(self, **kwargs: object) -> None:
+            """Simulate one persistent turn-write outage after runtime mutation."""
+            if self._fail_next_turn_write:
+                self._fail_next_turn_write = False
+                raise RuntimeError("history down after runtime turn save")
+            return super().record_turn_processed(**kwargs)
+
+    flaky_history_service = FlakyHistoryService(HistoryRepository(db_session))
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        """Share the in-memory database with the tested FastAPI app."""
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: flaky_history_service
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you manage this process today?"},
+    )
+
+    saved_session = repository.get(session_id)
+    turns = list(db_session.scalars(select(TrainingTurnRecord).where(TrainingTurnRecord.session_id == saved_session.session_id)))
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert "Please retry this action instead of resending the last message." in response.json()["error"]["message"]
+    assert saved_session is not None
+    assert saved_session.turn_count == 1
+    assert saved_session.history_sync_status == "pending_retry"
+    assert saved_session.history_sync_error == "turn_processed_history_write_failed"
+    assert turns == []
+
+    db_session.close()
+
+
+def test_api_resume_reconciles_pending_history_before_returning_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    class FlakyHistoryService(HistoryService):
+        def __init__(self, repository: HistoryRepository) -> None:
+            """Fail only the first durable turn write, then allow reconciliation."""
+            super().__init__(repository)
+            self._fail_next_turn_write = True
+
+        def record_turn_processed(self, **kwargs: object) -> None:
+            """Simulate one persistent turn-write outage after runtime mutation."""
+            if self._fail_next_turn_write:
+                self._fail_next_turn_write = False
+                raise RuntimeError("history down after runtime turn save")
+            return super().record_turn_processed(**kwargs)
+
+    flaky_history_service = FlakyHistoryService(HistoryRepository(db_session))
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        """Share the in-memory database with the tested FastAPI app."""
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: flaky_history_service
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    failed_turn = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "What is blocking growth right now?"},
+    )
+    resume_response = client.post(f"/api/sessions/{session_id}/resume")
+
+    saved_session = repository.get(session_id)
+    turns = list(db_session.scalars(select(TrainingTurnRecord).where(TrainingTurnRecord.session_id == saved_session.session_id)))
+
+    assert failed_turn.status_code == 409
+    assert resume_response.status_code == 200
+    assert resume_response.json()["session"]["session_id"] == session_id
+    assert saved_session is not None
+    assert saved_session.history_sync_status == "ok"
+    assert saved_session.history_sync_error is None
+    assert len(turns) == 1
+    assert turns[0].turn_index == 1
+
+    db_session.close()
+
+
+def test_api_next_message_reconciles_pending_history_before_processing_new_turn() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    class FlakyHistoryService(HistoryService):
+        def __init__(self, repository: HistoryRepository) -> None:
+            """Fail only the first durable turn write, then allow normal operation."""
+            super().__init__(repository)
+            self._fail_next_turn_write = True
+
+        def record_turn_processed(self, **kwargs: object) -> None:
+            """Simulate one persistent turn-write outage after runtime mutation."""
+            if self._fail_next_turn_write:
+                self._fail_next_turn_write = False
+                raise RuntimeError("history down after runtime turn save")
+            return super().record_turn_processed(**kwargs)
+
+    flaky_history_service = FlakyHistoryService(HistoryRepository(db_session))
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        """Share the in-memory database with the tested FastAPI app."""
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: flaky_history_service
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    failed_turn = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you track this today?"},
+    )
+    next_turn = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "Who is involved in the decision?"},
+    )
+
+    saved_session = repository.get(session_id)
+    turns = list(
+        db_session.scalars(
+            select(TrainingTurnRecord)
+            .where(TrainingTurnRecord.session_id == saved_session.session_id)
+            .order_by(TrainingTurnRecord.turn_index)
+        )
+    )
+
+    assert failed_turn.status_code == 409
+    assert next_turn.status_code == 200
+    assert next_turn.json()["turn_index"] == 2
+    assert saved_session is not None
+    assert saved_session.history_sync_status == "ok"
+    assert [turn.turn_index for turn in turns] == [1, 2]
 
     db_session.close()
 

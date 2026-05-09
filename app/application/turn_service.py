@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.application.evaluator import evaluate_turn
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
-from app.domain.errors import SessionNotActiveError, SessionNotFoundError
+from app.domain.errors import SessionHistorySyncPendingError, SessionNotActiveError, SessionNotFoundError
 from app.domain.interest import apply_interest_delta, interest_band
 from app.domain.models import LLMTurnInput, TrainingSessionState, Turn
 from app.domain.scenarios import get_scenario
@@ -159,6 +159,11 @@ class TurnService:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")
         if session.status != "active":
             raise SessionNotActiveError(f"Session '{session_id}' is not active.")
+        if session.history_sync_status != "ok":
+            raise SessionHistorySyncPendingError(
+                "The previous turn was processed, but session history is still being reconciled. "
+                "Please retry this action instead of resending the last message."
+            )
         return session
 
     def _build_summary(self, session: TrainingSessionState, internal_notes: str) -> str:
