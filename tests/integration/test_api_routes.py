@@ -1004,6 +1004,56 @@ def test_api_leads_keeps_whitelisted_query_params_and_truncates_values() -> None
     db_session.close()
 
 
+def test_api_leads_rate_limit_by_ip_returns_429() -> None:
+    db_session = _create_db_session()
+    client = _create_client(
+        db_session,
+        settings=Settings(
+            auth_cookie_secure=False,
+            login_rate_limit_attempts=0,
+            lead_rate_limit_attempts=2,
+            lead_rate_limit_window_seconds=1,
+        ),
+    )
+
+    for _ in range(2):
+        response = client.post("/api/leads", json=_valid_lead_payload())
+        assert response.status_code == 202
+
+    limited_response = client.post("/api/leads", json=_valid_lead_payload())
+    assert limited_response.status_code == 429
+
+    db_session.close()
+
+
+def test_api_leads_rate_limit_resets_after_window() -> None:
+    import time
+
+    db_session = _create_db_session()
+    client = _create_client(
+        db_session,
+        settings=Settings(
+            auth_cookie_secure=False,
+            login_rate_limit_attempts=0,
+            lead_rate_limit_attempts=1,
+            lead_rate_limit_window_seconds=1,
+        ),
+    )
+
+    first = client.post("/api/leads", json=_valid_lead_payload())
+    assert first.status_code == 202
+
+    limited = client.post("/api/leads", json=_valid_lead_payload())
+    assert limited.status_code == 429
+
+    time.sleep(1.1)
+
+    after_window = client.post("/api/leads", json=_valid_lead_payload())
+    assert after_window.status_code == 202
+
+    db_session.close()
+
+
 def test_api_create_session_compensates_runtime_and_ownership_when_history_fails() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()

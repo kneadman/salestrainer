@@ -36,5 +36,6 @@ Thumbs.db
 
 /landing-*.png
 AGENTS.override.md
+/docs/agent-reference/
 
 /frontend/logo.svg

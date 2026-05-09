@@ -28,6 +28,7 @@ from app.infrastructure.stt_client import STTClient, build_stt_client
 from app.infrastructure.stt_concurrency import LocalSTTConcurrencyLimiter
 from app.infrastructure.summary_compressor import build_summary_compressor
 from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
+from app.api.rate_limit import build_lead_rate_limiter
 from app.identity.rate_limit import build_login_rate_limiter
 from app.identity.routes import router as auth_router
 from app.internal_admin.routes import router as internal_admin_router
@@ -188,6 +189,7 @@ def create_app(
     app.state.speech_service = speech_service
     app.state.settings = resolved_settings
     app.state.login_rate_limiter = build_login_rate_limiter(resolved_settings)
+    app.state.lead_rate_limiter = build_lead_rate_limiter(resolved_settings)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)

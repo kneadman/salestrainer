@@ -54,7 +54,7 @@ A manager writes messages to a simulated cold B2B client. The system replies as 
 - Public API path: `/api/*`.
 - Auth path: `/auth/*`.
 - Static frontend can be served by FastAPI and in Docker through nginx.
-- Existing project documentation: `README.md` and `sales_trainer_mvp_docs_backlog.md`.
+- Existing project documentation: `README.md`, `sales_trainer_mvp_docs_backlog.md`, and `docs/agent-reference/README.md`.
 - Root project instructions live in `AGENTS.override.md`; keep this file synchronized with the repository state after each completed iteration.
 
 ## 2. Main entry points
@@ -218,11 +218,13 @@ At the beginning of each task:
 
 During implementation:
 
+- Before changing code, read `docs/agent-reference/README.md` and the relevant reference file under `docs/agent-reference/`.
 - Keep patches small.
 - Avoid broad refactors mixed with feature work.
 - Preserve public contracts unless the task requires changing them.
 - Add or update tests near the changed layer.
 - Update `README.md` only when setup, commands, API behavior, or user-facing flow changes.
+- Update `docs/agent-reference/` when changing architecture, public DTOs, runtime flow, auth/security, LLM/STT behavior, or tests.
 - Update `sales_trainer_mvp_docs_backlog.md` if product/architecture roadmap materially changes.
 - Add Alembic migrations for schema changes; do not edit applied migrations unless the migration has not been shared/used.
 - Do not add new production dependencies without a clear reason.
@@ -572,10 +574,10 @@ Maintain this backlog after every iteration.
 
 #### P1.2 Add rate limiting for public lead endpoint
 
-- [ ] Add configurable rate limiting for `POST /api/leads` by IP and optionally email/phone.
-- [ ] Keep honeypot/spam-marking behavior and attribution whitelist behavior.
-- [ ] Return controlled `429` responses.
-- [ ] Add tests for normal submission, honeypot spam marking, and rate limit behavior.
+- [x] Add configurable rate limiting for `POST /api/leads` by IP and optionally email/phone.
+- [x] Keep honeypot/spam-marking behavior and attribution whitelist behavior.
+- [x] Return controlled `429` responses.
+- [x] Add tests for normal submission, honeypot spam marking, and rate limit behavior.
 
 #### P1.3 Add rate limiting / queue protection for STT endpoint
 
@@ -724,13 +726,15 @@ Maintain this backlog after every iteration.
 
 ## 10. Current state
 
-Last updated: 2026-05-09 by Kimi after password-security iteration 1 fixes.
+Last updated: 2026-05-09 by ChatGPT after adding the agent-facing reference pack.
 
 Observed in repository state:
 
 - Repository: `kneadman/salestrainer`, default branch `main`.
+- Agent-facing documentation pack now exists under `docs/agent-reference/` with architecture, backend/frontend codemaps, API/data/security/LLM/STT/test/devops references, a change guide, and a symbol index for future agents.
 - README describes a CLI/API MVP with Redis runtime sessions, PostgreSQL identity/access/history, Alembic, React/Vite frontend, Docker stack, and environment-controlled LLM/STT behavior.
 - Frontend now serves the shared logo as a public Vite asset from `frontend/public/logo.svg`; visible brand marks are wired into the landing, client cabinet, internal admin sidebar, and favicon.
+- Root `README.md` now points future agents to `docs/agent-reference/README.md` as the first documentation entry point.
 - `pyproject.toml` lists Python package modules and dependencies.
 - Core training flow is implemented through `TrainingSessionService` and `TurnService`.
 - Runtime architecture expects Yandex-compatible persona/dialogue/judge agents in configured environments, while fake/local fallback paths remain intentionally available for local development and demo resilience.
@@ -752,6 +756,8 @@ Observed in repository state:
 - Security headers, CSRF middleware, request IDs, auth router, API router, and frontend mounting are configured in `app.api.main`.
 - Password hashing uses Argon2id; login session tokens are generated securely and stored as SHA-256 hashes.
 - Permanent password policy is enforced: minimum 8 characters, Latin letters and digits only; `PasswordValidationError` is raised for invalid passwords and mapped to HTTP 422 in auth routes.
+- `LoginRequest` enforces Pydantic `min_length`/`max_length` constraints (`email` 1–320, `password` 1–256) for input-size hardening without applying permanent-password regex at login.
+- `POST /api/leads` has configurable rate limiting by IP (and optionally email/phone) with `LeadRateLimiter`, returning controlled `429` responses; honeypot/spam-marking and query-param whitelist behavior are preserved.
 - `AuthService.change_password` rejects `new_password == current_password` and validates the new password against the permanent policy before hashing.
 - Admin CLI `reset-password` and internal-admin `reset_user_password`/`create_user` validate passwords through the same `validate_permanent_password` helper.
 - Frontend `SettingsPage` mirrors the backend policy with client-side regex and length checks before submit.
@@ -813,9 +819,9 @@ Observed in repository state:
 
 Latest known task state:
 
-- Task: Fix password security iteration 1.
+- Task: P1.2 — Rate limiting for public lead endpoint.
 - Status: completed.
-- Changed files: `app/identity/security.py`, `app/identity/routes.py`, `app/admin/cli.py`, `app/internal_admin/service.py`, `app/internal_admin/routes.py`, `tests/unit/test_identity_security.py`, `tests/integration/test_auth_routes.py`, `tests/integration/test_admin_cli.py`, `tests/integration/test_internal_admin_routes.py`.
+- Changed files: `app/api/rate_limit.py` (new `LeadRateLimiter` with Redis and in-memory backends), `app/infrastructure/config.py` (`lead_rate_limit_attempts`/`lead_rate_limit_window_seconds`), `app/api/main.py` (wire `lead_rate_limiter` into app state), `app/api/routes.py` (apply rate limiting in `submit_landing_lead`), `tests/integration/test_api_routes.py` (rate limit tests).
 - Validation run by Kimi: `pytest` — 259 passed, 1 skipped.
 - Branch state after iteration:
   - `MAX_PASSWORD_LENGTH = 256` added to central policy; `validate_permanent_password` rejects passwords longer than 256 characters.
@@ -841,6 +847,7 @@ Latest known task state:
 
 ## 11. Rules changelog
 
+- 2026-05-09: Agent-reference rule added: before changing code, read `docs/agent-reference/README.md` and the relevant file under `docs/agent-reference/`; when changing architecture, public DTOs, runtime flow, auth/security, LLM/STT behavior, or tests, update that documentation in the same iteration.
 - 2026-05-09: Strict idempotency rule added: for keyed `POST /api/sessions/{session_id}/messages`, the processed runtime turn and replayable public response payload must be persisted in the same runtime save; if that save fails, return a controlled retryable conflict and never silently degrade to best-effort idempotency.
 - 2026-05-09: Public-safe idempotency projection rule added: cached/replayed idempotent `TurnResponse` payloads must be built from the same shared public projection helpers as normal API responses; do not hand-maintain a second DTO mapping that can leak hidden persona fields or drift on discovered-state fields.
 - 2026-05-09: Idempotency/reconciliation ordering rule added: before serving a cached message submission result, `/api/sessions/{session_id}/messages` must first attempt pending Redis -> PostgreSQL reconciliation.

@@ -109,6 +109,34 @@ def test_wrong_password_returns_401() -> None:
     session.close()
 
 
+def test_login_rejects_too_long_password() -> None:
+    session = _create_session()
+    _create_user(session)
+    client = _create_client(session)
+
+    response = client.post(
+        "/auth/login",
+        json={"email": "manager@example.com", "password": "p" * 257},
+    )
+
+    assert response.status_code == 422
+    session.close()
+
+
+def test_login_rejects_empty_password() -> None:
+    session = _create_session()
+    _create_user(session)
+    client = _create_client(session)
+
+    response = client.post(
+        "/auth/login",
+        json={"email": "manager@example.com", "password": ""},
+    )
+
+    assert response.status_code == 422
+    session.close()
+
+
 def test_unknown_email_returns_401_without_leaking_whether_user_exists() -> None:
     session = _create_session()
     _create_user(session)

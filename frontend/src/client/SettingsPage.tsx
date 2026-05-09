@@ -31,6 +31,10 @@ export function SettingsPage({ user, onUserUpdated }: SettingsPageProps) {
       setError("Новый пароль должен быть не короче 8 символов.");
       return;
     }
+    if (newPassword.length > 256) {
+      setError("Новый пароль должен быть не длиннее 256 символов.");
+      return;
+    }
     if (!/^[a-zA-Z0-9]+$/.test(newPassword)) {
       setError("Новый пароль должен содержать только латинские буквы и цифры.");
       return;
@@ -71,7 +75,7 @@ export function SettingsPage({ user, onUserUpdated }: SettingsPageProps) {
         {success ? <ClientState title={success} /> : null}
         <form className="client-form" onSubmit={submit}>
           <label><span>Текущий пароль</span><input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></label>
-          <label><span>Новый пароль</span><input type="password" minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label>
+          <label><span>Новый пароль</span><input type="password" minLength={8} maxLength={256} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label>
           <label><span>Подтверждение</span><input type="password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></label>
           <button type="submit" className="client-button client-button--primary" disabled={loading}>{loading ? "Сохраняю..." : "Изменить пароль"}</button>
         </form>
