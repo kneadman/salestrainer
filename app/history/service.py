@@ -112,6 +112,69 @@ class HistoryService:
             ),
         )
 
+    def reconcile_turn_processed(
+        self,
+        *,
+        session: TrainingSessionState,
+        user_id: UUID,
+        client_account_id: UUID,
+        training_config_id: UUID | None,
+    ) -> bool:
+        """Ensure the latest runtime turn exists in durable history and rollups match."""
+        if not session.turns:
+            return False
+        turn = session.turns[-1]
+        existing_turn = self._repository.get_turn(session.session_id, turn.index)
+        if existing_turn is not None:
+            self._repository.update_session_after_turn(
+                session_id=session.session_id,
+                turn_count=session.turn_count,
+                last_activity_at=session.updated_at,
+                summary=session.summary,
+                final_interest_score=session.interest_score,
+                final_stage=session.stage,
+                final_state_snapshot=self._session_snapshot(session),
+            )
+            return False
+
+        evaluation = session.turn_evaluations[-1] if session.turn_evaluations else None
+        self._repository.record_turn_with_rollup_and_event(
+            session_id=session.session_id,
+            turn_kwargs={
+                "session_id": session.session_id,
+                "turn_index": turn.index,
+                "manager_message": turn.manager_message,
+                "client_answer": turn.client_answer,
+                "interest_before": turn.interest_before,
+                "interest_delta": turn.interest_delta,
+                "interest_after": turn.interest_after,
+                "stage_before": turn.stage_before,
+                "stage_after": turn.stage_after,
+                "client_state_snapshot": session.client_state.model_dump(mode="json"),
+                "llm_payload_snapshot": None,
+                "llm_response_snapshot": None,
+                "evaluation_snapshot": evaluation.model_dump(mode="json") if evaluation is not None else None,
+                "created_at": turn.created_at,
+            },
+            rollup={
+                "turn_count": session.turn_count,
+                "last_activity_at": session.updated_at,
+                "summary": session.summary,
+                "final_interest_score": session.interest_score,
+                "final_stage": session.stage,
+                "final_state_snapshot": self._session_snapshot(session),
+            },
+            event_kwargs=self._usage_event_kwargs(
+                event_type=UsageEventType.TURN_PROCESSED.value,
+                client_account_id=client_account_id,
+                user_id=user_id,
+                training_config_id=training_config_id,
+                session_id=session.session_id,
+                event_payload={"turn_index": turn.index, "interest_after": turn.interest_after, "stage_after": turn.stage_after},
+            ),
+        )
+        return True
+
     def record_session_finished(
         self,
         *,

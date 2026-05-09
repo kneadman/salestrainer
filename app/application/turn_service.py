@@ -7,10 +7,17 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.application.evaluator import evaluate_turn
+from app.application.projections import build_turn_response_payload
+from app.application.session_service import MAX_RECENT_MESSAGE_SUBMISSIONS
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
-from app.domain.errors import SessionNotActiveError, SessionNotFoundError
+from app.domain.errors import (
+    MessageIdempotencyPersistenceError,
+    SessionHistorySyncPendingError,
+    SessionNotActiveError,
+    SessionNotFoundError,
+)
 from app.domain.interest import apply_interest_delta, interest_band
-from app.domain.models import LLMTurnInput, TrainingSessionState, Turn
+from app.domain.models import LLMTurnInput, MessageSubmissionRecord, TrainingSessionState, Turn
 from app.domain.scenarios import get_scenario
 from app.domain.stages import resolve_next_stage
 from app.domain.state_update import apply_state_patch
@@ -32,6 +39,7 @@ class TurnResult(BaseModel):
     turn_index: int
     summary: str
     visible_objections: list[str] = Field(default_factory=list)
+    response_payload: dict[str, Any] | None = None
     llm_payload: dict[str, Any] | None = None
     llm_response: dict[str, Any] | None = None
 
@@ -51,7 +59,13 @@ class TurnService:
         self._debug_mode = debug_mode
         self._summary_compressor = summary_compressor or FakeSummaryCompressor()
 
-    def process_message(self, session_id: str, manager_message: str) -> TurnResult:
+    def process_message(
+        self,
+        session_id: str,
+        manager_message: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> TurnResult:
         session = self._require_active_session(session_id)
         expected_version = session.state_version
         interest_before = session.interest_score
@@ -127,7 +141,36 @@ class TurnService:
             latest_internal_notes=llm_response.internal_notes,
             overflow_turns=overflow_turns,
         )
-        self._repository.save(session, expected_version=expected_version)
+        response_payload = self._build_response_payload(
+            session,
+            turn=turn,
+            interest_before=interest_before,
+            stage_before=stage_before,
+        )
+        if idempotency_key is not None:
+            session.recent_message_submissions = self._append_message_submission(
+                session,
+                idempotency_key=idempotency_key,
+                manager_message=manager_message,
+                response_payload=response_payload,
+                created_at=now,
+            )
+        try:
+            self._repository.save(session, expected_version=expected_version)
+        except Exception as error:
+            logger.critical(
+                "turn_runtime_save_failed session_id=%s turn_index=%s idempotency_key=%s",
+                session.session_id,
+                turn.index,
+                idempotency_key,
+                exc_info=True,
+            )
+            if idempotency_key is not None:
+                raise MessageIdempotencyPersistenceError(
+                    "The turn could not be safely persisted for idempotent retry. "
+                    "Please retry this action instead of resending the last message."
+                ) from error
+            raise
         logger.info(
             "turn_processed session_id=%s turn_index=%s interest_before=%s interest_after=%s stage_before=%s stage_after=%s",
             session.session_id,
@@ -149,6 +192,7 @@ class TurnService:
             turn_index=turn.index,
             summary=session.summary,
             visible_objections=session.client_state.open_objections,
+            response_payload=response_payload,
             llm_payload=payload_dump if self._debug_mode else None,
             llm_response=response_dump if self._debug_mode else None,
         )
@@ -159,6 +203,11 @@ class TurnService:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")
         if session.status != "active":
             raise SessionNotActiveError(f"Session '{session_id}' is not active.")
+        if session.history_sync_status != "ok":
+            raise SessionHistorySyncPendingError(
+                "The previous turn was processed, but session history is still being reconciled. "
+                "Please retry this action instead of resending the last message."
+            )
         return session
 
     def _build_summary(self, session: TrainingSessionState, internal_notes: str) -> str:
@@ -190,3 +239,43 @@ class TurnService:
                 latest_internal_notes=latest_internal_notes,
             )
         return self._build_summary(session, latest_internal_notes)
+
+    def _build_response_payload(
+        self,
+        session: TrainingSessionState,
+        *,
+        turn: Turn,
+        interest_before: int,
+        stage_before: str,
+    ) -> dict[str, Any]:
+        """Build the public-safe turn response payload stored for idempotent retries."""
+        return build_turn_response_payload(
+            session,
+            turn=turn,
+            interest_before=interest_before,
+            stage_before=stage_before,
+        )
+
+    def _append_message_submission(
+        self,
+        session: TrainingSessionState,
+        *,
+        idempotency_key: str,
+        manager_message: str,
+        response_payload: dict[str, Any],
+        created_at: datetime,
+    ) -> list[MessageSubmissionRecord]:
+        """Return the bounded submission cache including the latest idempotent message result."""
+        existing_records = [
+            record for record in session.recent_message_submissions
+            if record.idempotency_key != idempotency_key
+        ]
+        return [
+            *existing_records[-(MAX_RECENT_MESSAGE_SUBMISSIONS - 1):],
+            MessageSubmissionRecord(
+                idempotency_key=idempotency_key,
+                manager_message=manager_message,
+                response_payload=response_payload,
+                created_at=created_at,
+            ),
+        ]

@@ -198,8 +198,18 @@ class TrainingSessionState(BaseModel):
     recent_turns: list[Turn] = Field(default_factory=list)
     turn_count: int = 0
     state_version: int = 1
+    history_sync_status: Literal["ok", "pending_retry"] = "ok"
+    history_sync_error: str | None = None
+    recent_message_submissions: list["MessageSubmissionRecord"] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class MessageSubmissionRecord(BaseModel):
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    manager_message: str = Field(min_length=1, max_length=2000)
+    response_payload: dict[str, Any]
+    created_at: datetime
 
 
 class LLMTurnInput(BaseModel):

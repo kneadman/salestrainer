@@ -254,6 +254,14 @@ class HistoryRepository:
         self._session.refresh(turn)
         return turn
 
+    def get_turn(self, session_id: UUID, turn_index: int) -> TrainingTurnRecord | None:
+        """Load one durable turn by its session-local turn index."""
+        statement = select(TrainingTurnRecord).where(
+            TrainingTurnRecord.session_id == session_id,
+            TrainingTurnRecord.turn_index == turn_index,
+        )
+        return self._session.scalar(statement)
+
     def finish_session_with_report_and_events(
         self,
         *,

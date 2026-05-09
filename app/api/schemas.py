@@ -91,6 +91,7 @@ class LandingSubmitResponse(BaseModel):
 
 class TurnRequest(BaseModel):
     manager_message: str = Field(min_length=1, max_length=2000)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class SessionStateResponse(BaseModel):

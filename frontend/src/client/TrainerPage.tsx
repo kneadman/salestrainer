@@ -15,6 +15,11 @@ type TrainerPageProps = {
   onLogout: () => Promise<void>;
 };
 
+type PendingMessageSubmission = {
+  idempotencyKey: string;
+  managerMessage: string;
+};
+
 export function TrainerPage({ onLogout }: TrainerPageProps) {
   /** Keep the runtime trainer flow inside the client cabinet and restore the last session when possible. */
   const [session, setSession] = useState<SessionPublicDTO | null>(null);
@@ -26,6 +31,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [report, setReport] = useState<string | null>(null);
   const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [pendingMessageSubmission, setPendingMessageSubmission] = useState<PendingMessageSubmission | null>(null);
 
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity across page reloads. */
@@ -80,6 +86,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     setReport(null);
     setReportPayload(null);
     setReportModalOpen(false);
+    setPendingMessageSubmission(null);
     setTurns([]);
     setInputValue("");
 
@@ -103,15 +110,24 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     }
 
     const message = inputValue.trim();
+    const idempotencyKey =
+      pendingMessageSubmission?.managerMessage === message
+        ? pendingMessageSubmission.idempotencyKey
+        : createMessageIdempotencyKey();
     setInputValue("");
     setBusyAction("send");
     setError(null);
     setVoiceError(null);
+    setPendingMessageSubmission({
+      idempotencyKey,
+      managerMessage: message,
+    });
 
     try {
-      const response = await sendMessage(session.session_id, message);
+      const response = await sendMessage(session.session_id, message, idempotencyKey);
       setSession(response.session);
       setTurns(response.turns);
+      setPendingMessageSubmission(null);
     } catch (sendError) {
       setInputValue(message);
       setError(getClientErrorMessage(sendError));
@@ -203,7 +219,15 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
             </div>
             <Composer
               value={inputValue}
-              onChange={setInputValue}
+              onChange={(nextValue) => {
+                setInputValue(nextValue);
+                if (
+                  pendingMessageSubmission !== null
+                  && nextValue.trim() !== pendingMessageSubmission.managerMessage
+                ) {
+                  setPendingMessageSubmission(null);
+                }
+              }}
               onSend={handleSend}
               disabled={!canSend}
               loading={isSending}
@@ -230,6 +254,14 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
       />
     </>
   );
+}
+
+function createMessageIdempotencyKey(): string {
+  /** Generate a stable per-send idempotency key with a timestamp fallback for older runtimes. */
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function appendTranscribedText(currentValue: string, transcribedText: string): string {

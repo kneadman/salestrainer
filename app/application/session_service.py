@@ -7,13 +7,14 @@ from uuid import uuid4
 from app.access.models import RuntimeTrainingConfig
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.interest import interest_band
-from app.domain.errors import SessionNotActiveError, SessionNotFoundError
-from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
+from app.domain.errors import SessionHistorySyncPendingError, SessionNotActiveError, SessionNotFoundError
+from app.domain.models import ClientState, MessageSubmissionRecord, PersonaProfile, TrainingSessionState
 from app.domain.personas import get_persona
 from app.domain.scenarios import get_scenario
 from app.infrastructure.session_repository import SessionRepository
 
 logger = logging.getLogger(__name__)
+MAX_RECENT_MESSAGE_SUBMISSIONS = 20
 
 DEFAULT_PUBLIC_BRIEF = (
     "Вы начали первичный B2B-диалог с потенциальным клиентом. "
@@ -119,4 +120,53 @@ class TrainingSessionService:
         if session.status != "active":
             raise SessionNotActiveError(f"Session '{session_id}' is not active.")
         logger.info("session_resumed session_id=%s", session.session_id)
+        return session
+
+    def mark_history_sync_pending(self, session_id: str, *, reason: str) -> TrainingSessionState:
+        """Persist a runtime flag that blocks new work until history is reconciled."""
+        session = self._require_session(session_id)
+        expected_version = session.state_version
+        session.history_sync_status = "pending_retry"
+        session.history_sync_error = reason
+        session.state_version = expected_version + 1
+        session.updated_at = datetime.now(tz=UTC)
+        self._repository.save(session, expected_version=expected_version)
+        logger.warning("session_history_sync_pending session_id=%s reason=%s", session.session_id, reason)
+        return session
+
+    def clear_history_sync_pending(self, session_id: str) -> TrainingSessionState:
+        """Clear the runtime history-sync flag after successful reconciliation."""
+        session = self._require_session(session_id)
+        expected_version = session.state_version
+        session.history_sync_status = "ok"
+        session.history_sync_error = None
+        session.state_version = expected_version + 1
+        session.updated_at = datetime.now(tz=UTC)
+        self._repository.save(session, expected_version=expected_version)
+        logger.info("session_history_sync_restored session_id=%s", session.session_id)
+        return session
+
+    def require_history_sync_ready(self, session_id: str) -> TrainingSessionState:
+        """Return the runtime session when it is not blocked by pending history sync."""
+        session = self.resume_session(session_id)
+        if session.history_sync_status != "ok":
+            raise SessionHistorySyncPendingError(
+                "The previous turn was processed, but session history is still being reconciled. "
+                "Please retry this action instead of resending the last message."
+            )
+        return session
+
+    def get_message_submission(self, session_id: str, idempotency_key: str) -> MessageSubmissionRecord | None:
+        """Return one saved message submission record for the runtime session when present."""
+        session = self._require_session(session_id)
+        for record in reversed(session.recent_message_submissions):
+            if record.idempotency_key == idempotency_key:
+                return record
+        return None
+
+    def _require_session(self, session_id: str) -> TrainingSessionState:
+        """Load a runtime session or raise a not-found domain error."""
+        session = self._repository.get(session_id)
+        if session is None:
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
         return session
