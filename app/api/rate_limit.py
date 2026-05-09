@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from redis import Redis
@@ -32,15 +33,22 @@ class _Bucket:
 
 
 class InMemoryLeadRateLimiter(LeadRateLimiter):
-    def __init__(self, *, max_attempts: int, window_seconds: int) -> None:
+    def __init__(
+        self,
+        *,
+        max_attempts: int,
+        window_seconds: int,
+        time_provider: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._max_attempts = max_attempts
         self._window_seconds = window_seconds
+        self._time_provider = time_provider
         self._buckets: dict[str, _Bucket] = {}
         self._lock = threading.Lock()
 
     def hit(self, *, ip_address: str | None, email: str | None = None, phone: str | None = None) -> None:
         keys = _lead_rate_limit_keys(ip_address=ip_address, email=email, phone=phone)
-        now = time.monotonic()
+        now = self._time_provider()
         with self._lock:
             for key in keys:
                 bucket = self._buckets.get(key)

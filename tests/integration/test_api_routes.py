@@ -22,6 +22,7 @@ from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
 from app.identity.repository import IdentityRepository
 from app.identity.security import hash_password
+from app.api.rate_limit import InMemoryLeadRateLimiter, LeadRateLimiter
 from app.infrastructure.config import Settings
 from app.infrastructure.db import Base, import_model_modules
 from app.infrastructure.llm_client import FakeLLMClient
@@ -47,12 +48,14 @@ def _create_client(
     repository: InMemorySessionRepository | None = None,
     settings: Settings | None = None,
     stt_client: FakeSTTClient | None = None,
+    lead_rate_limiter: LeadRateLimiter | None = None,
 ) -> TestClient:
     app = create_app(
         settings=settings or Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
         repository=repository or InMemorySessionRepository(),
         llm_client=FakeLLMClient(),
         stt_client=stt_client,
+        lead_rate_limiter=lead_rate_limiter,
     )
 
     if db_session is not None:
@@ -1008,12 +1011,7 @@ def test_api_leads_rate_limit_by_ip_returns_429() -> None:
     db_session = _create_db_session()
     client = _create_client(
         db_session,
-        settings=Settings(
-            auth_cookie_secure=False,
-            login_rate_limit_attempts=0,
-            lead_rate_limit_attempts=2,
-            lead_rate_limit_window_seconds=1,
-        ),
+        lead_rate_limiter=InMemoryLeadRateLimiter(max_attempts=2, window_seconds=60),
     )
 
     for _ in range(2):
@@ -1022,34 +1020,6 @@ def test_api_leads_rate_limit_by_ip_returns_429() -> None:
 
     limited_response = client.post("/api/leads", json=_valid_lead_payload())
     assert limited_response.status_code == 429
-
-    db_session.close()
-
-
-def test_api_leads_rate_limit_resets_after_window() -> None:
-    import time
-
-    db_session = _create_db_session()
-    client = _create_client(
-        db_session,
-        settings=Settings(
-            auth_cookie_secure=False,
-            login_rate_limit_attempts=0,
-            lead_rate_limit_attempts=1,
-            lead_rate_limit_window_seconds=1,
-        ),
-    )
-
-    first = client.post("/api/leads", json=_valid_lead_payload())
-    assert first.status_code == 202
-
-    limited = client.post("/api/leads", json=_valid_lead_payload())
-    assert limited.status_code == 429
-
-    time.sleep(1.1)
-
-    after_window = client.post("/api/leads", json=_valid_lead_payload())
-    assert after_window.status_code == 202
 
     db_session.close()
 

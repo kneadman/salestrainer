@@ -731,7 +731,7 @@ Last updated: 2026-05-09 by ChatGPT after adding the agent-facing reference pack
 Observed in repository state:
 
 - Repository: `kneadman/salestrainer`, default branch `main`.
-- Agent-facing documentation pack now exists under `docs/agent-reference/` with architecture, backend/frontend codemaps, API/data/security/LLM/STT/test/devops references, a change guide, and a symbol index for future agents.
+- Agent-facing documentation pack exists under `docs/agent-reference/`; `.gitignore` no longer excludes it so it can be tracked in version control.
 - README describes a CLI/API MVP with Redis runtime sessions, PostgreSQL identity/access/history, Alembic, React/Vite frontend, Docker stack, and environment-controlled LLM/STT behavior.
 - Frontend now serves the shared logo as a public Vite asset from `frontend/public/logo.svg`; visible brand marks are wired into the landing, client cabinet, internal admin sidebar, and favicon.
 - Root `README.md` now points future agents to `docs/agent-reference/README.md` as the first documentation entry point.
@@ -819,9 +819,14 @@ Observed in repository state:
 
 Latest known task state:
 
-- Task: P1.2 — Rate limiting for public lead endpoint.
+- Task: P1.2 — Rate limiting for public lead endpoint (iteration 2, final).
 - Status: completed.
-- Changed files: `app/api/rate_limit.py` (new `LeadRateLimiter` with Redis and in-memory backends), `app/infrastructure/config.py` (`lead_rate_limit_attempts`/`lead_rate_limit_window_seconds`), `app/api/main.py` (wire `lead_rate_limiter` into app state), `app/api/routes.py` (apply rate limiting in `submit_landing_lead`), `tests/integration/test_api_routes.py` (rate limit tests).
+- Changed files:
+  - `app/api/rate_limit.py`: injectable `time_provider` in `InMemoryLeadRateLimiter`
+  - `app/api/main.py`: `create_app(..., lead_rate_limiter: LeadRateLimiter | None = None)`
+  - `tests/integration/test_api_routes.py`: lead tests use injected `InMemoryLeadRateLimiter`, no `time.sleep`
+  - `tests/unit/test_lead_rate_limiter.py`: new unit tests for noop/in-memory backends
+  - `.gitignore`: removed `/docs/agent-reference/` exclusion
 - Validation run by Kimi: `pytest` — 259 passed, 1 skipped.
 - Branch state after iteration:
   - `MAX_PASSWORD_LENGTH = 256` added to central policy; `validate_permanent_password` rejects passwords longer than 256 characters.
