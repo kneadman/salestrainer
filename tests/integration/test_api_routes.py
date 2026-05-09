@@ -938,6 +938,79 @@ def test_api_message_history_failure_marks_runtime_pending_and_returns_controlle
     db_session.close()
 
 
+def test_api_message_idempotency_retry_reconciles_pending_history_before_returning_cached_response() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    class FlakyHistoryService(HistoryService):
+        def __init__(self, repository: HistoryRepository) -> None:
+            """Fail the first durable turn write and count pending-history reconciliations."""
+            super().__init__(repository)
+            self._fail_next_turn_write = True
+            self.reconcile_calls = 0
+
+        def record_turn_processed(self, **kwargs: object) -> None:
+            """Simulate one persistent turn-write outage after runtime and cache save."""
+            if self._fail_next_turn_write:
+                self._fail_next_turn_write = False
+                raise RuntimeError("history down after runtime turn save")
+            return super().record_turn_processed(**kwargs)
+
+        def reconcile_turn_processed(self, **kwargs: object) -> bool:
+            """Count the explicit reconciliation path used before cached idempotent replies."""
+            self.reconcile_calls += 1
+            return super().reconcile_turn_processed(**kwargs)
+
+    flaky_history_service = FlakyHistoryService(HistoryRepository(db_session))
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        """Share the in-memory database with the tested FastAPI app."""
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: flaky_history_service
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    failed_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you manage this process today?", "idempotency_key": "msg-77"},
+    )
+    retry_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you manage this process today?", "idempotency_key": "msg-77"},
+    )
+
+    saved_session = repository.get(session_id)
+    turns = list(
+        db_session.scalars(
+            select(TrainingTurnRecord)
+            .where(TrainingTurnRecord.session_id == saved_session.session_id)
+            .order_by(TrainingTurnRecord.turn_index)
+        )
+    )
+
+    assert failed_response.status_code == 409
+    assert retry_response.status_code == 200
+    assert retry_response.json()["turn_index"] == 1
+    assert flaky_history_service.reconcile_calls == 1
+    assert saved_session is not None
+    assert saved_session.history_sync_status == "ok"
+    assert len(saved_session.recent_message_submissions) == 1
+    assert saved_session.turn_count == 1
+    assert len(turns) == 1
+    assert turns[0].turn_index == 1
+
+    db_session.close()
+
+
 def test_api_resume_reconciles_pending_history_before_returning_session() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()

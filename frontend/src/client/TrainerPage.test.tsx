@@ -247,7 +247,7 @@ describe("TrainerPage", () => {
         .mockResolvedValueOnce({
           session: activeSession,
           turns: [makeTurn(1)],
-          client_answer: "РћС‚РІРµС‚ 1",
+          client_answer: "Ответ 1",
           interest_before: 41,
           interest_delta: 1,
           interest_after: 42,
@@ -261,13 +261,13 @@ describe("TrainerPage", () => {
       const textarea = await screen.findByRole("textbox");
       const sendButton = container.querySelector(".composer__send");
       expect(sendButton).not.toBeNull();
-      await user.type(textarea, "РџСЂРёРІРµС‚");
+      await user.type(textarea, "Привет");
       await user.click(sendButton as HTMLElement);
       await screen.findByText("network down");
       await user.click(sendButton as HTMLElement);
 
-      expect(apiMocks.sendMessage).toHaveBeenNthCalledWith(1, activeSession.session_id, "РџСЂРёРІРµС‚", "msg-key-1");
-      expect(apiMocks.sendMessage).toHaveBeenNthCalledWith(2, activeSession.session_id, "РџСЂРёРІРµС‚", "msg-key-1");
+      expect(apiMocks.sendMessage).toHaveBeenNthCalledWith(1, activeSession.session_id, "Привет", "msg-key-1");
+      expect(apiMocks.sendMessage).toHaveBeenNthCalledWith(2, activeSession.session_id, "Привет", "msg-key-1");
       expect(randomUuid).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(globalThis, "crypto", {

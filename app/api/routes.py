@@ -335,6 +335,13 @@ def post_manager_message(
 ) -> TurnResponse:
     try:
         access_service.require_session_access(session_id, current_session.user.id)
+        _reconcile_pending_history_sync(
+            session_id=session_id,
+            session_service=session_service,
+            access_service=access_service,
+            history_service=history_service,
+            current_session=current_session,
+        )
         if request.idempotency_key is not None:
             existing_submission = session_service.get_message_submission(session_id, request.idempotency_key)
             if existing_submission is not None:
@@ -343,13 +350,6 @@ def post_manager_message(
                         "This idempotency key was already used for a different manager_message."
                     )
                 return TurnResponse.model_validate(existing_submission.response_payload)
-        _reconcile_pending_history_sync(
-            session_id=session_id,
-            session_service=session_service,
-            access_service=access_service,
-            history_service=history_service,
-            current_session=current_session,
-        )
         ownership = access_service.get_session_ownership(session_id)
         turn_result = turn_service.process_message(session_id, request.manager_message)
     except SalesTrainerError as error:
@@ -370,14 +370,18 @@ def post_manager_message(
         stage_after=turn_result.stage_after,
         turn_index=turn_result.turn_index,
     )
+    cached_response = response
     if request.idempotency_key is not None:
-        response_payload = session_service.save_message_submission(
-            session_id,
-            idempotency_key=request.idempotency_key,
-            manager_message=request.manager_message,
-            response_payload=response.model_dump(mode="json"),
-        )
-        response = TurnResponse.model_validate(response_payload)
+        try:
+            response_payload = session_service.save_message_submission(
+                session_id,
+                idempotency_key=request.idempotency_key,
+                manager_message=request.manager_message,
+                response_payload=response.model_dump(mode="json"),
+            )
+            cached_response = TurnResponse.model_validate(response_payload)
+        except Exception:
+            logger.critical("message_idempotency_cache_write_failed session_id=%s", session_id, exc_info=True)
     try:
         history_service.record_turn_processed(
             session=session,
@@ -396,7 +400,7 @@ def post_manager_message(
             "The turn was processed, but session history is still being reconciled. "
             "Please retry this action instead of resending the last message."
         ) from None
-    return response
+    return cached_response
 
 
 @router.post("/sessions/{session_id}/finish", response_model=FinishSessionResponse, responses=ERROR_RESPONSES)
