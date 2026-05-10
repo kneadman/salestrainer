@@ -19,8 +19,8 @@ const Footer: React.FC = () => {
           {/* Logo & tagline */}
           <div>
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center">
-                <span className="font-manrope font-bold text-navy-800 text-sm">R</span>
+              <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center overflow-hidden">
+                <img src="/logo.png" alt="" className="w-full h-full object-cover" aria-hidden="true" />
               </div>
               <span className="font-manrope font-semibold text-text-primary text-[15px]">
                 Replikor
