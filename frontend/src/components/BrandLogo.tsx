@@ -10,7 +10,7 @@ export function BrandLogo({ title, subtitle, className, imageClassName, textClas
   /** Render one shared product logo block so landing and cabinets stay visually consistent. */
   return (
     <div className={className}>
-      <img className={imageClassName} src="/logo.svg" alt="" aria-hidden="true" />
+      <img className={imageClassName} src="/logo.png" alt="" aria-hidden="true" />
       <div className={textClassName}>
         <strong>{title}</strong>
         {subtitle ? <small>{subtitle}</small> : null}

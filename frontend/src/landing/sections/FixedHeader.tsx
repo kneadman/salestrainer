@@ -57,8 +57,8 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {/* Logo */}
           <a href="#" className="flex items-center gap-2.5 flex-shrink-0" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-            <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center">
-              <span className="font-manrope font-bold text-navy-800 text-sm">R</span>
+            <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" alt="" className="w-full h-full object-cover" aria-hidden="true" />
             </div>
             <div className="flex flex-col">
               <span className="font-manrope font-semibold text-text-primary text-[15px] leading-tight">

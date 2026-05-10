@@ -47,7 +47,7 @@ describe("ClientLayout", () => {
       </ClientLayout>,
     );
 
-    expect(container.querySelector('img[src="/logo.svg"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/logo.png"]')).toBeInTheDocument();
   });
 
   it("uses product branding and hides the balance section from navigation", () => {
