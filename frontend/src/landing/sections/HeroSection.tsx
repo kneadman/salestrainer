@@ -5,9 +5,9 @@ import GhostButton from '@/landing/components/GhostButton';
 import { Check } from 'lucide-react';
 
 const trustSignals = [
-  'Без кредитной карты',
-  'Настройка за 5 минут',
-  '500+ менеджеров уже тренируются',
+  'Без предоплаты',
+  'Пилот за 1 рабочий день',
+  'Для B2B-команд любого размера',
 ];
 
 const chatMessages = [

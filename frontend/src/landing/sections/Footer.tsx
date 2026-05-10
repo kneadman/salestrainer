@@ -1,6 +1,8 @@
 import React from 'react';
 import { ChevronUp } from 'lucide-react';
 
+const currentYear = new Date().getFullYear();
+
 const Footer: React.FC = () => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -66,10 +68,18 @@ const Footer: React.FC = () => {
 
       {/* Bottom bar */}
       <div className="border-t border-white/[0.04]">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <p className="font-inter text-[12px] text-text-tertiary text-center">
-            © 2025 Replikor
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p className="font-inter text-[12px] text-text-tertiary text-center sm:text-left">
+            © {currentYear} Replikor
           </p>
+          <div className="flex items-center gap-4">
+            <a href="/privacy" className="font-inter text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">
+              Политика конфиденциальности
+            </a>
+            <a href="/cookies" className="font-inter text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">
+              Cookie
+            </a>
+          </div>
         </div>
       </div>
     </footer>

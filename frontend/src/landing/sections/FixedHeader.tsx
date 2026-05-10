@@ -135,7 +135,7 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
               {authenticated ? 'Открыть кабинет' : 'Войти в кабинет'}
             </button>
             <button
-              onClick={onDemoClick}
+              onClick={() => { setMobileOpen(false); onDemoClick(); }}
               className="gradient-btn w-full"
             >
               Попробовать демо

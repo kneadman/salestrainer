@@ -197,7 +197,11 @@ const DemoFormSection: React.FC<DemoFormSectionProps> = ({
                     className="mt-1 w-4 h-4 rounded border-white/[0.15] bg-navy-800 text-mint focus:ring-mint/30 flex-shrink-0"
                   />
                   <span className="font-inter text-[13px] text-text-secondary leading-relaxed">
-                    Согласен на обработку персональных данных для связи по демо.
+                    Согласен на{" "}
+                    <a href="/privacy" className="underline hover:text-text-primary transition-colors">
+                      обработку персональных данных
+                    </a>{" "}
+                    для связи по демо.
                   </span>
                 </label>
                 <label className="flex items-start gap-3 cursor-pointer">

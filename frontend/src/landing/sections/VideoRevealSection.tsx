@@ -34,16 +34,24 @@ const VideoRevealSection: React.FC = () => {
 
           let index = 0;
           const speed = 35; // ms per character
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+          let cancelled = false;
 
           const type = () => {
+            if (cancelled) return;
             if (index <= fullText.length) {
               setDisplayedText(fullText.slice(0, index));
               index++;
-              setTimeout(type, speed + Math.random() * 15);
+              timeoutId = setTimeout(type, speed + Math.random() * 15);
             }
           };
 
           type();
+
+          return () => {
+            cancelled = true;
+            if (timeoutId) clearTimeout(timeoutId);
+          };
         },
       });
 
