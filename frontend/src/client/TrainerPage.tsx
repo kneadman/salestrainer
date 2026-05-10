@@ -11,16 +11,12 @@ import { getClientErrorMessage } from "./utils";
 
 const STORAGE_KEY = "salestrainer.currentSessionId";
 
-type TrainerPageProps = {
-  onLogout: () => Promise<void>;
-};
-
 type PendingMessageSubmission = {
   idempotencyKey: string;
   managerMessage: string;
 };
 
-export function TrainerPage({ onLogout }: TrainerPageProps) {
+export function TrainerPage() {
   /** Keep the runtime trainer flow inside the client cabinet and restore the last session when possible. */
   const [session, setSession] = useState<SessionPublicDTO | null>(null);
   const [turns, setTurns] = useState<TurnPublicDTO[]>([]);
@@ -209,9 +205,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
               onNewSession={startNewSession}
               onOpenReport={() => setReportModalOpen(true)}
               onFinish={handleFinish}
-              onLogout={() => {
-                void onLogout();
-              }}
+
             />
             <div className="trainer-chat-body">
               {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
