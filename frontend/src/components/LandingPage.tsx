@@ -1,19 +1,19 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { submitLead } from "../api";
-import { landingNavItems } from "./landing/content";
-import {
-  DemoSection,
-  EvaluationTilesSection,
-  FAQSection,
-  FinalCTASection,
-  HeroSection,
-  LandingFooter,
-  LandingHeader,
-  ManagementUseCasesSection,
-  PilotStepperSection,
-  ProblemTilesSection,
-  ScenarioTilesSection,
-} from "./landing/Sections";
+import { useLenis } from "@/landing/hooks/useLenis";
+import AmbientGlow from "@/landing/sections/AmbientGlow";
+import FixedHeader from "@/landing/sections/FixedHeader";
+import HeroSection from "@/landing/sections/HeroSection";
+import VideoRevealSection from "@/landing/sections/VideoRevealSection";
+import ProblemSection from "@/landing/sections/ProblemSection";
+import HowItWorksSection from "@/landing/sections/HowItWorksSection";
+import MetricsReportSection from "@/landing/sections/MetricsReportSection";
+import ForManagersSection from "@/landing/sections/ForManagersSection";
+import ScenariosSection from "@/landing/sections/ScenariosSection";
+import PilotSection from "@/landing/sections/PilotSection";
+import DemoFormSection from "@/landing/sections/DemoFormSection";
+import FAQSection from "@/landing/sections/FAQSection";
+import Footer from "@/landing/sections/Footer";
 
 type LeadStatus = "idle" | "submitting" | "success" | "error";
 
@@ -42,13 +42,14 @@ function scrollToBlock(id: string, eventName: string) {
 
 export function LandingPage({ authenticated }: LandingPageProps) {
   /** Render the public landing as a product-led story from problem to demo request. */
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [leadStatus, setLeadStatus] = useState<LeadStatus>("idle");
   const [leadConsent, setLeadConsent] = useState(false);
   const [leadFormOpened, setLeadFormOpened] = useState(false);
-  const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [cookiesAccepted, setCookiesAccepted] = useState(() => localStorage.getItem("salestrainer.cookiesAccepted") === "true");
   const queryParams = useMemo(collectQueryParams, []);
+
+  // Initialize smooth scroll only for the landing page
+  useLenis();
 
   useEffect(() => {
     /** Track the page view and a couple of coarse scroll-depth milestones. */
@@ -76,6 +77,15 @@ export function LandingPage({ authenticated }: LandingPageProps) {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [authenticated]);
+
+  useEffect(() => {
+    /** Set landing-specific body background; restore on unmount. */
+    const prevBodyBackground = document.body.style.backgroundColor;
+    document.body.style.backgroundColor = "#0f1729";
+    return () => {
+      document.body.style.backgroundColor = prevBodyBackground;
+    };
+  }, []);
 
   const handleLoginClick = () => {
     /** Route authenticated visitors into the cabinet and everyone else into login. */
@@ -139,47 +149,42 @@ export function LandingPage({ authenticated }: LandingPageProps) {
   };
 
   return (
-    <div className="lp-page">
-      <LandingHeader
-        authenticated={authenticated}
-        mobileOpen={mobileOpen}
-        navItems={landingNavItems}
-        onLoginClick={handleLoginClick}
-        onMobileToggle={() => setMobileOpen((value) => !value)}
-        onCloseMobileMenu={() => setMobileOpen(false)}
-        onDemoClick={() => {
-          setMobileOpen(false);
-          scrollToBlock("lead", "hero_demo_click");
-        }}
-      />
-
-      <main>
-        <HeroSection
-          onDemoClick={() => scrollToBlock("lead", "hero_demo_click")}
-          onMechanicsClick={() => scrollToBlock("demo", "hero_mechanics_click")}
+    <div>
+      <AmbientGlow />
+      <div className="relative z-[1]">
+        <FixedHeader
+          authenticated={authenticated}
+          onLoginClick={handleLoginClick}
+          onDemoClick={() => scrollToBlock("demo", "hero_demo_click")}
         />
-        <ProblemTilesSection />
-        <DemoSection />
-        <EvaluationTilesSection />
-        <ManagementUseCasesSection />
-        <ScenarioTilesSection />
-        <PilotStepperSection onDemoClick={() => scrollToBlock("lead", "pilot_cta_click")} />
-        <FinalCTASection
+        <HeroSection
+          onDemoClick={() => scrollToBlock("demo", "hero_demo_click")}
+          onMechanicsClick={() => scrollToBlock("how-it-works", "hero_mechanics_click")}
+        />
+        <VideoRevealSection />
+        <ProblemSection />
+        <HowItWorksSection />
+        <MetricsReportSection />
+        <ForManagersSection />
+        <ScenariosSection />
+        <PilotSection onDemoClick={() => scrollToBlock("demo", "pilot_cta_click")} />
+        <DemoFormSection
           leadStatus={leadStatus}
           leadConsent={leadConsent}
           onConsentChange={setLeadConsent}
           onLeadSubmit={handleLeadSubmit}
           onLeadFormFocus={handleLeadFormFocus}
         />
-        <FAQSection openIndex={faqOpen} onToggle={(index) => setFaqOpen((current) => (current === index ? null : index))} />
-      </main>
-
-      <LandingFooter />
+        <FAQSection />
+        <Footer />
+      </div>
 
       {!cookiesAccepted ? (
-        <div className="lp-cookies" role="dialog" aria-live="polite" aria-label="Уведомление о cookie">
-          <p>Используем cookie и UTM-метки только для работы формы демо и базовой аналитики лендинга.</p>
-          <button type="button" className="lp-button lp-button--primary" onClick={handleCookieAccept}>
+        <div className="fixed bottom-4 left-4 right-4 z-[1001] max-w-[600px] mx-auto bg-navy-700/90 backdrop-blur-md border border-white/[0.05] rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4" role="dialog" aria-live="polite" aria-label="Уведомление о cookie">
+          <p className="font-inter text-[13px] text-text-secondary text-center sm:text-left">
+            Используем cookie и UTM-метки только для работы формы демо и базовой аналитики лендинга.
+          </p>
+          <button type="button" className="gradient-btn whitespace-nowrap px-5 py-2.5 text-[14px]" onClick={handleCookieAccept}>
             Понятно
           </button>
         </div>

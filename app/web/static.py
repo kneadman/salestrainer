@@ -17,8 +17,18 @@ def mount_frontend(app: FastAPI) -> None:
     index_html = dist_dir / "index.html"
     assets_dir = dist_dir / "assets"
 
+    logo_svg = dist_dir / "logo.svg"
+
     if dist_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_dir, check_dir=False), name="frontend-assets")
+        images_dir = dist_dir / "images"
+        if images_dir.is_dir():
+            app.mount("/images", StaticFiles(directory=images_dir, check_dir=False), name="frontend-images")
+
+    if logo_svg.is_file():
+        async def serve_logo() -> Response:
+            return FileResponse(logo_svg, media_type="image/svg+xml")
+        app.get("/logo.svg", include_in_schema=False)(serve_logo)
 
     async def serve_index() -> Response:
         if index_html.is_file():
