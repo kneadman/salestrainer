@@ -16,7 +16,6 @@ describe("SessionHeader", () => {
         onNewSession={onNewSession}
         onOpenReport={onOpenReport}
         onFinish={vi.fn()}
-        onLogout={vi.fn()}
       />,
     );
 
@@ -44,7 +43,6 @@ describe("SessionHeader", () => {
         onNewSession={vi.fn()}
         onOpenReport={vi.fn()}
         onFinish={vi.fn()}
-        onLogout={vi.fn()}
       />,
     );
 

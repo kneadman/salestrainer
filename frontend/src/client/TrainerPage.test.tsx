@@ -135,7 +135,7 @@ describe("TrainerPage", () => {
       },
     });
 
-    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    const { container } = render(<TrainerPage />);
 
     const reportButton = await screen.findByRole("button", { name: "Открыть итоговый отчёт" });
     expect(reportButton).toBeInTheDocument();
@@ -176,7 +176,7 @@ describe("TrainerPage", () => {
       report_payload: structuredReportPayload,
     });
 
-    render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    render(<TrainerPage />);
 
     const finishButton = await screen.findByRole("button", { name: "Завершить" });
     await user.click(finishButton);
@@ -198,7 +198,7 @@ describe("TrainerPage", () => {
     });
     apiMocks.sendMessage.mockRejectedValue(new Error("Сервис временно недоступен"));
 
-    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    const { container } = render(<TrainerPage />);
 
     const textarea = await screen.findByPlaceholderText("Введите сообщение клиенту");
     await user.type(textarea, "Привет");
@@ -256,7 +256,7 @@ describe("TrainerPage", () => {
           turn_index: 1,
         });
 
-      const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+      const { container } = render(<TrainerPage />);
 
       const textarea = await screen.findByRole("textbox");
       const sendButton = container.querySelector(".composer__send");
@@ -285,7 +285,7 @@ describe("TrainerPage", () => {
       turns: Array.from({ length: 32 }, (_, index) => makeTurn(index + 1)),
     });
 
-    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    const { container } = render(<TrainerPage />);
 
     await screen.findByText("Ответ 32");
 

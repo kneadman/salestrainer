@@ -1611,6 +1611,7 @@ button:disabled {
 
 .client-welcome {
   width: min(680px, 100%);
+  margin: auto;
 }
 
 .client-stats-grid {
