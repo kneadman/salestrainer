@@ -11,7 +11,7 @@ from app.client_portal.schemas import ClientUserAnalyticsDTO
 from app.history.schemas import HistorySessionSummaryDTO
 
 NameStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
-PasswordStr = Annotated[str, StringConstraints(min_length=8, max_length=256)]
+PasswordStr = Annotated[str, StringConstraints(min_length=8, max_length=256, pattern=r"^[a-zA-Z0-9]+$")]
 SlugStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=80, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 
 

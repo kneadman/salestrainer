@@ -36,5 +36,8 @@ Thumbs.db
 
 /landing-*.png
 AGENTS.override.md
+# /docs/agent-reference/ is intentionally not ignored; agent-facing documentation should be tracked
 
 /frontend/logo.svg
+
+/docs/agent-reference/

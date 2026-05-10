@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.access.models import LandingLead
 from app.api.dependencies import get_app_settings, get_persona_generation_service, get_report_service, get_session_service, get_turn_service
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
+from app.api.rate_limit import LeadRateLimitExceeded
 from app.api.schemas import (
     ErrorResponse,
     FinishSessionResponse,
@@ -123,8 +124,20 @@ def healthcheck() -> dict[str, str]:
 @router.post("/leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
 def submit_landing_lead(
     request: LandingLeadRequest,
+    http_request: Request,
     db_session: Session = Depends(get_db_session),
 ) -> LandingSubmitResponse:
+    try:
+        http_request.app.state.lead_rate_limiter.hit(
+            ip_address=_client_ip(http_request),
+            email=str(request.email) if request.email else None,
+            phone=request.phone if request.phone else None,
+        )
+    except LeadRateLimitExceeded as error:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+        ) from error
     if request.consent_personal_data is not True:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -493,3 +506,9 @@ def get_report(
         report=report_text,
         report_payload=report_payload,
     )
+
+
+def _client_ip(request: Request) -> str | None:
+    if request.client is None:
+        return None
+    return request.client.host

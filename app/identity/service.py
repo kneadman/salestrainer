@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from app.access.repository import AccessRepository
 from app.identity.models import LoginSession, User
 from app.identity.repository import IdentityRepository
-from app.identity.security import generate_secure_token, hash_password, hash_token, verify_password
+from app.identity.security import generate_secure_token, hash_password, hash_token, PasswordValidationError, validate_permanent_password, verify_password
 from app.infrastructure.config import Settings
 
 
@@ -133,6 +133,9 @@ class AuthService:
         user = current_session.user
         if not verify_password(current_password, user.password_hash):
             raise AuthenticationError("Invalid current password.")
+        if current_password == new_password:
+            raise PasswordValidationError("New password must be different from the current password.")
+        validate_permanent_password(new_password)
         updated_user = self._identity_repository.update_user_password(
             user_id=user.id,
             password_hash=hash_password(new_password),

@@ -2,6 +2,11 @@
 
 CLI/API MVP for an interactive sales training simulator. A manager writes messages, the system simulates a hidden B2B client, and the application owns all session state.
 
+## Agent-facing code reference
+
+Detailed agent-facing documentation is stored in `docs/agent-reference/`.
+Start from `docs/agent-reference/README.md`.
+
 ## Current MVP scope
 
 - CLI chat plus FastAPI API

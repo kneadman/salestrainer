@@ -3,13 +3,14 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.identity.dependencies import get_auth_service, get_auth_settings, get_current_session
 from app.identity.csrf import clear_csrf_cookie, generate_csrf_token, set_csrf_cookie
 from app.identity.models import User
 from app.identity.roles import role_value
 from app.identity.rate_limit import LoginRateLimitExceeded
+from app.identity.security import PasswordValidationError
 from app.identity.service import AuthService, AuthenticationError, CurrentSession
 from app.infrastructure.config import Settings
 
@@ -17,8 +18,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class ClientAccountDTO(BaseModel):
@@ -44,8 +45,8 @@ class CsrfResponse(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
 
 
 @router.post("/login", response_model=AuthUserResponse)
@@ -136,6 +137,8 @@ def change_password(
         )
     except AuthenticationError as error:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(error)) from error
+    except PasswordValidationError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
     return AuthUserResponse(user=_user_dto(user))
 
 

@@ -12,7 +12,7 @@ from app.history.projections import session_summary_dto
 from app.history.repository import HistoryRepository, SessionListFilters
 from app.identity.models import ClientAccount, User
 from app.identity.roles import CLIENT_ROLES, normalize_role
-from app.identity.security import hash_password
+from app.identity.security import hash_password, PasswordValidationError, validate_permanent_password
 from app.infrastructure.config import Settings
 from app.infrastructure.secrets import encrypt_secret, preview_encrypted_secret
 from app.internal_admin.schemas import (
@@ -150,6 +150,10 @@ class InternalAdminService:
         normalized_role = normalize_role(str(role))
         if normalized_role not in CLIENT_ROLES:
             raise ValidationError("Only client_lead or client_manager can be created for an organization.")
+        try:
+            validate_permanent_password(password)
+        except PasswordValidationError as error:
+            raise ValidationError(str(error)) from error
         user = User(
             client_account_id=organization_id,
             email=email.strip().lower(),
@@ -201,6 +205,10 @@ class InternalAdminService:
 
     def reset_user_password(self, *, actor_user_id: UUID, user_id: UUID, password: str) -> UserDTO:
         user = self._get_user(user_id)
+        try:
+            validate_permanent_password(password)
+        except PasswordValidationError as error:
+            raise ValidationError(str(error)) from error
         user.password_hash = hash_password(password)
         user.must_change_password = True
         self._audit(

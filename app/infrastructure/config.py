@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     csrf_token_ttl_seconds: int = 3600
     login_rate_limit_attempts: int = Field(default=5, ge=0)
     login_rate_limit_window_seconds: int = Field(default=300, ge=1)
+    lead_rate_limit_attempts: int = Field(default=10, ge=0)
+    lead_rate_limit_window_seconds: int = Field(default=3600, ge=1)
     secret_encryption_key: str = ""
     stt_enabled: bool = False
     stt_backend: str = "fake"

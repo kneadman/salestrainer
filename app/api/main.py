@@ -28,6 +28,7 @@ from app.infrastructure.stt_client import STTClient, build_stt_client
 from app.infrastructure.stt_concurrency import LocalSTTConcurrencyLimiter
 from app.infrastructure.summary_compressor import build_summary_compressor
 from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
+from app.api.rate_limit import LeadRateLimiter, build_lead_rate_limiter
 from app.identity.rate_limit import build_login_rate_limiter
 from app.identity.routes import router as auth_router
 from app.internal_admin.routes import router as internal_admin_router
@@ -103,6 +104,7 @@ def create_app(
     stt_client: STTClient | None = None,
     audio_duration_probe: AudioDurationProbe | None = None,
     audio_converter: AudioConverter | None = None,
+    lead_rate_limiter: LeadRateLimiter | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     setup_logging(resolved_settings.log_level)
@@ -188,6 +190,7 @@ def create_app(
     app.state.speech_service = speech_service
     app.state.settings = resolved_settings
     app.state.login_rate_limiter = build_login_rate_limiter(resolved_settings)
+    app.state.lead_rate_limiter = lead_rate_limiter or build_lead_rate_limiter(resolved_settings)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)
