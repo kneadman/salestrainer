@@ -13,6 +13,8 @@ const VideoRevealSection: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [displayedText, setDisplayedText] = useState('');
   const hasAnimated = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     setIsMobile(window.innerWidth < 768);
@@ -24,6 +26,8 @@ const VideoRevealSection: React.FC = () => {
   useEffect(() => {
     if (isMobile) return;
 
+    cancelledRef.current = false;
+
     const ctx = gsap.context(() => {
       ScrollTrigger.create({
         trigger: sectionRef.current,
@@ -33,29 +37,22 @@ const VideoRevealSection: React.FC = () => {
           hasAnimated.current = true;
 
           let index = 0;
-          const speed = 35; // ms per character
-          let timeoutId: ReturnType<typeof setTimeout> | null = null;
-          let cancelled = false;
+          const speed = 35;
 
           const type = () => {
-            if (cancelled) return;
+            if (cancelledRef.current) return;
+
             if (index <= fullText.length) {
               setDisplayedText(fullText.slice(0, index));
               index++;
-              timeoutId = setTimeout(type, speed + Math.random() * 15);
+              timeoutRef.current = setTimeout(type, speed + Math.random() * 15);
             }
           };
 
           type();
-
-          return () => {
-            cancelled = true;
-            if (timeoutId) clearTimeout(timeoutId);
-          };
         },
       });
 
-      // Cursor blink
       gsap.to(cursorRef.current, {
         opacity: 0,
         duration: 0.5,
@@ -65,7 +62,16 @@ const VideoRevealSection: React.FC = () => {
       });
     }, sectionRef);
 
-    return () => ctx.revert();
+    return () => {
+      cancelledRef.current = true;
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      ctx.revert();
+    };
   }, [isMobile]);
 
   if (isMobile) {
