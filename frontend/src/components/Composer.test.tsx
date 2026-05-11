@@ -36,7 +36,7 @@ describe("Composer", () => {
 
     const textarea = screen.getByPlaceholderText("Введите сообщение клиенту");
     const voiceButton = screen.getByRole("button", { name: "Голосовой ввод" });
-    const sendButton = screen.getByRole("button", { name: "Отправить" });
+    const sendButton = screen.getByRole("button", { name: "Отправить сообщение" });
 
     expect(textarea).toHaveAttribute("rows", "1");
     expect(textarea).toHaveClass("composer__input");
