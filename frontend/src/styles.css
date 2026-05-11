@@ -2509,19 +2509,13 @@ button:disabled {
   }
 
   .composer {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding: 12px;
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
-  .composer__input {
-    width: 100%;
-    grid-column: 1 / -1;
-  }
-
   .composer__actions {
-    width: 100%;
     justify-content: flex-end;
     gap: 8px;
   }

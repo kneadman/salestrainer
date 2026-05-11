@@ -202,7 +202,7 @@ describe("TrainerPage", () => {
 
     const textarea = await screen.findByPlaceholderText("Введите сообщение клиенту");
     await user.type(textarea, "Привет");
-    await user.click(screen.getByRole("button", { name: "Отправить" }));
+    await user.click(screen.getByRole("button", { name: "Отправить сообщение" }));
 
     const errorBanner = await screen.findByText("Сервис временно недоступен");
     const trainerChatPanel = container.querySelector(".trainer-chat-panel");
