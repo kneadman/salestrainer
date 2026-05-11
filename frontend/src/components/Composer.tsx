@@ -116,26 +116,38 @@ export function Composer({
         rows={1}
         disabled={composerDisabled}
       />
-      <button
-        type="button"
-        className={`composer__voice ${isVoiceRecording ? "composer__voice--recording" : ""}`}
-        onClick={() => void handleVoiceClick()}
-        onPointerDown={(event) => void handlePointerDown(event.pointerType)}
-        onPointerUp={() => void handlePointerStop()}
-        onPointerCancel={() => void handlePointerStop()}
-        aria-label={voiceButtonLabel}
-        title={voiceButtonLabel}
-        disabled={voiceDisabled || !onTranscribeAudio || !isSupported || isVoiceTranscribing}
-      >
-        <span className="composer__voice-icon" aria-hidden="true">
-          <MicrophoneIcon />
-        </span>
-        <span className="composer__voice-label">{isVoiceTranscribing ? "Распознаём..." : "Голос"}</span>
-        {isVoiceRecording ? <span className="composer__voice-timer">{formatElapsedSeconds(elapsedSeconds)}</span> : null}
-      </button>
-      <button type="button" className="composer__send" onClick={onSend} disabled={composerDisabled || !value.trim()}>
-        {loading ? "..." : "Отправить"}
-      </button>
+      <div className="composer__actions">
+        <button
+          type="button"
+          className={`composer__voice ${isVoiceRecording ? "composer__voice--recording" : ""}`}
+          onClick={() => void handleVoiceClick()}
+          onPointerDown={(event) => void handlePointerDown(event.pointerType)}
+          onPointerUp={() => void handlePointerStop()}
+          onPointerCancel={() => void handlePointerStop()}
+          aria-label={voiceButtonLabel}
+          title={voiceButtonLabel}
+          disabled={voiceDisabled || !onTranscribeAudio || !isSupported || isVoiceTranscribing}
+        >
+          <span className="composer__voice-icon" aria-hidden="true">
+            <MicrophoneIcon />
+          </span>
+          {isVoiceRecording ? (
+            <span className="composer__voice-timer">{formatElapsedSeconds(elapsedSeconds)}</span>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className="composer__send"
+          onClick={onSend}
+          disabled={composerDisabled || !value.trim()}
+          aria-label={loading ? "Отправка сообщения" : "Отправить сообщение"}
+          title={loading ? "Отправка сообщения" : "Отправить сообщение"}
+        >
+          <span className="composer__send-icon" aria-hidden="true">
+            {loading ? "..." : <SendIcon />}
+          </span>
+        </button>
+      </div>
       {inlineVoiceError ? <div className="composer__error">{inlineVoiceError}</div> : null}
       {!isSupported && onTranscribeAudio ? (
         <div className="composer__hint">Голосовой ввод не поддерживается в этом браузере.</div>
@@ -151,6 +163,25 @@ function MicrophoneIcon(props: SVGProps<SVGSVGElement>) {
       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
       <path d="M12 19v3" />
       <path d="M8 22h8" />
+    </svg>
+  );
+}
+
+function SendIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22 11 13 2 9 22 2Z" />
     </svg>
   );
 }
