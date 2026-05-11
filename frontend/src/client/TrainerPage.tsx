@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError, createSession, finishSession, getReport, getSession, sendMessage, transcribeSpeech } from "../api";
 import { ChatWindow } from "../components/ChatWindow";
 import { Composer } from "../components/Composer";
-import { FactsPanel } from "../components/FactsPanel";
-import { MetricsPanel } from "../components/MetricsPanel";
 import { SessionHeader } from "../components/SessionHeader";
+import { TrainerContextPanel } from "../components/TrainerContextPanel";
 import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
@@ -196,8 +195,7 @@ export function TrainerPage() {
     <>
       <main className="client-trainer-layout">
         <aside className="trainer-side-panels" aria-label="Метрики и факты тренировки">
-          <MetricsPanel session={session} />
-          <FactsPanel state={factsState} />
+          <TrainerContextPanel session={session} factsState={factsState} />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
           <section className="trainer-chat-panel">
