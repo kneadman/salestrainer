@@ -56,7 +56,7 @@ export default function App() {
 
   useEffect(() => {
     /** Bootstrap auth once so protected routes can decide redirect/access states. */
-    if (path === "/demo") {
+    if (getCurrentPath() === "/demo") {
       setAuthBootstrapping(false);
       return;
     }
@@ -80,7 +80,7 @@ export default function App() {
     };
 
     void bootstrapAuth();
-  }, [path]);
+  }, []);
 
   useEffect(() => {
     /** Enforce protected route redirects without adding a routing dependency. */
