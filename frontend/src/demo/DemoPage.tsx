@@ -22,14 +22,11 @@ type DemoClientLayoutProps = {
 
 function DemoClientLayout({ activeTab, children, onTabChange }: DemoClientLayoutProps) {
   /** Render the demo cabinet shell mimicking ClientLayout without real auth data. */
-  const [counts] = useState(() => ({
-    overview: Math.floor(Math.random() * 20),
-    history: Math.floor(Math.random() * 10),
-    analytics: Math.floor(Math.random() * 5),
-  }));
+  const shellClass = activeTab === "trainer" ? "client-shell client-shell--trainer" : "client-shell";
+  const contentClass = activeTab === "trainer" ? "client-content client-content--trainer" : "client-content";
 
   return (
-    <div className="client-shell client-shell--trainer">
+    <div className={shellClass}>
       <aside className="client-sidebar">
         <BrandLogo
           className="client-brand"
@@ -51,15 +48,6 @@ function DemoClientLayout({ activeTab, children, onTabChange }: DemoClientLayout
               onClick={() => onTabChange(item.tab)}
             >
               {item.label}
-              {item.tab === "overview" && counts.overview > 0 ? (
-                <span className="client-nav__count">{counts.overview}</span>
-              ) : null}
-              {item.tab === "history" && counts.history > 0 ? (
-                <span className="client-nav__count">{counts.history}</span>
-              ) : null}
-              {item.tab === "analytics" && counts.analytics > 0 ? (
-                <span className="client-nav__count">{counts.analytics}</span>
-              ) : null}
             </button>
           ))}
         </nav>
@@ -74,13 +62,13 @@ function DemoClientLayout({ activeTab, children, onTabChange }: DemoClientLayout
             <span className="client-badge">Менеджер</span>
           </div>
         </header>
-        <main className="client-content client-content--trainer">{children}</main>
+        <main className={contentClass}>{children}</main>
       </div>
     </div>
   );
 }
 
-function DemoOverview() {
+function DemoOverview({ onStartTrainer }: { onStartTrainer: () => void }) {
   /** Render a static overview page with fake analytics. */
   return (
     <div className="client-page">
@@ -90,7 +78,7 @@ function DemoOverview() {
           <h1>Обзор</h1>
           <p>Добро пожаловать, demo@replikor.ai</p>
         </div>
-        <button type="button" className="client-button client-button--primary" disabled>
+        <button type="button" className="client-button client-button--primary" onClick={onStartTrainer}>
           Начать тренировку
         </button>
       </div>
@@ -170,7 +158,7 @@ export function DemoPage({ onNavigate: _onNavigate }: DemoPageProps) {
 
   return (
     <DemoClientLayout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === "overview" ? <DemoOverview /> : null}
+      {activeTab === "overview" ? <DemoOverview onStartTrainer={() => setActiveTab("trainer")} /> : null}
       {activeTab === "trainer" ? <DemoTrainer /> : null}
       {activeTab === "history" ? <DemoPlaceholder title="История" /> : null}
       {activeTab === "analytics" ? <DemoPlaceholder title="Моя аналитика" /> : null}

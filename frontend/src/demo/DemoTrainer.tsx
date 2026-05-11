@@ -302,7 +302,7 @@ export function DemoTrainer() {
     setTurnIndex(0);
     setTurns([]);
     setClientState({});
-    setInputValue("");
+    setInputValue(DEMO_TURNS[0].manager);
     setFinished(false);
     setReportModalOpen(false);
     setSessionMetrics(buildSession({ interest: 0, trust: 0, tone: "neutral", band: "cold" }, 0, {}));
@@ -353,15 +353,18 @@ export function DemoTrainer() {
         setHint("Диалог завершён. Просмотрите отчёт");
       } else {
         setHint("Нажмите «Отправить», чтобы отправить следующий ответ менеджера");
+        setInputValue(DEMO_TURNS[nextIndex].manager);
       }
     }, 700);
   };
 
   const handleFinish = () => {
-    if (!finished) {
+    if (!started || finished || loading) {
       return;
     }
+    setFinished(true);
     setReportModalOpen(true);
+    setHint("Диалог завершён. Просмотрите отчёт");
   };
 
   const handleNewSession = () => {
@@ -397,7 +400,7 @@ export function DemoTrainer() {
           <section className="trainer-chat-panel">
             <SessionHeader
               busy={loading}
-              canFinish={finished}
+              canFinish={started && !finished}
               onNewSession={handleNewSession}
               onFinish={handleFinish}
               canShowReport={finished}
@@ -420,7 +423,7 @@ export function DemoTrainer() {
               </>
             ) : (
               <div className="composer">
-                <p className="trainer-hint" style={{ gridColumn: "1 / -1", margin: 0 }}>
+                <p className="trainer-hint trainer-hint--finished">
                   {hint}
                 </p>
               </div>
