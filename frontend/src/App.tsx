@@ -4,6 +4,7 @@ import { AdminApp } from "./admin/AdminApp";
 import { ClientApp } from "./client/ClientApp";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
+import { DemoPage } from "./demo/DemoPage";
 import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
@@ -55,6 +56,11 @@ export default function App() {
 
   useEffect(() => {
     /** Bootstrap auth once so protected routes can decide redirect/access states. */
+    if (getCurrentPath() === "/demo") {
+      setAuthBootstrapping(false);
+      return;
+    }
+
     const bootstrapAuth = async () => {
       try {
         const response = await getMe();
@@ -82,6 +88,9 @@ export default function App() {
       return;
     }
     if (path === "/") {
+      return;
+    }
+    if (path === "/demo") {
       return;
     }
     if ((path.startsWith("/admin") || path.startsWith("/app")) && !user) {
@@ -128,6 +137,10 @@ export default function App() {
       navigate("/login", true);
     }
   };
+
+  if (path === "/demo") {
+    return <DemoPage onNavigate={navigate} />;
+  }
 
   if (authBootstrapping) {
     return <div className="app-shell">Загрузка...</div>;
