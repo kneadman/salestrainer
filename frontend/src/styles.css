@@ -390,7 +390,7 @@ button:disabled {
   padding: 14px 18px 18px;
   border-top: 1px solid rgba(148, 163, 184, 0.12);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: end;
   min-width: 0;
@@ -415,24 +415,31 @@ button:disabled {
   outline: 1px solid rgba(96, 165, 250, 0.8);
 }
 
+.composer__actions {
+  display: inline-flex;
+  gap: 10px;
+  align-items: end;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .composer__voice,
 .composer__send {
-  min-width: 56px;
+  width: 48px;
+  min-width: 48px;
   height: 48px;
   min-height: 48px;
+  padding: 0;
   align-self: end;
   border-radius: 16px;
   white-space: nowrap;
-}
-
-.composer__voice {
-  height: 48px;
-  min-height: 48px;
-  padding: 0 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+}
+
+.composer__voice {
+  position: relative;
   color: #dbeafe;
   background: rgba(59, 130, 246, 0.12);
   border: 1px solid rgba(96, 165, 250, 0.24);
@@ -441,13 +448,16 @@ button:disabled {
 }
 
 .composer__send {
-  height: 48px;
-  min-height: 48px;
-  padding: 0 18px;
-  border-radius: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  color: #08111f;
+  background: linear-gradient(135deg, #7dd3fc 0%, #60a5fa 100%);
+  border: 1px solid rgba(125, 211, 252, 0.36);
+  box-shadow: 0 8px 22px rgba(96, 165, 250, 0.16);
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.composer__send:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(96, 165, 250, 0.22);
 }
 
 .composer__voice:hover:not(:disabled) {
@@ -468,31 +478,34 @@ button:disabled {
   box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2), 0 0 18px rgba(239, 68, 68, 0.12);
 }
 
-.composer__voice-icon {
+.composer__voice-icon,
+.composer__send-icon {
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.composer__voice-timer,
 .composer__voice-label,
-.composer__hint,
-.composer__error {
-  font-size: 0.82rem;
+.composer__send-label {
+  display: none;
 }
 
 .composer__voice-timer {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  transform: translateX(-50%);
+  font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
+  color: #ffd0d0;
+  white-space: nowrap;
 }
 
-.composer__voice-label {
-  font-weight: 700;
-}
-
-.composer__error,
-.composer__hint {
+.composer__hint,
+.composer__error {
   grid-column: 1 / -1;
+  font-size: 0.82rem;
 }
 
 .composer__hint {
@@ -922,12 +935,16 @@ button:disabled {
 
   .composer {
     padding-bottom: calc(18px + env(safe-area-inset-bottom));
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .composer__voice,
   .composer__send {
-    min-width: 52px;
+    width: 46px;
+    min-width: 46px;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 14px;
   }
 
   .composer__voice-label {
@@ -961,8 +978,12 @@ button:disabled {
     grid-column: 1 / -1;
   }
 
+  .composer__voice,
   .composer__send {
-    width: 100%;
+    width: 46px;
+    min-width: 46px;
+    height: 44px;
+    min-height: 44px;
   }
 }
 
@@ -2488,23 +2509,30 @@ button:disabled {
   }
 
   .composer {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
     gap: 8px;
     padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
   .composer__input {
-    grid-column: 1 / -1;
     width: 100%;
+    grid-column: 1 / -1;
   }
 
-  .composer__voice {
-    min-width: 48px;
-    padding: 0 12px;
+  .composer__actions {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 8px;
   }
 
+  .composer__voice,
   .composer__send {
-    min-width: 112px;
+    width: 46px;
+    min-width: 46px;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 14px;
   }
 
   .composer__voice-label {
@@ -2533,13 +2561,12 @@ button:disabled {
 }
 
 @media (max-width: 420px) {
-  .composer {
-    grid-template-columns: 48px 1fr;
-  }
-
+  .composer__voice,
   .composer__send {
-    min-width: 0;
-    width: 100%;
+    width: 46px;
+    min-width: 46px;
+    height: 44px;
+    min-height: 44px;
   }
 }
 
