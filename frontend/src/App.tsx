@@ -4,6 +4,7 @@ import { AdminApp } from "./admin/AdminApp";
 import { ClientApp } from "./client/ClientApp";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
+import { DemoPage } from "./demo/DemoPage";
 import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
@@ -84,6 +85,9 @@ export default function App() {
     if (path === "/") {
       return;
     }
+    if (path === "/demo") {
+      return;
+    }
     if ((path.startsWith("/admin") || path.startsWith("/app")) && !user) {
       sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, path);
       navigate("/login", true);
@@ -128,6 +132,10 @@ export default function App() {
       navigate("/login", true);
     }
   };
+
+  if (path === "/demo") {
+    return <DemoPage onNavigate={navigate} />;
+  }
 
   if (authBootstrapping) {
     return <div className="app-shell">Загрузка...</div>;
