@@ -194,8 +194,8 @@ export function TrainerPage() {
   return (
     <>
       <main className="client-trainer-layout">
-        <aside className="trainer-side-panels" aria-label="Метрики и факты тренировки">
-          <TrainerContextPanel session={session} factsState={factsState} />
+        <aside className="trainer-side-panels trainer-side-panels--desktop" aria-label="Метрики и факты тренировки">
+          <TrainerContextPanel session={session} factsState={factsState} mode="desktop" />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
           <section className="trainer-chat-panel">
@@ -206,8 +206,10 @@ export function TrainerPage() {
               onNewSession={startNewSession}
               onOpenReport={() => setReportModalOpen(true)}
               onFinish={handleFinish}
-
             />
+            <div className="trainer-context-slot trainer-context-slot--mobile">
+              <TrainerContextPanel session={session} factsState={factsState} mode="mobile" />
+            </div>
             <div className="trainer-chat-body">
               {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
               <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />
