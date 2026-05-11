@@ -4,6 +4,7 @@ import { Composer } from "../components/Composer";
 import { FactsPanel } from "../components/FactsPanel";
 import { MetricsPanel } from "../components/MetricsPanel";
 import { SessionHeader } from "../components/SessionHeader";
+import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ClientStatePublic, JudgeSessionOutputDTO, SessionPublicDTO, TurnPublicDTO } from "../types";
 
@@ -377,15 +378,15 @@ export function DemoTrainer() {
 
   if (!started) {
     return (
-      <section className="client-welcome">
-        <span className="client-kicker">Тренажёр</span>
-        <h1>Начните демо-тренировку</h1>
-        <p>Отрабатывайте discovery-first продажи: роль, текущий процесс, боли, ограничения, критерии решения и следующий шаг.</p>
-        <p className="trainer-hint">{hint}</p>
-        <button type="button" className="client-button client-button--primary" onClick={handleStart}>
-          Начать тренировку
-        </button>
-      </section>
+      <TrainerStartScreen
+        kicker="Демо-тренажёр"
+        title="Попробуйте демо-тренировку"
+        description="Пройдите предзаписанный discovery-диалог на 15 ходов и посмотрите, как работают метрики, факты и итоговый отчёт."
+        hint={hint}
+        buttonLabel="Начать демо-тренировку"
+        onStart={handleStart}
+        variant="demo"
+      />
     );
   }
 

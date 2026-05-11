@@ -5,6 +5,7 @@ import { Composer } from "../components/Composer";
 import { FactsPanel } from "../components/FactsPanel";
 import { MetricsPanel } from "../components/MetricsPanel";
 import { SessionHeader } from "../components/SessionHeader";
+import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
 import { getClientErrorMessage } from "./utils";
@@ -177,15 +178,17 @@ export function TrainerPage() {
 
   if (!session) {
     return (
-      <section className="client-welcome">
-        <span className="client-kicker">Тренажёр</span>
-        <h1>Начните тренировку</h1>
-        <p>Отрабатывайте discovery-first продажи: роль, текущий процесс, боли, ограничения, критерии решения и следующий шаг.</p>
-        {error ? <div className="client-alert client-alert--error">{error}</div> : null}
-        <button type="button" className="client-button client-button--primary" onClick={startNewSession} disabled={loading}>
-          Начать тренировку
-        </button>
-      </section>
+      <TrainerStartScreen
+        kicker="Тренажёр"
+        title="Начните тренировку продаж"
+        description="Отрабатывайте discovery-first продажи: роль, текущий процесс, боли, ограничения, критерии решения и следующий шаг."
+        hint="Тренировка создаст новую симуляцию клиента и откроет рабочий диалог."
+        buttonLabel="Начать тренировку"
+        onStart={startNewSession}
+        disabled={loading}
+        variant="runtime"
+        error={error}
+      />
     );
   }
 
