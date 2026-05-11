@@ -392,8 +392,8 @@ export function DemoTrainer() {
   return (
     <>
       <main className="client-trainer-layout">
-        <aside className="trainer-side-panels" aria-label="Метрики и факты тренировки">
-          <TrainerContextPanel session={sessionMetrics} factsState={factsState} />
+        <aside className="trainer-side-panels trainer-side-panels--desktop" aria-label="Метрики и факты тренировки">
+          <TrainerContextPanel session={sessionMetrics} factsState={factsState} mode="desktop" />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
           <section className="trainer-chat-panel">
@@ -405,6 +405,9 @@ export function DemoTrainer() {
               canShowReport={finished}
               onOpenReport={() => setReportModalOpen(true)}
             />
+            <div className="trainer-context-slot trainer-context-slot--mobile">
+              <TrainerContextPanel session={sessionMetrics} factsState={factsState} mode="mobile" />
+            </div>
             <div className="trainer-chat-body">
               <ChatWindow turns={turns} loading={isSending} publicBrief={sessionMetrics.public_brief} />
             </div>
