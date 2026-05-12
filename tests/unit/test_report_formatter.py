@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.application.report_formatter import build_human_report, build_key_mistakes
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, TurnEvaluation
+from tests.unit._persona_fixtures import valid_minimal_persona
 
 
 def make_session() -> TrainingSessionState:
@@ -13,18 +14,17 @@ def make_session() -> TrainingSessionState:
         session_id=uuid4(),
         scenario_id="sales_audit_cold_outreach",
         status="finished",
-        persona=PersonaProfile(
+        persona=valid_minimal_persona(
             id="generated_persona",
             display_name="Unknown B2B contact",
             role="managing_partner",
             industry="professional_services",
             company_size="20-50",
-            authority_level="final_decider",
             behavior_model="analytical_and_cautious",
             communication_style="Спокойный, задаёт уточняющие вопросы.",
             current_business_context="Компания растёт, но контроль финансов и процессов размыт.",
             latent_pains=["Нет прозрачности по юнит-экономике", "Решения принимаются на ощущениях"],
-            decision_criteria=["Понятный ROI", "Низкая нагрузка на команду"],
+            decision_criteria=["Понятный ROI", "Низкая нагрузка на команду", "Быстрый старт"],
             hidden_constraints=["Нет времени на долгий проект"],
         ),
         interest_score=52,

@@ -125,7 +125,7 @@ class FakeLLMClient:
 
     def _process_answer(self, profile: Any) -> str:
         parts = [profile.current_business_context]
-        parts.append(f"Текущая модель учёта: {profile.current_accounting_model}.")
+        parts.append(f"Текущее решение: {profile.current_solution}.")
         parts.extend(profile.business_facts[:2])
         return " ".join(part.strip() for part in parts if part.strip())[:280]
 
@@ -195,7 +195,7 @@ class FakeLLMClient:
             trust_delta += 2
         if self._contains_any(message_lower, self.PROCESS_TOKENS):
             current_process.append(profile.current_business_context)
-            current_process.append(f"Текущая модель учёта: {profile.current_accounting_model}.")
+            current_process.append(f"Текущее решение: {profile.current_solution}.")
             current_process.extend(profile.business_facts[:2])
         if self._contains_any(message_lower, ["по каким критериям", "что важно", "как выбираете"]):
             decision_criteria.extend(profile.decision_criteria[:2])

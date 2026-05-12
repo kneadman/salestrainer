@@ -723,10 +723,11 @@ Maintain this backlog after every iteration.
 - [x] Local `development` branch was rebased onto `origin/main` after PR #18 landed on `main`; no source behavior was changed by this maintenance step.
 - [x] Runtime/history turn-write reconciliation now marks pending Redis sessions, returns controlled `409` conflicts, and lazily replays the latest turn into PostgreSQL on the next `resume`/`messages`/`finish` action without exposing hidden persona data.
 - [x] Message submission idempotency now accepts optional `idempotency_key`, stores a bounded recent result cache in runtime session state, returns the saved turn result for duplicate same-payload retries, rejects conflicting key reuse with `409`, and keeps no-key legacy duplicate behavior unchanged.
+- [x] Persona schema migrated to universal B2B v3.1: `PersonaProfile` now uses `extra="forbid"`, strict min/max list lengths, `current_solution`/`alternative_solutions`/`information_gaps`, `authority_level` is `Literal["final_decider"]`, legacy accounting fields are rejected, and `schema_version` is removed from `PersonaGenerationInput`; `UniversalFakePersonaGenerator` and `StructuredPersonaGeneratorClient` updated accordingly; legacy adapter `normalize_legacy_persona_payload` keeps old Redis/JSON records loadable via `TrainingSessionState` pre-validation; `CALL_SCORING_CRITERIA` cleaned of bookkeeping legacy; dead `accounting_outsourcing`/`outsourced_cfo` persona datasets removed.
 
 ## 10. Current state
 
-Last updated: 2026-05-09 by ChatGPT after adding the agent-facing reference pack.
+Last updated: 2026-05-12 after persona schema v3.1 migration.
 
 Observed in repository state:
 
