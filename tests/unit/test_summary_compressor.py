@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.application.summary_compressor import FakeSummaryCompressor
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, Turn
+from tests.unit._persona_fixtures import valid_minimal_persona
 
 
 def make_session() -> TrainingSessionState:
@@ -10,15 +11,7 @@ def make_session() -> TrainingSessionState:
         session_id=uuid4(),
         scenario_id="sales_audit_cold_outreach",
         status="active",
-        persona=PersonaProfile(
-            id="owner",
-            display_name="Owner",
-            role="owner",
-            industry="b2b",
-            company_size="30-100",
-            authority_level="final_decider",
-            behavior_model="skeptical_but_rational",
-        ),
+        persona=valid_minimal_persona(),
         interest_score=48,
         stage="need_discovery",
         client_state=ClientState(

@@ -98,6 +98,7 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
         "managing_partner",
         "commercial_director",
         "cfo",
+        "chief_accountant",
         "operations_director",
         "sales_director",
         "purchase_manager",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from app.domain.models import PersonaGenerationInput
 from app.domain.scenarios import get_scenario
@@ -26,16 +27,26 @@ def _persona_payload() -> dict[str, object]:
             "authority_level": "final_decider",
             "behavior_model": "skeptical_but_rational",
             "target_action": "book_intro_call",
-            "cares_about": ["control", "margin"],
-            "typical_objections": ["We already have a supplier."],
             "current_business_context": "The company needs a better first conversation process.",
-            "latent_pains": ["Discovery is too shallow."],
-            "buying_motivation": ["Reduce lost opportunities."],
-            "decision_criteria": ["credibility", "clarity"],
+            "business_facts": ["A new sales process is being reviewed.", "Owner is directly involved."],
+            "cares_about": ["control", "margin", "speed"],
+            "current_solution": "Excel + manual outreach tracking",
+            "alternative_solutions": [
+                "статус-кво: продолжать как сейчас",
+                "hire a sales ops person",
+                "buy a lightweight CRM",
+            ],
+            "information_gaps": [
+                "Thinks CRM implementation requires months.",
+                "Does not know about plug-and-play options.",
+            ],
+            "latent_pains": ["Discovery is too shallow.", "Follow-up is inconsistent."],
+            "buying_motivation": ["Reduce lost opportunities.", "Improve conversion."],
+            "decision_criteria": ["credibility", "clarity", "quick setup"],
             "hidden_constraints": ["The owner protects calendar time."],
-            "business_facts": ["A new sales process is being reviewed."],
+            "typical_objections": ["We already have a supplier.", "No time to change tools."],
             "proof_sensitivity": ["cases", "process"],
-            "call_scoring_criteria": ["role discovery"],
+            "call_scoring_criteria": ["role discovery", "pain identification", "next step clarity"],
             "communication_style": "short answers, asks for specifics",
             "initial_openness": 25,
             "starting_interest": 22,
@@ -102,10 +113,10 @@ def _generation_input(allowed_roles: list[str] | None = None) -> PersonaGenerati
 def test_generated_persona_business_rules_reject_non_decider() -> None:
     payload = _persona_payload()
     payload["persona"]["authority_level"] = "gatekeeper"  # type: ignore[index]
-    output = parse_persona_generation_response(payload)
 
-    with pytest.raises(PersonaGenerationBusinessValidationError):
-        validate_generated_persona(output, _generation_input())
+    # Pydantic now rejects invalid authority_level before business validation.
+    with pytest.raises(ValidationError):
+        parse_persona_generation_response(payload)
 
 
 def test_generated_persona_business_rules_reject_role_outside_allowed_roles() -> None:
@@ -115,14 +126,40 @@ def test_generated_persona_business_rules_reject_role_outside_allowed_roles() ->
         validate_generated_persona(output, _generation_input(allowed_roles=["cfo"]))
 
 
-@pytest.mark.parametrize("field", ["latent_pains", "typical_objections", "decision_criteria"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "business_facts",
+        "cares_about",
+        "alternative_solutions",
+        "information_gaps",
+        "latent_pains",
+        "typical_objections",
+        "decision_criteria",
+        "hidden_constraints",
+        "proof_sensitivity",
+        "call_scoring_criteria",
+    ],
+)
 def test_generated_persona_business_rules_reject_empty_required_lists(field: str) -> None:
     payload = _persona_payload()
     payload["persona"][field] = []  # type: ignore[index]
-    output = parse_persona_generation_response(payload)
 
-    with pytest.raises(PersonaGenerationBusinessValidationError):
-        validate_generated_persona(output, _generation_input(allowed_roles=["owner"]))
+    # Pydantic min-length validation catches these before business rules.
+    with pytest.raises(ValidationError):
+        parse_persona_generation_response(payload)
+
+
+def test_generated_persona_business_rules_reject_missing_status_quo() -> None:
+    payload = _persona_payload()
+    payload["persona"]["alternative_solutions"] = [  # type: ignore[index]
+        "hire a sales ops person",
+        "buy a lightweight CRM",
+    ]
+
+    # Pydantic field_validator catches missing status quo before business rules.
+    with pytest.raises(ValidationError):
+        parse_persona_generation_response(payload)
 
 
 def test_generated_persona_business_rules_accept_valid_persona() -> None:

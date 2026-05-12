@@ -5,6 +5,7 @@ import pytest
 from app.domain.errors import LLMProviderConfigurationError
 from app.domain.judgement_models import JudgeSessionInput, JudgeSessionOutput
 from app.domain.models import ClientState, PersonaProfile, Scenario, TurnEvaluation
+from tests.unit._persona_fixtures import valid_minimal_persona
 from app.infrastructure.config import Settings
 from app.infrastructure.judge_client import (
     FakeJudgeClient,
@@ -45,14 +46,9 @@ def _build_payload(*, heuristic: bool = True) -> JudgeSessionInput:
             success_condition="Earn a relevant next step.",
             failure_condition="Pitch too early.",
         ),
-        persona=PersonaProfile(
+        persona=valid_minimal_persona(
             id="persona-1",
             display_name="Owner",
-            role="owner",
-            industry="b2b",
-            company_size="30-100",
-            authority_level="final_decider",
-            behavior_model="skeptical_but_rational",
         ),
         final_client_state=ClientState(
             tone="interested",

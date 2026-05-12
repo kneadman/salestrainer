@@ -4,12 +4,12 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 ToneLiteral = Literal["cold", "skeptical", "neutral", "interested", "warm", "ready_next_step"]
 SessionStatus = Literal["active", "finished", "expired"]
-AuthorityLevel = Literal["final_decider", "influencer", "gatekeeper", "evaluator"]
+AuthorityLevel = Literal["final_decider"]
 BehaviorModel = Literal[
     "skeptical_but_rational",
     "dominant_and_direct",
@@ -23,51 +23,109 @@ BehaviorModel = Literal[
     "process_oriented",
     "friendly_but_distrustful",
 ]
+Role = Literal[
+    "owner",
+    "founder",
+    "ceo",
+    "general_director",
+    "managing_partner",
+    "commercial_director",
+    "cfo",
+    "chief_accountant",
+    "operations_director",
+    "sales_director",
+    "purchase_manager",
+]
 
 
 class PersonaProfile(BaseModel):
-    id: str
-    display_name: str = "Unknown B2B contact"
-    role: Literal[
-        "owner",
-        "founder",
-        "ceo",
-        "general_director",
-        "managing_partner",
-        "commercial_director",
-        "cfo",
-        "chief_accountant",
-        "operations_director",
-        "sales_director",
-        "purchase_manager",
-    ]
-    industry: str
-    company_size: str
-    authority_level: AuthorityLevel
+    """Universal B2B persona schema v3.1.
+
+    Strictly validated hidden profile used by the simulator.
+    Legacy accounting fields are rejected via ``extra="forbid"``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(..., min_length=1, max_length=120)
+    display_name: str = Field(..., min_length=1, max_length=300)
+    role: Role
+    industry: str = Field(..., min_length=1, max_length=120)
+    company_size: str = Field(..., min_length=1, max_length=80)
+    authority_level: AuthorityLevel = "final_decider"
     behavior_model: BehaviorModel
-    target_action: str = ""
-    current_accounting_model: str = "unknown"
-    legal_form: str = "unknown"
-    tax_system: str = "unknown"
-    accounting_software: str = "unknown"
-    accounting_software_mode: str = "unknown"
-    primary_docs_owner: str = "unknown"
-    cares_about: list[str] = Field(default_factory=list)
-    typical_objections: list[str] = Field(default_factory=list)
-    current_business_context: str = ""
-    latent_pains: list[str] = Field(default_factory=list)
-    buying_motivation: list[str] = Field(default_factory=list)
-    decision_criteria: list[str] = Field(default_factory=list)
-    hidden_constraints: list[str] = Field(default_factory=list)
-    business_facts: list[str] = Field(default_factory=list)
-    proof_sensitivity: list[str] = Field(default_factory=list)
-    call_scoring_criteria: list[str] = Field(default_factory=list)
-    communication_style: str = ""
-    initial_openness: int = Field(default=25, ge=0, le=100)
-    starting_interest: int = Field(default=25, ge=0, le=100)
-    price_sensitivity: int = Field(default=50, ge=0, le=100)
-    urgency: int = Field(default=20, ge=0, le=100)
-    trust_baseline: int = Field(default=20, ge=0, le=100)
+    target_action: str = Field(..., min_length=1, max_length=120)
+
+    current_business_context: str = Field(..., min_length=1, max_length=3000)
+    business_facts: list[str] = Field(..., min_length=2, max_length=5)
+    cares_about: list[str] = Field(..., min_length=3, max_length=6)
+
+    current_solution: str = Field(..., min_length=1, max_length=1000)
+    alternative_solutions: list[str] = Field(..., min_length=2, max_length=4)
+    information_gaps: list[str] = Field(..., min_length=2, max_length=4)
+
+    latent_pains: list[str] = Field(..., min_length=2, max_length=5)
+    buying_motivation: list[str] = Field(..., min_length=2, max_length=4)
+    decision_criteria: list[str] = Field(..., min_length=3, max_length=5)
+    hidden_constraints: list[str] = Field(..., min_length=1, max_length=3)
+    typical_objections: list[str] = Field(..., min_length=2, max_length=5)
+    proof_sensitivity: list[str] = Field(..., min_length=2, max_length=4)
+    call_scoring_criteria: list[str] = Field(..., min_length=3, max_length=6)
+    communication_style: str = Field(..., min_length=1, max_length=2000)
+
+    initial_openness: int = Field(..., ge=0, le=100)
+    starting_interest: int = Field(..., ge=0, le=100)
+    price_sensitivity: int = Field(..., ge=0, le=100)
+    urgency: int = Field(..., ge=0, le=100)
+    trust_baseline: int = Field(..., ge=0, le=100)
+
+    @field_validator(
+        "business_facts",
+        "cares_about",
+        "alternative_solutions",
+        "information_gaps",
+        "latent_pains",
+        "buying_motivation",
+        "decision_criteria",
+        "hidden_constraints",
+        "typical_objections",
+        "proof_sensitivity",
+        "call_scoring_criteria",
+    )
+    @classmethod
+    def string_lists_must_not_contain_blank_items(cls, value: list[str]) -> list[str]:
+        if any(not isinstance(item, str) or not item.strip() for item in value):
+            raise ValueError("List fields must contain only non-empty strings.")
+        return value
+
+    @field_validator("alternative_solutions")
+    @classmethod
+    def alternative_solutions_must_include_status_quo(cls, value: list[str]) -> list[str]:
+        normalized = " | ".join(item.lower() for item in value)
+        status_quo_markers = [
+            "статус-кво",
+            "ничего не менять",
+            "как сейчас",
+            "текущий процесс",
+            "оставить текущ",
+            "продолжать",
+            "продолжить",
+            "оставить всё",
+            "оставить все",
+            "без изменений",
+            "не менять",
+            "сохранить текущ",
+            "сохранить как есть",
+            "текущим подрядчиком",
+            "текущий подрядчик",
+            "текущим поставщиком",
+            "текущий поставщик",
+            "status quo",
+            "status-quo",
+        ]
+        if not any(marker in normalized for marker in status_quo_markers):
+            raise ValueError("alternative_solutions must include status quo.")
+        return value
 
 
 class ClientState(BaseModel):
@@ -158,14 +216,13 @@ class PersonaGenerationInput(BaseModel):
     difficulty_level: str | None = None
     randomization_seed: int | None = None
     constraints: dict[str, Any] = Field(default_factory=dict)
-    schema_version: int = 1
 
 
 class PersonaGenerationOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     persona: PersonaProfile
-    generation_notes: str = ""
+    generation_notes: str = Field(default="", max_length=2000)
     policy_coverage: list[str] = Field(default_factory=list)
     risk_flags: list[str] = Field(default_factory=list)
 
@@ -204,6 +261,18 @@ class TrainingSessionState(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_persona_in_session(cls, data: Any) -> Any:
+        """Normalize legacy persona payloads inside session JSON so old Redis records remain loadable."""
+        if not isinstance(data, dict):
+            return data
+        persona = data.get("persona")
+        if isinstance(persona, dict):
+            data = dict(data)
+            data["persona"] = normalize_legacy_persona_payload(persona)
+        return data
+
 
 class MessageSubmissionRecord(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=200)
@@ -221,3 +290,88 @@ class LLMTurnInput(BaseModel):
     conversation_summary: str
     recent_turns: list[dict[str, str]] = Field(default_factory=list)
     manager_message: str = Field(min_length=1)
+
+
+def _map_legacy_current_solution(persona: dict[str, Any]) -> str | None:
+    """Derive a human-readable current_solution from legacy bookkeeping fields."""
+    model = persona.get("current_accounting_model")
+    software = persona.get("accounting_software")
+    software_mode = persona.get("accounting_software_mode")
+    docs_owner = persona.get("primary_docs_owner")
+
+    if model in {"director_self", "owner_does_accounting"}:
+        return "Excel + ручной учёт собственником"
+    if model == "inhouse_accountant":
+        return "штатный бухгалтер"
+    if model in {"remote_accountant", "private_accountant"}:
+        return "частный или удалённый бухгалтер"
+    if model in {"outsourced", "outsourced_accounting"}:
+        return "текущий бухгалтерский аутсорсер"
+    if model == "mixed":
+        return "смешанная модель: часть процессов внутри, часть на подрядчике"
+    if model == "unknown":
+        return None
+
+    parts: list[str] = []
+    if isinstance(software, str) and software and software != "unknown":
+        parts.append(software)
+    if isinstance(software_mode, str) and software_mode and software_mode != "unknown":
+        parts.append(software_mode)
+    if isinstance(docs_owner, str) and docs_owner and docs_owner != "unknown":
+        parts.append(f"ответственный за процесс: {docs_owner}")
+
+    if parts:
+        return " + ".join(parts)
+
+    return None
+
+
+def normalize_legacy_persona_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map a legacy persona dict (pre-v3.1) to the universal v3.1 shape.
+
+    This is intentionally kept outside ``PersonaProfile`` so that the model
+    itself can reject unknown fields with ``extra="forbid"`` while runtime
+    session repositories can still load historical JSON from Redis/PostgreSQL.
+    """
+    legacy_keys = [
+        "current_accounting_model",
+        "legal_form",
+        "tax_system",
+        "accounting_software",
+        "accounting_software_mode",
+        "primary_docs_owner",
+    ]
+    if not any(key in raw for key in legacy_keys):
+        return raw
+
+    raw = raw.copy()
+
+    # Старые runtime-сессии могли содержать influencer/gatekeeper/evaluator.
+    # Новая схема v3.1 допускает только final_decider.
+    raw["authority_level"] = "final_decider"
+
+    if "current_solution" not in raw:
+        mapped = _map_legacy_current_solution(raw)
+        raw["current_solution"] = mapped or (
+            "legacy-персона: текущее решение не было сохранено в старой схеме"
+        )
+
+    raw.setdefault(
+        "alternative_solutions",
+        [
+            "статус-кво: продолжать как сейчас",
+            "обсудить альтернативный подход",
+        ],
+    )
+    raw.setdefault(
+        "information_gaps",
+        [
+            "legacy-персона: информационные пробелы не были сохранены в старой схеме",
+            "требует уточнения в диалоге",
+        ],
+    )
+
+    for key in legacy_keys:
+        raw.pop(key, None)
+
+    return raw

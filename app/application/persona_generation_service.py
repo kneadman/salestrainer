@@ -89,7 +89,6 @@ class PersonaGenerationService:
             difficulty_level=None,
             randomization_seed=None,
             constraints={},
-            schema_version=1,
         )
 
     def _build_client(

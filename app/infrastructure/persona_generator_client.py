@@ -96,7 +96,12 @@ class StructuredPersonaGeneratorClient:
         """Call the provider and validate its response as PersonaGenerationOutput."""
         last_error: Exception | None = None
         for attempt in range(self._max_retries + 1):
-            retry_instruction = "Return one JSON object only. No markdown. No commentary." if attempt > 0 else ""
+            retry_instruction = (
+                "Return one JSON object only. No markdown. No commentary. "
+                "Use PersonaGenerationOutput schema. "
+                "Do not include legacy accounting fields: current_accounting_model, legal_form, "
+                "tax_system, accounting_software, accounting_software_mode, primary_docs_owner."
+            ) if attempt > 0 else ""
             request_payload = self._build_request_payload(payload, retry_instruction)
             metadata = self._safe_request_metadata(attempt=attempt + 1, request_payload=request_payload)
             logger.info("persona_generator_request %s", metadata)
@@ -226,19 +231,70 @@ def validate_generated_persona(
 ) -> PersonaProfile:
     """Return a generated persona only after Pydantic and business-rule validation."""
     persona = output.persona
+
     if persona.authority_level != "final_decider":
         raise PersonaGenerationBusinessValidationError("Generated persona must be a final_decider.")
+
     if input_payload is not None:
-        if input_payload.allowed_roles and persona.role not in set(input_payload.allowed_roles):
+        allowed_roles = set(input_payload.allowed_roles or [])
+        if allowed_roles and persona.role not in allowed_roles:
             raise PersonaGenerationBusinessValidationError("Generated persona role is outside allowed_roles.")
-    if not persona.latent_pains:
-        raise PersonaGenerationBusinessValidationError("Generated persona must include latent_pains.")
-    if not persona.typical_objections:
-        raise PersonaGenerationBusinessValidationError("Generated persona must include typical_objections.")
-    if not persona.decision_criteria:
-        raise PersonaGenerationBusinessValidationError("Generated persona must include decision_criteria.")
+
     if not persona.current_business_context.strip():
         raise PersonaGenerationBusinessValidationError("Generated persona must include current_business_context.")
+
+    if not persona.current_solution.strip():
+        raise PersonaGenerationBusinessValidationError("Generated persona must include current_solution.")
+
+    if len(persona.alternative_solutions) < 2:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include at least two alternative_solutions.")
+
+    alternatives_joined = " | ".join(solution.lower() for solution in persona.alternative_solutions)
+    status_quo_markers = [
+        "статус-кво",
+        "ничего не менять",
+        "как сейчас",
+        "текущий процесс",
+        "оставить текущ",
+        "продолжать",
+        "status quo",
+        "status-quo",
+    ]
+    if not any(marker in alternatives_joined for marker in status_quo_markers):
+        raise PersonaGenerationBusinessValidationError(
+            "Generated persona alternative_solutions must include status quo."
+        )
+
+    if len(persona.information_gaps) < 2:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include information_gaps.")
+
+    if len(persona.latent_pains) < 2:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include latent_pains.")
+
+    if len(persona.typical_objections) < 2:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include typical_objections.")
+
+    if len(persona.decision_criteria) < 3:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include decision_criteria.")
+
+    if len(persona.hidden_constraints) < 1:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include hidden_constraints.")
+
+    if len(persona.business_facts) < 2:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include business_facts.")
+
+    if len(persona.cares_about) < 3:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include cares_about.")
+
+    if len(persona.proof_sensitivity) < 2:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include proof_sensitivity.")
+
+    if len(persona.call_scoring_criteria) < 3:
+        raise PersonaGenerationBusinessValidationError("Generated persona must include call_scoring_criteria.")
+
+    if not persona.communication_style.strip():
+        raise PersonaGenerationBusinessValidationError("Generated persona must include communication_style.")
+
     return persona
 
 
