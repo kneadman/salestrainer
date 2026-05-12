@@ -58,6 +58,20 @@ GENERIC_ALTERNATIVE_SOLUTIONS = [
     "сделать самописное решение",
 ]
 
+GENERIC_DISPLAY_NAMES_BY_ROLE = {
+    "owner": "Алексей Викторович, собственник B2B-компании",
+    "founder": "Марина Сергеевна, основатель компании",
+    "ceo": "Ирина Павловна, CEO B2B-компании",
+    "general_director": "Виктор Петрович, генеральный директор ООО «Вектор»",
+    "managing_partner": "Олег Андреевич, управляющий партнёр",
+    "commercial_director": "Наталья Игоревна, коммерческий директор",
+    "cfo": "Дмитрий Александрович, финансовый директор",
+    "chief_accountant": "Елена Викторовна, главный бухгалтер",
+    "operations_director": "Сергей Валентинович, операционный директор",
+    "sales_director": "Анна Михайловна, директор по продажам",
+    "purchase_manager": "Павел Николаевич, руководитель закупок",
+}
+
 GENERIC_INFORMATION_GAPS = [
     "Думает, что внедрение займёт значительно дольше, чем возможно при пилотном запуске.",
     "Не понимает, чем безопасный первый шаг отличается от полноценного внедрения.",
@@ -156,7 +170,7 @@ class UniversalFakePersonaGenerator:
 
         return PersonaProfile(
             id=f"generated_{scenario_id}_{role}",
-            display_name="Unknown B2B contact",
+            display_name=GENERIC_DISPLAY_NAMES_BY_ROLE.get(role, "B2B-контакт"),
             role=role,  # type: ignore[arg-type]
             industry=self._random.choice(GENERIC_INDUSTRIES),
             company_size=self._random.choice(GENERIC_COMPANY_SIZES),

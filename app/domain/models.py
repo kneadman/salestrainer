@@ -109,6 +109,17 @@ class PersonaProfile(BaseModel):
             "текущий процесс",
             "оставить текущ",
             "продолжать",
+            "продолжить",
+            "оставить всё",
+            "оставить все",
+            "без изменений",
+            "не менять",
+            "сохранить текущ",
+            "сохранить как есть",
+            "текущим подрядчиком",
+            "текущий подрядчик",
+            "текущим поставщиком",
+            "текущий поставщик",
             "status quo",
             "status-quo",
         ]
@@ -288,16 +299,18 @@ def _map_legacy_current_solution(persona: dict[str, Any]) -> str | None:
     software_mode = persona.get("accounting_software_mode")
     docs_owner = persona.get("primary_docs_owner")
 
-    if model == "director_self":
-        return "Excel + ручной учёт директором"
+    if model in {"director_self", "owner_does_accounting"}:
+        return "Excel + ручной учёт собственником"
     if model == "inhouse_accountant":
         return "штатный бухгалтер"
-    if model == "remote_accountant":
-        return "удалённый бухгалтер"
-    if model == "outsourced":
-        return "текущий аутсорсер"
+    if model in {"remote_accountant", "private_accountant"}:
+        return "частный или удалённый бухгалтер"
+    if model in {"outsourced", "outsourced_accounting"}:
+        return "текущий бухгалтерский аутсорсер"
     if model == "mixed":
         return "смешанная модель: часть процессов внутри, часть на подрядчике"
+    if model == "unknown":
+        return None
 
     parts: list[str] = []
     if isinstance(software, str) and software and software != "unknown":
@@ -332,6 +345,10 @@ def normalize_legacy_persona_payload(raw: dict[str, Any]) -> dict[str, Any]:
         return raw
 
     raw = raw.copy()
+
+    # Старые runtime-сессии могли содержать influencer/gatekeeper/evaluator.
+    # Новая схема v3.1 допускает только final_decider.
+    raw["authority_level"] = "final_decider"
 
     if "current_solution" not in raw:
         mapped = _map_legacy_current_solution(raw)

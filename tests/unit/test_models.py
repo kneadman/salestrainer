@@ -87,3 +87,141 @@ def test_training_session_state_contains_required_fields() -> None:
     )
     assert session.turn_count == 0
     assert session.turns == []
+
+
+def test_training_session_state_normalizes_legacy_persona_payload() -> None:
+    now = datetime.now(tz=UTC)
+    payload = {
+        "session_id": uuid4(),
+        "scenario_id": "first_contact_discovery",
+        "status": "active",
+        "persona": {
+            "id": "legacy_owner",
+            "display_name": "Legacy Owner",
+            "role": "owner",
+            "industry": "services",
+            "company_size": "10-30",
+            "authority_level": "final_decider",
+            "behavior_model": "skeptical_but_rational",
+            "target_action": "book_meeting",
+            "current_business_context": "Legacy context.",
+            "business_facts": ["Fact 1", "Fact 2"],
+            "cares_about": ["control", "risk", "time"],
+            "current_accounting_model": "owner_does_accounting",
+            "legal_form": "ООО",
+            "tax_system": "УСН",
+            "accounting_software": "Excel",
+            "accounting_software_mode": "local",
+            "primary_docs_owner": "owner",
+            "latent_pains": ["Pain 1", "Pain 2"],
+            "buying_motivation": ["Motivation 1", "Motivation 2"],
+            "decision_criteria": ["Criteria 1", "Criteria 2", "Criteria 3"],
+            "hidden_constraints": ["Constraint 1"],
+            "typical_objections": ["Objection 1", "Objection 2"],
+            "proof_sensitivity": ["Proof 1", "Proof 2"],
+            "call_scoring_criteria": ["Score 1", "Score 2", "Score 3"],
+            "communication_style": "Direct and cautious.",
+            "initial_openness": 25,
+            "starting_interest": 25,
+            "price_sensitivity": 50,
+            "urgency": 20,
+            "trust_baseline": 20,
+        },
+        "interest_score": 25,
+        "stage": "first_contact",
+        "client_state": {
+            "tone": "cold",
+            "trust": 20,
+            "irritation": 10,
+            "urgency": 20,
+            "price_sensitivity": 50,
+        },
+        "summary": "started",
+        "public_brief": "brief",
+        "turns": [],
+        "turn_evaluations": [],
+        "recent_turns": [],
+        "turn_count": 0,
+        "state_version": 1,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    session = TrainingSessionState.model_validate(payload)
+
+    assert session.persona.authority_level == "final_decider"
+    assert session.persona.current_solution == "Excel + ручной учёт собственником"
+    assert session.persona.alternative_solutions
+    assert session.persona.information_gaps
+
+    persona_dump = session.persona.model_dump()
+    assert "current_accounting_model" not in persona_dump
+    assert "legal_form" not in persona_dump
+    assert "tax_system" not in persona_dump
+    assert "accounting_software" not in persona_dump
+    assert "accounting_software_mode" not in persona_dump
+    assert "primary_docs_owner" not in persona_dump
+
+
+def test_training_session_state_normalizes_legacy_non_decider_authority() -> None:
+    now = datetime.now(tz=UTC)
+    payload = {
+        "session_id": uuid4(),
+        "scenario_id": "first_contact_discovery",
+        "status": "active",
+        "persona": {
+            "id": "legacy_gatekeeper",
+            "display_name": "Legacy Gatekeeper",
+            "role": "owner",
+            "industry": "services",
+            "company_size": "10-30",
+            "authority_level": "gatekeeper",
+            "behavior_model": "skeptical_but_rational",
+            "target_action": "book_meeting",
+            "current_business_context": "Legacy context.",
+            "business_facts": ["Fact 1", "Fact 2"],
+            "cares_about": ["control", "risk", "time"],
+            "current_accounting_model": "outsourced_accounting",
+            "legal_form": "ООО",
+            "tax_system": "УСН",
+            "accounting_software": "1С",
+            "accounting_software_mode": "cloud",
+            "primary_docs_owner": "accountant",
+            "latent_pains": ["Pain 1", "Pain 2"],
+            "buying_motivation": ["Motivation 1", "Motivation 2"],
+            "decision_criteria": ["Criteria 1", "Criteria 2", "Criteria 3"],
+            "hidden_constraints": ["Constraint 1"],
+            "typical_objections": ["Objection 1", "Objection 2"],
+            "proof_sensitivity": ["Proof 1", "Proof 2"],
+            "call_scoring_criteria": ["Score 1", "Score 2", "Score 3"],
+            "communication_style": "Direct and cautious.",
+            "initial_openness": 25,
+            "starting_interest": 25,
+            "price_sensitivity": 50,
+            "urgency": 20,
+            "trust_baseline": 20,
+        },
+        "interest_score": 25,
+        "stage": "first_contact",
+        "client_state": {
+            "tone": "cold",
+            "trust": 20,
+            "irritation": 10,
+            "urgency": 20,
+            "price_sensitivity": 50,
+        },
+        "summary": "started",
+        "public_brief": "brief",
+        "turns": [],
+        "turn_evaluations": [],
+        "recent_turns": [],
+        "turn_count": 0,
+        "state_version": 1,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    session = TrainingSessionState.model_validate(payload)
+
+    assert session.persona.authority_level == "final_decider"
+    assert session.persona.current_solution == "текущий бухгалтерский аутсорсер"
