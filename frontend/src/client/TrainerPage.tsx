@@ -7,16 +7,23 @@ import { TrainerContextPanel } from "../components/TrainerContextPanel";
 import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
+import {
+  clearStoredTrainerSessionId,
+  getStoredTrainerSessionId,
+  storeTrainerSessionId,
+} from "./trainerSessionStorage";
 import { getClientErrorMessage } from "./utils";
-
-const STORAGE_KEY = "salestrainer.currentSessionId";
 
 type PendingMessageSubmission = {
   idempotencyKey: string;
   managerMessage: string;
 };
 
-export function TrainerPage() {
+type TrainerPageProps = {
+  userId: string;
+};
+
+export function TrainerPage({ userId }: TrainerPageProps) {
   /** Keep the runtime trainer flow inside the client cabinet and restore the last session when possible. */
   const [session, setSession] = useState<SessionPublicDTO | null>(null);
   const [turns, setTurns] = useState<TurnPublicDTO[]>([]);
@@ -32,7 +39,7 @@ export function TrainerPage() {
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity across page reloads. */
     const restore = async () => {
-      const sessionId = localStorage.getItem(STORAGE_KEY);
+      const sessionId = getStoredTrainerSessionId(userId);
       if (!sessionId) {
         setBusyAction(null);
         return;
@@ -55,7 +62,7 @@ export function TrainerPage() {
         }
       } catch (restoreError) {
         if (restoreError instanceof ApiError && restoreError.code === "not_found") {
-          localStorage.removeItem(STORAGE_KEY);
+          clearStoredTrainerSessionId(userId);
         } else {
           setError(getClientErrorMessage(restoreError));
         }
@@ -65,7 +72,7 @@ export function TrainerPage() {
     };
 
     void restore();
-  }, []);
+  }, [userId]);
 
   const loading = busyAction !== null;
   const isSending = busyAction === "send";
@@ -89,11 +96,11 @@ export function TrainerPage() {
     try {
       const response = await createSession();
       setSession(response.session);
-      localStorage.setItem(STORAGE_KEY, response.session.session_id);
+      storeTrainerSessionId(userId, response.session.session_id);
     } catch (startError) {
       setError(getClientErrorMessage(startError));
       setSession(null);
-      localStorage.removeItem(STORAGE_KEY);
+      clearStoredTrainerSessionId(userId);
     } finally {
       setBusyAction(null);
     }

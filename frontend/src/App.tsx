@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ApiError, getMe, logout as logoutRequest } from "./api";
 import { AdminApp } from "./admin/AdminApp";
 import { ClientApp } from "./client/ClientApp";
+import { clearLegacyTrainerSessionId, clearTrainerSessionRestoreState } from "./client/trainerSessionStorage";
 import { LoginPage } from "./components/LoginPage";
 import { DemoPage } from "./demo/DemoPage";
 import type { AuthUser } from "./types";
@@ -101,6 +102,7 @@ export default function App() {
 
   const handleAuthenticated = (authenticatedUser: AuthUser) => {
     /** Store the authenticated user and honor protected-route redirects after login. */
+    clearLegacyTrainerSessionId();
     setUser(authenticatedUser);
     setAuthError(null);
     const storedRedirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
@@ -119,6 +121,7 @@ export default function App() {
     } catch {
       // A failed logout request should not keep stale authenticated UI around.
     } finally {
+      clearTrainerSessionRestoreState(user?.id);
       setUser(null);
       setLogoutBusy(false);
       navigate("/login", true);
