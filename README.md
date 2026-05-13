@@ -652,10 +652,10 @@ For production client API sessions, prefer configuring `persona_generation_conte
 ## MVP limitations
 
 - A live Yandex cloud smoke test is not part of this iteration.
-- Real Yandex/OpenAI API is not connected to the working flow
-- Yandex adapter now follows the AI Studio `OpenAI(...).responses.create(...)` contract and is covered by mocked request/response tests, but is still not verified here against a live cloud account
+- Real Yandex-compatible runtime is configured globally through `.env`; organization-level provider configs are not used by the MVP training flow.
+- Yandex adapter follows the AI Studio `OpenAI(...).responses.create(...)` contract and is covered by mocked request/response tests, but is still not verified here against a live cloud account.
 - The local `client_simulator.md` file is not injected into Yandex runtime requests; the remote dialogue agent remains the runtime prompt source
-- Legacy `llm_provider_configs` still exist in the backend, but the primary MVP flow does not use them
+- Legacy `llm_provider_configs` still exist in the backend as future-enterprise groundwork, but the primary MVP flow and primary admin UI do not use them.
 - CLI still uses a simple terminal flow
 - Reports and evaluator scores are rule-based, not judge-model based
 - Session resume across process restarts requires Redis; in-memory mode is process-local and does not survive restarts
