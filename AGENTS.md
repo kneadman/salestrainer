@@ -714,6 +714,7 @@ Maintain this backlog after every iteration.
 - [x] Client-facing history and team-history session DTOs omit internal ownership/config identifiers (`user_id`, `client_account_id`, `training_config_id`); internal-admin history DTOs keep the fuller administrative shape.
 - [x] Client cabinet navigation temporarily hides the Balance/usage section while preserving the route/component code as future billing/limits groundwork.
 - [x] Client/admin UI labels now centralize role/status/scenario/provider/audit/usage naming and avoid raw technical keys in normal user-facing surfaces.
+- [x] Frontend shared API client converts backend validation/auth/conflict/rate-limit/server errors into product-safe Russian messages instead of showing raw backend `message`/`details`.
 - [x] Client analytics `/app/analytics` now uses a full-width bento layer with real backend-provided 7-day dynamics, while `/app/history/{session_id}` no longer renders the separate summary/public-brief block and shows started-at date/time in the H1; 7-day session metrics are computed separately from report joins so training reports cannot duplicate session counts.
 - [x] Internal Admin now has a dedicated permalink user-analytics screen at `/admin/organizations/{organization_id}/users/{user_id}/analytics`, backed by an organization-scoped `/api/internal/organizations/{organization_id}/users/{user_id}/analytics` endpoint that reuses client analytics logic and returns recent public-safe history.
 - [x] Returning from internal-admin user analytics now preserves organization context via `/admin/organizations/{organization_id}?tab=users`, so the back action reopens the Users tab instead of the organization overview.
@@ -728,12 +729,12 @@ Maintain this backlog after every iteration.
 
 ## 10. Current state
 
-Last updated: 2026-05-12 after persona schema v3.1 migration.
+Last updated: 2026-05-13 after frontend API error normalization.
 
 Observed in repository state:
 
 - Repository: `kneadman/salestrainer`, default branch `main`.
-- Agent-facing documentation pack exists under `docs/agent-reference/`; `.gitignore` no longer excludes it so it can be tracked in version control.
+- Agent-facing documentation pack exists under `docs/agent-reference/`, but the current `.gitignore` still excludes `/docs/agent-reference/`; changes there are local reference updates unless the ignore policy is changed or files are force-added deliberately.
 - README describes a CLI/API MVP with Redis runtime sessions, PostgreSQL identity/access/history, Alembic, React/Vite frontend, Docker stack, and environment-controlled LLM/STT behavior.
 - Frontend now serves the shared logo as a public Vite asset from `frontend/public/logo.svg`; visible brand marks are wired into the landing, client cabinet, internal admin sidebar, and favicon.
 - Root `README.md` now points future agents to `docs/agent-reference/README.md` as the first documentation entry point.
@@ -809,6 +810,7 @@ Observed in repository state:
 - Frontend `/app/analytics` now renders a full-width bento grid with all-time values plus real `trends_7d` context; weakest-skill and skill-score summary panels are hidden from the client view without changing the backend DTO.
 - Frontend `/app/history/{session_id}` no longer renders a separate summary/public-brief card; the detail H1 now uses formatted `started_at` date/time instead of a short technical session id.
 - Client-facing `/api/history/*` and `/api/team/users/{user_id}/history/sessions` use client-safe history session DTOs that do not expose `user_id`, `client_account_id`, or `training_config_id`; internal admin history endpoints still expose the fuller admin DTO where needed.
+- Frontend shared API client now maps backend error status/code values to product-safe Russian messages, while preserving `ApiError.status` and `ApiError.code` for route/form logic.
 - Frontend structured report guard now rejects partial/legacy payloads unless `overall_grade`, `bento_blocks[*].severity`, `skill_scores[*].severity`, and `recommendations` pass minimal runtime checks, so the trainer/admin UIs fall back cleanly instead of crashing inside bento/report lists.
 - Frontend report label mapping in `frontend/src/components/reportPayload.ts` must stay as readable UTF-8 Russian copy; regression tests now pin the exact visible strings for severity and grade labels to prevent mojibake from reaching the bento report UI.
 - Voice input MVP adds authenticated `/api/speech/transcribe` multipart upload with CSRF protection, bounded upload validation, temporary-file cleanup, light text normalization, always-registered controlled error handling when STT is disabled, configurable fake/`whisper.cpp` STT wiring, `ffmpeg` WAV preprocessing before `whisper.cpp`, and a local concurrency limiter with queue timeout plus per-user active-or-pending lock; the backend Docker image now bundles `whisper-cli`, the default `ggml-base.bin` model, and the required `whisper.cpp` shared libraries with an `ldd` sanity check during image build.
@@ -870,6 +872,7 @@ Latest known task state:
 - 2026-05-09: Internal-admin organization detail routing rule added: preserve tab context in the URL with `?tab=...` for shareable deep links and for return actions from nested admin pages; user-analytics back navigation should reopen the organization Users tab.
 - 2026-05-09: Internal-admin user analytics rule added: organization user analytics should live on a dedicated permalink route `/admin/organizations/{organization_id}/users/{user_id}/analytics`, backed by `/api/internal/*`; the backend must verify the user belongs to the organization and return `404` on mismatch instead of revealing cross-organization ids.
 - 2026-05-13: Client history DTO minimization rule added: normal client history and team-history responses must not expose ownership/config identifiers (`user_id`, `client_account_id`, `training_config_id`); keep those identifiers limited to internal-admin history/analytics surfaces.
+- 2026-05-13: Frontend API error-copy rule added: normal browser UI must show product-safe messages derived from backend status/code and must not render raw backend validation details, CSRF wording, provider/debug text, or other internal error strings.
 - 2026-05-09: Client analytics aggregation hardening rule added: for `/api/client/analytics/me` 7-day trends, session counts/rates/averages must be derived from `TrainingSessionRecord` without joining report rows; judgement metrics may join reports but should defensively deduplicate by `session_id`.
 - 2026-05-08: Client analytics rule added: `/api/client/analytics/me` should keep stable all-time metrics but must provide real backend-calculated `trends_7d` for client-facing dynamics; `/app/analytics` must not fabricate period deltas on the frontend.
 - 2026-05-08: Client history detail rule updated: `/app/history/{session_id}` should not render a separate summary/public-brief surface, and the main H1 should use formatted started-at date/time instead of a truncated technical session id.
