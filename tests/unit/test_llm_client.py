@@ -187,6 +187,21 @@ def test_llm_client_exports_single_active_fake_client() -> None:
     assert FakeLLMClient is ActiveFakeLLMClient
 
 
+def test_fake_llm_client_discovers_current_process_from_russian_accounting_question() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Как сейчас ведёте бухгалтерию и где теряется процесс?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    discovered_process = response.state_patch.add_discovered_current_process
+    assert discovered_process
+    assert any(
+        "Owner wants more control" in item or "Текущее решение" in item
+        for item in discovered_process
+    )
+
+
 def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None:
     settings = Settings(
         llm_backend="yandex_compatible",
