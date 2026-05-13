@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { auditActionLabel, auditEntityLabel, metricNameLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
+import { auditActionLabel, auditEntityLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
 import {
   assignTrainingConfig,
   createTrainingConfig,
@@ -32,7 +32,7 @@ import type {
   UserDTO,
   UserTrainingConfigAssignmentDTO,
 } from "./types";
-import { compactJson, formatDate, getErrorMessage, statusLabel } from "./utils";
+import { auditPayloadSummary, formatDate, getErrorMessage, statusLabel } from "./utils";
 
 type OrganizationDetailPageProps = {
   organizationId: string;
@@ -547,21 +547,42 @@ function UsageSection({ usage }: { usage: UsageSummaryDTO | null }) {
         <StatCard label="Средний интерес" value={usage.avg_final_interest_score ?? "—"} />
         <StatCard label="Среднее число ходов" value={usage.avg_turn_count ?? "—"} />
         <StatCard label="События использования" value={usage.usage_events_count} />
+        <StatCard label="Настроек с тренировками" value={Object.keys(usage.sessions_by_training_config).length} />
       </div>
-      <details className="admin-technical-details">
-        <summary>Показать технические данные</summary>
-        <pre className="admin-json-block">{compactJson({
-          [metricNameLabel("sessions_by_status")]: usage.sessions_by_status,
-          [metricNameLabel("sessions_by_scenario")]: usage.sessions_by_scenario,
-          [metricNameLabel("sessions_by_training_config")]: usage.sessions_by_training_config,
-        })}</pre>
-      </details>
+      <div className="admin-usage-breakdowns">
+        <UsageBreakdown title="По статусам" values={usage.sessions_by_status} labelFormatter={entityStatusLabel} />
+        <UsageBreakdown title="По сценариям" values={usage.sessions_by_scenario} labelFormatter={scenarioLabel} />
+      </div>
     </section>
   );
 }
 
+function UsageBreakdown({ title, values, labelFormatter }: { title: string; values: Record<string, number>; labelFormatter: (key: string) => string }) {
+  /** Render aggregate usage values as readable rows instead of raw JSON maps. */
+  const entries = Object.entries(values);
+  if (entries.length === 0) {
+    return null;
+  }
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-table">
+        <caption>{title}</caption>
+        <thead><tr><th>Группа</th><th>Тренировки</th></tr></thead>
+        <tbody>
+          {entries.map(([key, value]) => (
+            <tr key={key}>
+              <td>{labelFormatter(key)}</td>
+              <td>{value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function AuditSection({ audit }: { audit: AuditLogDTO[] }) {
-  /** Render organization-scoped audit events with compact JSON payloads. */
+  /** Render organization-scoped audit events with readable payload summaries. */
   if (audit.length === 0) {
     return <EmptyState title="Событий аудита нет" />;
   }
@@ -570,7 +591,7 @@ function AuditSection({ audit }: { audit: AuditLogDTO[] }) {
       <div className="admin-panel__header"><h2>Аудит</h2></div>
       <div className="admin-table-wrap">
         <table className="admin-table">
-          <thead><tr><th>Время</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead>
+          <thead><tr><th>Время</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Детали</th></tr></thead>
           <tbody>
             {audit.map((event) => (
               <tr key={event.id}>
@@ -578,12 +599,7 @@ function AuditSection({ audit }: { audit: AuditLogDTO[] }) {
                 <td>{auditActionLabel(event.action)}</td>
                 <td>{auditEntityLabel(event.entity_type)}</td>
                 <td>{event.actor_user_id ? "Администратор" : "Система"}</td>
-                <td>
-                  <details className="admin-technical-details">
-                    <summary>Показать</summary>
-                    <pre className="admin-json-cell">{compactJson({ id: event.actor_user_id, payload: event.payload })}</pre>
-                  </details>
-                </td>
+                <td>{auditPayloadSummary(event.payload)}</td>
               </tr>
             ))}
           </tbody>
