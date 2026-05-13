@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.history.schemas import HistorySessionSummaryDTO, UsageSummaryDTO
+from app.history.schemas import ClientHistorySessionSummaryDTO, UsageSummaryDTO
 
 
 class MetricTrendDTO(BaseModel):
@@ -62,7 +62,7 @@ class TeamUserDTO(BaseModel):
 class TeamUserDetailDTO(BaseModel):
     user: TeamUserDTO
     analytics: ClientUserAnalyticsDTO
-    history: list[HistorySessionSummaryDTO]
+    history: list[ClientHistorySessionSummaryDTO]
 
 
 class TeamUsageSummaryDTO(UsageSummaryDTO):

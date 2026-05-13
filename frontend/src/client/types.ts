@@ -60,10 +60,7 @@ export type ClientUserAnalyticsDTO = {
 
 export type HistorySessionSummaryDTO = {
   session_id: string;
-  user_id: string;
   user_email: string;
-  client_account_id: string;
-  training_config_id: string | null;
   scenario_id: string;
   status: string;
   started_at: string;

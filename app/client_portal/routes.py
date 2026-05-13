@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.client_portal.schemas import ClientUserAnalyticsDTO, TeamUsageSummaryDTO, TeamUserDTO, TeamUserDetailDTO
 from app.client_portal.service import ClientPortalAccessError, ClientPortalNotFoundError, ClientPortalService
 from app.history.repository import SessionListFilters
-from app.history.schemas import HistorySessionSummaryDTO
+from app.history.schemas import ClientHistorySessionSummaryDTO
 from app.identity.dependencies import require_current_user
 from app.identity.service import CurrentSession
 from app.infrastructure.db import get_db_session
@@ -63,7 +63,7 @@ def get_team_usage_summary(
         _handle_client_portal_error(error)
 
 
-@router.get("/team/users/{user_id}/history/sessions", response_model=list[HistorySessionSummaryDTO])
+@router.get("/team/users/{user_id}/history/sessions", response_model=list[ClientHistorySessionSummaryDTO])
 def list_team_user_history(
     user_id: UUID,
     status: str | None = None,
@@ -73,7 +73,7 @@ def list_team_user_history(
     offset: int = Query(default=0, ge=0),
     service: ClientPortalService = Depends(get_client_portal_service),
     current_session: CurrentSession = Depends(require_current_user),
-) -> list[HistorySessionSummaryDTO]:
+) -> list[ClientHistorySessionSummaryDTO]:
     """Return one same-organization user's history for client leads."""
     try:
         return service.list_team_user_history(

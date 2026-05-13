@@ -60,14 +60,11 @@ function makeDetail(
   } = {},
 ): HistorySessionDetailDTO {
   return {
-    session: {
-      session_id: "session-123456",
-      user_id: "user-1",
-      user_email: "manager@example.com",
-      client_account_id: "account-1",
-      training_config_id: "config-1",
-      scenario_id: "generic_b2b_first_contact",
-      status: "finished",
+      session: {
+        session_id: "session-123456",
+        user_email: "manager@example.com",
+        scenario_id: "generic_b2b_first_contact",
+        status: "finished",
       started_at: "2026-05-08T19:23:00Z",
       finished_at: "2026-05-08T19:53:00Z",
       last_activity_at: "2026-05-08T19:53:00Z",

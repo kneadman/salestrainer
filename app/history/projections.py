@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.history.models import TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord
-from app.history.schemas import HistoryReportDTO, HistorySessionSummaryDTO, HistoryTurnDTO
+from app.history.schemas import ClientHistorySessionSummaryDTO, HistoryReportDTO, HistorySessionSummaryDTO, HistoryTurnDTO
 
 
 def session_summary_dto(record: TrainingSessionRecord, *, user_email: str) -> HistorySessionSummaryDTO:
@@ -12,6 +12,23 @@ def session_summary_dto(record: TrainingSessionRecord, *, user_email: str) -> Hi
         user_email=user_email,
         client_account_id=record.client_account_id,
         training_config_id=record.training_config_id,
+        scenario_id=record.scenario_id,
+        status=record.status,
+        started_at=record.started_at,
+        finished_at=record.finished_at,
+        last_activity_at=record.last_activity_at,
+        turn_count=record.turn_count,
+        final_interest_score=record.final_interest_score,
+        final_stage=record.final_stage,
+        summary=record.summary,
+    )
+
+
+def client_session_summary_dto(record: TrainingSessionRecord, *, user_email: str) -> ClientHistorySessionSummaryDTO:
+    """Project a persistent session record without tenant/config ownership identifiers."""
+    return ClientHistorySessionSummaryDTO(
+        session_id=record.id,
+        user_email=user_email,
         scenario_id=record.scenario_id,
         status=record.status,
         started_at=record.started_at,
