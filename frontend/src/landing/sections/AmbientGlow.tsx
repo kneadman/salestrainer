@@ -37,6 +37,22 @@ function hexToVec3(hex: string): THREE.Vector3 {
   return new THREE.Vector3(c.r, c.g, c.b);
 }
 
+function canUseWebGL(canvas: HTMLCanvasElement): boolean {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  if (userAgent.includes('jsdom')) {
+    return false;
+  }
+  if (!('WebGLRenderingContext' in window)) {
+    return false;
+  }
+  try {
+    const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+    return Boolean(context);
+  } catch {
+    return false;
+  }
+}
+
 const AmbientGlow: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -44,6 +60,7 @@ const AmbientGlow: React.FC = () => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (!canUseWebGL(canvas)) return;
 
     // Check mobile
     const isMobile = window.innerWidth < 768;

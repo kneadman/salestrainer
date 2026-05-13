@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { ApiError, getMe, logout as logoutRequest } from "./api";
 import { AdminApp } from "./admin/AdminApp";
 import { ClientApp } from "./client/ClientApp";
-import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
 import { DemoPage } from "./demo/DemoPage";
 import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
+const LandingPage = lazy(() => import("./components/LandingPage").then((module) => ({ default: module.LandingPage })));
 
 function getErrorMessage(error: unknown): string {
   /** Normalize app-level API errors for display. */
@@ -147,7 +147,11 @@ export default function App() {
   }
 
   if (path === "/") {
-    return <LandingPage authenticated={Boolean(user)} />;
+    return (
+      <Suspense fallback={<div className="app-shell">Загрузка...</div>}>
+        <LandingPage authenticated={Boolean(user)} />
+      </Suspense>
+    );
   }
 
   if (path === "/login" || !user) {
