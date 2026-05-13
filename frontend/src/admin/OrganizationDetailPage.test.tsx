@@ -207,6 +207,6 @@ describe("OrganizationDetailPage training configs", () => {
     expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
     expect(screen.getByText("Первичный контакт и разведка")).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "ID сессии" })).not.toBeInTheDocument();
-    expect(screen.queryByText("session-")).not.toBeInTheDocument();
+    expect(screen.queryByText(/session-/)).not.toBeInTheDocument();
   });
 });

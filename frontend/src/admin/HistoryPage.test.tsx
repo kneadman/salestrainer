@@ -79,7 +79,7 @@ describe("HistoryPage", () => {
     expect(screen.getByRole("columnheader", { name: "Начало" })).toBeInTheDocument();
     expect(screen.getByText("manager@example.com")).toBeInTheDocument();
     expect(screen.getAllByText("Первичный контакт и разведка").length).toBeGreaterThan(0);
-    expect(screen.queryByText("session-")).not.toBeInTheDocument();
+    expect(screen.queryByText(/session-/)).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue("first_contact_discovery")).not.toBeInTheDocument();
   });
 

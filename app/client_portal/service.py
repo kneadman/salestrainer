@@ -53,6 +53,7 @@ class ClientPortalService:
         """Return same-organization users for a client lead."""
         self._require_client_lead(requester)
         users = self._list_users_for_account(requester.client_account_id)
+        # TODO: This performs per-user analytics and judgement aggregation; replace with bulk aggregation for larger teams.
         return [self._team_user_dto(user) for user in users]
 
     def get_team_usage_summary(self, *, requester: User) -> TeamUsageSummaryDTO:
