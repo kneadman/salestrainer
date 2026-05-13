@@ -48,6 +48,29 @@ export function providerLabel(value: string | null | undefined): string {
   return value ? labels[value] ?? "Другой провайдер" : "Не указано";
 }
 
+export function stageLabel(value: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    first_contact: "Первичный контакт",
+    initial_contact: "Первичный контакт",
+    role_discovery: "Выявление роли",
+    role_qualification: "Выявление роли",
+    need_discovery: "Выявление потребностей",
+    discovery: "Выявление потребностей",
+    qualification: "Выявление потребностей",
+    value_clarification: "Уточнение ценности",
+    value_discussion: "Уточнение ценности",
+    objection_handling: "Работа с возражениями",
+    trust_building: "Укрепление доверия",
+    next_step_negotiation: "Согласование следующего шага",
+    next_step: "Согласование следующего шага",
+    finished_success: "Успешно завершена",
+    closed_won: "Успешно завершена",
+    finished_failed: "Завершена без результата",
+    closed_lost: "Завершена без результата",
+  };
+  return value ? labels[value] ?? "Другой этап" : "Не указан";
+}
+
 export function metricNameLabel(key: string): string {
   const labels: Record<string, string> = {
     final_interest_score: "Итоговый интерес",
@@ -75,6 +98,11 @@ export function auditActionLabel(action: string | null | undefined): string {
     user_disabled: "Пользователь отключён",
     user_enabled: "Пользователь включён",
     password_reset: "Пароль сброшен",
+    password_changed: "Пароль изменён",
+    internal_admin_bootstrapped: "Администратор платформы создан",
+    config_created: "Настройка тренировки создана",
+    config_updated: "Настройка тренировки обновлена",
+    config_assigned: "Настройка назначена",
     training_config_created: "Настройка тренировки создана",
     training_config_updated: "Настройка тренировки обновлена",
     training_config_disabled: "Настройка тренировки отключена",

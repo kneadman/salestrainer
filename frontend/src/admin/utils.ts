@@ -81,9 +81,27 @@ export function stringifyJson(value: JsonObject | null | undefined): string {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
-export function compactJson(value: JsonObject): string {
-  /** Render compact JSON for audit/history payload cells. */
-  return JSON.stringify(value, null, 2);
+export function auditPayloadSummary(value: JsonObject | null | undefined): string {
+  /** Build a human-readable audit payload summary without exposing raw ids or JSON. */
+  if (!value) {
+    return "Без дополнительных данных";
+  }
+
+  const parts: string[] = [];
+  if (typeof value.email === "string" && value.email.trim()) {
+    parts.push(`Пользователь: ${value.email}`);
+  }
+  if (typeof value.name === "string" && value.name.trim()) {
+    parts.push(`Настройка: ${value.name}`);
+  }
+  if (typeof value.client_slug === "string" && value.client_slug.trim()) {
+    parts.push(`Организация: ${value.client_slug}`);
+  }
+  if (typeof value.default === "boolean") {
+    parts.push(value.default ? "Назначена по умолчанию" : "Назначена как дополнительная");
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : "Без дополнительных данных";
 }
 
 export function statusLabel(active: boolean): string {

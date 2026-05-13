@@ -208,6 +208,7 @@ def test_client_lead_can_read_same_org_team_users_and_usage_summary() -> None:
 
     users_response = client.get("/api/team/users")
     summary_response = client.get("/api/team/usage-summary")
+    history_response = client.get(f"/api/team/users/{users['manager@example.com'].id}/history/sessions")
 
     assert users_response.status_code == 200
     assert {user["email"] for user in users_response.json()} == {"lead@example.com", "manager@example.com"}
@@ -218,6 +219,11 @@ def test_client_lead_can_read_same_org_team_users_and_usage_summary() -> None:
     assert summary_response.json()["total_sessions"] == 1
     assert summary_response.json()["finished_sessions"] == 1
     assert summary_response.json()["users"]
+    assert history_response.status_code == 200
+    assert history_response.json()[0]["user_email"] == "manager@example.com"
+    assert "user_id" not in history_response.json()[0]
+    assert "client_account_id" not in history_response.json()[0]
+    assert "training_config_id" not in history_response.json()[0]
     db_session.close()
 
 

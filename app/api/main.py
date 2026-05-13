@@ -10,6 +10,7 @@ from app.api.dependencies import ServiceContainer
 from app.application.judgement_service import JudgementService
 from app.api.routes import router
 from app.api.speech_routes import build_speech_router
+from app.api.speech_rate_limit import SpeechRateLimiter, build_speech_rate_limiter
 from app.api.schemas import ErrorBody, ErrorResponse
 from app.application.report_service import ReportService
 from app.application.session_service import TrainingSessionService
@@ -105,6 +106,7 @@ def create_app(
     audio_duration_probe: AudioDurationProbe | None = None,
     audio_converter: AudioConverter | None = None,
     lead_rate_limiter: LeadRateLimiter | None = None,
+    speech_rate_limiter: SpeechRateLimiter | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     setup_logging(resolved_settings.log_level)
@@ -191,6 +193,7 @@ def create_app(
     app.state.settings = resolved_settings
     app.state.login_rate_limiter = build_login_rate_limiter(resolved_settings)
     app.state.lead_rate_limiter = lead_rate_limiter or build_lead_rate_limiter(resolved_settings)
+    app.state.speech_rate_limiter = speech_rate_limiter or build_speech_rate_limiter(resolved_settings)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)

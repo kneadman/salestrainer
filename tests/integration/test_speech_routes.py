@@ -164,6 +164,48 @@ def test_speech_route_accepts_audio_webm_with_codecs_parameter() -> None:
     assert recording_client.audio_paths[-1].suffix == ".wav"
 
 
+def test_speech_rate_limit_rejects_too_many_requests_for_same_user() -> None:
+    app = _build_speech_test_app(settings=_speech_settings(stt_rate_limit_attempts=1, stt_global_rate_limit_attempts=0))
+    client = TestClient(app)
+    _authorize_client(client, token="user-1")
+
+    first_response = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+    )
+    second_response = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 429
+    assert second_response.json()["error"]["code"] == "too_many_requests"
+
+
+def test_speech_global_rate_limit_rejects_too_many_requests_across_users() -> None:
+    app = _build_speech_test_app(
+        settings=_speech_settings(stt_rate_limit_attempts=10, stt_global_rate_limit_attempts=1),
+    )
+    client_one = TestClient(app)
+    client_two = TestClient(app)
+    _authorize_client(client_one, token="user-1")
+    _authorize_client(client_two, token="user-2")
+
+    first_response = client_one.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+    )
+    second_response = client_two.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 429
+    assert second_response.json()["error"]["code"] == "too_many_requests"
+
+
 def test_non_wav_unknown_duration_is_rejected_when_fail_closed() -> None:
     app = _build_speech_test_app(duration_probe=FixedDurationProbe(None))
     client = TestClient(app)

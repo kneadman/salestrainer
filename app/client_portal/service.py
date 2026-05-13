@@ -10,9 +10,9 @@ from pydantic import ValidationError
 from app.domain.judgement_models import JudgeSessionOutput
 from app.history.models import TrainingSessionRecord
 from app.history.models import TrainingReportRecord
-from app.history.projections import session_summary_dto
+from app.history.projections import client_session_summary_dto
 from app.history.repository import HistoryRepository, SessionListFilters
-from app.history.schemas import HistorySessionSummaryDTO, UsageSummaryDTO
+from app.history.schemas import ClientHistorySessionSummaryDTO, UsageSummaryDTO
 from app.identity.models import User
 from app.identity.roles import UserRole, normalize_role
 from app.client_portal.schemas import (
@@ -53,6 +53,7 @@ class ClientPortalService:
         """Return same-organization users for a client lead."""
         self._require_client_lead(requester)
         users = self._list_users_for_account(requester.client_account_id)
+        # TODO: This performs per-user analytics and judgement aggregation; replace with bulk aggregation for larger teams.
         return [self._team_user_dto(user) for user in users]
 
     def get_team_usage_summary(self, *, requester: User) -> TeamUsageSummaryDTO:
@@ -75,12 +76,12 @@ class ClientPortalService:
         filters: SessionListFilters,
         limit: int,
         offset: int,
-    ) -> list[HistorySessionSummaryDTO]:
+    ) -> list[ClientHistorySessionSummaryDTO]:
         """Return one same-organization user's history for a client lead."""
         self._require_client_lead(requester)
         user = self._require_same_account_user(user_id=user_id, client_account_id=requester.client_account_id)
         rows = self._history.list_sessions_for_user(user_id=user.id, filters=filters, limit=limit, offset=offset)
-        return [session_summary_dto(record, user_email=email) for record, email in rows]
+        return [client_session_summary_dto(record, user_email=email) for record, email in rows]
 
     def get_team_user_detail(self, *, requester: User, user_id: UUID) -> TeamUserDetailDTO:
         """Return one same-organization user's analytics and latest history."""

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listAuditLog, listOrganizations, getUsageSummary } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO, UsageSummaryDTO } from "./types";
+import { auditActionLabel, auditEntityLabel } from "../labels";
 import { formatDate, getErrorMessage } from "./utils";
 
 type AdminDashboardProps = {
@@ -119,9 +120,9 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                 {auditLog.map((event) => (
                   <tr key={event.id}>
                     <td>{formatDate(event.created_at)}</td>
-                    <td><Badge>{event.action}</Badge></td>
-                    <td>{event.entity_type}</td>
-                    <td>{event.actor_user_id ?? "система"}</td>
+                    <td><Badge>{auditActionLabel(event.action)}</Badge></td>
+                    <td>{auditEntityLabel(event.entity_type)}</td>
+                    <td>{event.actor_user_id ? "Администратор" : "Система"}</td>
                   </tr>
                 ))}
               </tbody>

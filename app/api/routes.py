@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.access.models import LandingLead
+from app.api.client_ip import client_ip_from_request
 from app.api.dependencies import get_app_settings, get_persona_generation_service, get_report_service, get_session_service, get_turn_service
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
@@ -129,7 +130,7 @@ def submit_landing_lead(
 ) -> LandingSubmitResponse:
     try:
         http_request.app.state.lead_rate_limiter.hit(
-            ip_address=_client_ip(http_request),
+            ip_address=client_ip_from_request(http_request),
             email=str(request.email) if request.email else None,
             phone=request.phone if request.phone else None,
         )
@@ -506,9 +507,3 @@ def get_report(
         report=report_text,
         report_payload=report_payload,
     )
-
-
-def _client_ip(request: Request) -> str | None:
-    if request.client is None:
-        return None
-    return request.client.host

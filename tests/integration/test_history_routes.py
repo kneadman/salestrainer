@@ -203,11 +203,20 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert report.report_payload is not None
     assert {"session_started", "turn_processed", "session_finished", "report_generated"}.issubset(set(event_types))
 
+    history_list_response = client.get("/api/history/sessions")
     history_response = client.get(f"/api/history/sessions/{session_id}")
     report_response = client.get(f"/api/history/sessions/{session_id}/report")
 
+    assert history_list_response.status_code == 200
+    assert history_list_response.json()[0]["session_id"] == session_id
+    assert "user_id" not in history_list_response.json()[0]
+    assert "client_account_id" not in history_list_response.json()[0]
+    assert "training_config_id" not in history_list_response.json()[0]
     assert history_response.status_code == 200
     assert history_response.json()["session"]["session_id"] == session_id
+    assert "user_id" not in history_response.json()["session"]
+    assert "client_account_id" not in history_response.json()["session"]
+    assert "training_config_id" not in history_response.json()["session"]
     assert len(history_response.json()["turns"]) == 1
     assert "persona_snapshot" not in history_response.text
     assert "llm_payload_snapshot" not in history_response.text

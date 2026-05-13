@@ -18,6 +18,7 @@ from app.infrastructure.llm_client import (
     parse_llm_turn_response,
 )
 from app.infrastructure.config import Settings
+from app.infrastructure.fake_llm_client import FakeLLMClient as ActiveFakeLLMClient
 from app.prompts.schemas import build_strict_json_schema, llm_turn_response_schema
 
 
@@ -180,6 +181,25 @@ def test_yandex_compatible_client_falls_back_to_fake_client() -> None:
     response = client.generate_client_turn(sample_payload())
     assert response.answer
     assert -15 <= response.interest_delta <= 15
+
+
+def test_llm_client_exports_single_active_fake_client() -> None:
+    assert FakeLLMClient is ActiveFakeLLMClient
+
+
+def test_fake_llm_client_discovers_current_process_from_russian_accounting_question() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Как сейчас ведёте бухгалтерию и где теряется процесс?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    discovered_process = response.state_patch.add_discovered_current_process
+    assert discovered_process
+    assert any(
+        "Owner wants more control" in item or "Текущее решение" in item
+        for item in discovered_process
+    )
 
 
 def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None:

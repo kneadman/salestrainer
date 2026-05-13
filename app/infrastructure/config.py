@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = Field(default=300, ge=1)
     lead_rate_limit_attempts: int = Field(default=10, ge=0)
     lead_rate_limit_window_seconds: int = Field(default=3600, ge=1)
+    trusted_proxy_ips: str = ""
     secret_encryption_key: str = ""
     stt_enabled: bool = False
     stt_backend: str = "fake"
@@ -54,6 +55,9 @@ class Settings(BaseSettings):
     stt_max_concurrent_jobs: int = Field(default=1, ge=1, le=2)
     stt_queue_wait_timeout_seconds: int = Field(default=20, ge=1, le=120)
     stt_per_user_concurrency: int = Field(default=1, ge=1, le=2)
+    stt_rate_limit_attempts: int = Field(default=20, ge=0)
+    stt_rate_limit_window_seconds: int = Field(default=3600, ge=1)
+    stt_global_rate_limit_attempts: int = Field(default=120, ge=0)
     stt_reject_unknown_duration: bool = True
     stt_temp_dir: str = "/tmp/salestrainer-stt"
     stt_whisper_cpp_binary: str = ""

@@ -3,7 +3,7 @@ import { auditActionLabel, auditEntityLabel } from "../labels";
 import { listAuditLog, listOrganizations } from "./api";
 import { EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO } from "./types";
-import { compactJson, formatDate, getErrorMessage } from "./utils";
+import { auditPayloadSummary, formatDate, getErrorMessage } from "./utils";
 
 type AuditFilters = {
   organization_id: string;
@@ -13,6 +13,34 @@ type AuditFilters = {
   limit: number;
   offset: number;
 };
+
+const ACTION_FILTERS = [
+  "organization_created",
+  "organization_updated",
+  "organization_disabled",
+  "organization_enabled",
+  "user_created",
+  "user_updated",
+  "user_disabled",
+  "user_enabled",
+  "password_reset",
+  "password_changed",
+  "training_config_created",
+  "training_config_updated",
+  "training_config_disabled",
+  "training_config_enabled",
+  "training_config_assigned",
+  "training_config_unassigned",
+  "default_training_config_changed",
+  "config_created",
+  "config_updated",
+  "config_assigned",
+  "login_success",
+  "login_failed",
+  "logout",
+];
+
+const ENTITY_FILTERS = ["organization", "user", "training_config", "client_training_config", "user_training_config", "login_session"];
 
 export function AuditLogPage() {
   /** Render audit log with backend-supported filters and limit/offset pagination. */
@@ -68,9 +96,8 @@ export function AuditLogPage() {
       <section className="admin-panel">
         <form className="admin-form admin-form--inline" onSubmit={handleSubmit}>
           <label><span>Организация</span><select value={filters.organization_id} onChange={(event) => setFilters({ ...filters, organization_id: event.target.value, offset: 0 })}><option value="">Все</option>{organizations.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
-          <label><span>ID пользователя</span><input value={filters.actor_user_id} onChange={(event) => setFilters({ ...filters, actor_user_id: event.target.value, offset: 0 })} /></label>
-          <label><span>Действие</span><input value={filters.action} onChange={(event) => setFilters({ ...filters, action: event.target.value, offset: 0 })} /></label>
-          <label><span>Тип сущности</span><input value={filters.entity_type} onChange={(event) => setFilters({ ...filters, entity_type: event.target.value, offset: 0 })} /></label>
+          <label><span>Действие</span><select value={filters.action} onChange={(event) => setFilters({ ...filters, action: event.target.value, offset: 0 })}><option value="">Все</option>{ACTION_FILTERS.map((action) => <option key={action} value={action}>{auditActionLabel(action)}</option>)}</select></label>
+          <label><span>Сущность</span><select value={filters.entity_type} onChange={(event) => setFilters({ ...filters, entity_type: event.target.value, offset: 0 })}><option value="">Все</option>{ENTITY_FILTERS.map((entityType) => <option key={entityType} value={entityType}>{auditEntityLabel(entityType)}</option>)}</select></label>
           <label><span>Лимит</span><input type="number" min={1} max={500} value={filters.limit} onChange={(event) => setFilters({ ...filters, limit: Number(event.target.value), offset: 0 })} /></label>
           <button type="submit" className="admin-button admin-button--primary">Применить</button>
         </form>
@@ -79,7 +106,7 @@ export function AuditLogPage() {
         {events.length === 0 ? <EmptyState title="Событий аудита нет" /> : (
           <div className="admin-table-wrap">
             <table className="admin-table">
-              <thead><tr><th>Создано</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead>
+              <thead><tr><th>Создано</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Детали</th></tr></thead>
               <tbody>
                 {events.map((event) => (
                   <tr key={event.id}>
@@ -87,16 +114,7 @@ export function AuditLogPage() {
                     <td>{auditActionLabel(event.action)}</td>
                     <td>{auditEntityLabel(event.entity_type)}</td>
                     <td>{event.actor_user_id ? "Администратор" : "Система"}</td>
-                    <td>
-                      <details className="admin-technical-details">
-                        <summary>Показать технические данные</summary>
-                        <pre className="admin-json-cell">{compactJson({
-                          entity_id: event.entity_id,
-                          actor_user_id: event.actor_user_id,
-                          payload: event.payload,
-                        })}</pre>
-                      </details>
-                    </td>
+                    <td>{auditPayloadSummary(event.payload)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -64,6 +64,44 @@ const organizationUser: UserDTO = {
   },
 };
 
+const usageSummary: UsageSummaryDTO = {
+  total_sessions: 4,
+  finished_sessions: 3,
+  active_sessions: 1,
+  unique_users: 2,
+  total_turns: 18,
+  avg_final_interest_score: 72,
+  avg_turn_count: 5,
+  sessions_by_status: {
+    finished: 3,
+    active: 1,
+  },
+  sessions_by_scenario: {
+    first_contact_discovery: 4,
+  },
+  sessions_by_training_config: {
+    "config-technical-id": 4,
+  },
+  usage_events_count: 0,
+};
+
+const historySession: HistorySessionSummaryDTO = {
+  session_id: "session-technical-id",
+  user_id: "user-1",
+  user_email: "manager@example.com",
+  client_account_id: "org-1",
+  training_config_id: "config-1",
+  scenario_id: "first_contact_discovery",
+  status: "finished",
+  started_at: "2026-05-13T06:30:00Z",
+  finished_at: "2026-05-13T06:45:00Z",
+  last_activity_at: "2026-05-13T06:45:00Z",
+  turn_count: 2,
+  final_interest_score: 68,
+  final_stage: "need_discovery",
+  summary: null,
+};
+
 function setupApiMocks(): void {
   vi.mocked(listOrganizations).mockResolvedValue([organization]);
   vi.mocked(listUsers).mockResolvedValue([]);
@@ -137,5 +175,38 @@ describe("OrganizationDetailPage training configs", () => {
     await user.click(await screen.findByRole("button", { name: "Аналитика" }));
 
     expect(onNavigate).toHaveBeenCalledWith("/admin/organizations/org-1/users/user-1/analytics");
+  });
+
+  it("renders usage breakdowns without raw JSON or training-config ids", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getUsageSummary).mockResolvedValue(usageSummary);
+
+    render(<OrganizationDetailPage organizationId="org-1" onNavigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "Использование" }));
+
+    expect(await screen.findByText("По статусам")).toBeInTheDocument();
+    expect(screen.getByText("Завершена")).toBeInTheDocument();
+    expect(screen.getByText("Активна")).toBeInTheDocument();
+    expect(screen.getByText("По сценариям")).toBeInTheDocument();
+    expect(screen.getByText("Первичный контакт и разведка")).toBeInTheDocument();
+    expect(screen.getByText("Настроек с тренировками")).toBeInTheDocument();
+    expect(screen.queryByText("Показать технические данные")).not.toBeInTheDocument();
+    expect(screen.queryByText("config-technical-id")).not.toBeInTheDocument();
+    expect(screen.queryByText("{")).not.toBeInTheDocument();
+  });
+
+  it("renders organization history without short technical session ids", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listOrganizationHistory).mockResolvedValue([historySession]);
+
+    render(<OrganizationDetailPage organizationId="org-1" onNavigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "История" }));
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Первичный контакт и разведка")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "ID сессии" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/session-/)).not.toBeInTheDocument();
   });
 });

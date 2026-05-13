@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { roleLabel } from "../labels";
 import type { AuthUser } from "../types";
 import { changePassword } from "./api";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
@@ -64,9 +65,9 @@ export function SettingsPage({ user, onUserUpdated }: SettingsPageProps) {
       <section className="client-panel">
         <dl className="client-profile-list">
           <div><dt>Email</dt><dd>{user.email}</dd></div>
-          <div><dt>Role</dt><dd><ClientBadge>{user.role}</ClientBadge></dd></div>
-          <div><dt>Organization</dt><dd>{user.client_account.name}</dd></div>
-          <div><dt>Password status</dt><dd>{user.must_change_password ? <ClientBadge tone="warning">must change</ClientBadge> : <ClientBadge tone="good">ok</ClientBadge>}</dd></div>
+          <div><dt>Роль</dt><dd><ClientBadge>{roleLabel(user.role)}</ClientBadge></dd></div>
+          <div><dt>Организация</dt><dd>{user.client_account.name}</dd></div>
+          <div><dt>Статус пароля</dt><dd>{user.must_change_password ? <ClientBadge tone="warning">Требуется смена</ClientBadge> : <ClientBadge tone="good">Актуален</ClientBadge>}</dd></div>
         </dl>
       </section>
       <section className="client-panel">

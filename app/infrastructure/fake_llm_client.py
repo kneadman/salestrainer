@@ -10,6 +10,7 @@ class FakeLLMClient:
     ROLE_TOKENS = ["кто вы", "ваша роль", "за что отвечаете"]
     AUTHORITY_TOKENS = ["кто принимает решение", "кто согласует", "есть ли полномочия"]
     PAIN_TOKENS = ["какая проблема", "что болит", "болит", "где потери", "что мешает", "проблем"]
+    ACCOUNTING_TOKENS = ["бухгалтер", "бухгалтерия", "учет", "учёт"]
     PROCESS_TOKENS = [
         "как сейчас устроено",
         "как сейчас устроена",
@@ -197,6 +198,8 @@ class FakeLLMClient:
             current_process.append(profile.current_business_context)
             current_process.append(f"Текущее решение: {profile.current_solution}.")
             current_process.extend(profile.business_facts[:2])
+            if self._contains_any(message_lower, self.ACCOUNTING_TOKENS):
+                current_process.append("Бухгалтерия и учет обсуждаются как часть текущего процесса.")
         if self._contains_any(message_lower, ["по каким критериям", "что важно", "как выбираете"]):
             decision_criteria.extend(profile.decision_criteria[:2])
         if self._contains_any(message_lower, ["что мешает", "какие ограничения", "риски"]):
