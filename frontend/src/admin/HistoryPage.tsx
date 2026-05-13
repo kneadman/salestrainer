@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { ReportSurface } from "../components/ReportSurface";
-import { scenarioLabel, statusLabel } from "../labels";
+import { scenarioLabel, stageLabel, statusLabel } from "../labels";
 import { getHistorySession, listOrganizationHistory, listOrganizations } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO } from "./types";
-import { formatDate, getErrorMessage } from "./utils";
+import { FALLBACK_SCENARIOS, formatDate, getErrorMessage } from "./utils";
 
 type HistoryPageProps = {
   sessionId?: string;
@@ -123,7 +123,12 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
           </label>
           <label>
             <span>Сценарий</span>
-            <input value={scenarioId} onChange={(event) => setScenarioId(event.target.value)} />
+            <select value={scenarioId} onChange={(event) => setScenarioId(event.target.value)}>
+              <option value="">Все сценарии</option>
+              {FALLBACK_SCENARIOS.map((id) => (
+                <option key={id} value={id}>{scenarioLabel(id)}</option>
+              ))}
+            </select>
           </label>
           <button type="submit" className="admin-button admin-button--primary">
             Применить
@@ -138,20 +143,19 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>ID сессии</th>
+                  <th>Начало</th>
                   <th>Пользователь</th>
                   <th>Статус</th>
                   <th>Сценарий</th>
                   <th>Ходы</th>
                   <th>Интерес</th>
-                  <th>Начало</th>
                   <th>Действия</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((session) => (
                   <tr key={session.session_id}>
-                    <td>{session.session_id.slice(0, 8)}</td>
+                    <td>{formatDate(session.started_at)}</td>
                     <td>{session.user_email}</td>
                     <td>
                       <Badge>{statusLabel(session.status)}</Badge>
@@ -159,7 +163,6 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
                     <td>{scenarioLabel(session.scenario_id)}</td>
                     <td>{session.turn_count}</td>
                     <td>{session.final_interest_score ?? "—"}</td>
-                    <td>{formatDate(session.started_at)}</td>
                     <td>
                       <button
                         type="button"
@@ -217,7 +220,7 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
           <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/history")}>
             ← История
           </button>
-          <h1>Сессия {detail.session.session_id.slice(0, 8)}</h1>
+          <h1>Тренировка от {formatDate(detail.session.started_at)}</h1>
           <p className="admin-muted">
             {detail.session.user_email} · {scenarioLabel(detail.session.scenario_id)}
           </p>
@@ -248,7 +251,7 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
                   <strong>Клиент:</strong> {turn.client_answer}
                 </p>
                 <p className="admin-muted">
-                  Интерес {turn.interest_before} → {turn.interest_after}; этап {turn.stage_before} → {turn.stage_after}
+                  Интерес {turn.interest_before} → {turn.interest_after}; этап {stageLabel(turn.stage_before)} → {stageLabel(turn.stage_after)}
                 </p>
               </article>
             ))}

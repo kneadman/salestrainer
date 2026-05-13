@@ -48,6 +48,29 @@ export function providerLabel(value: string | null | undefined): string {
   return value ? labels[value] ?? "Другой провайдер" : "Не указано";
 }
 
+export function stageLabel(value: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    first_contact: "Первичный контакт",
+    initial_contact: "Первичный контакт",
+    role_discovery: "Выявление роли",
+    role_qualification: "Выявление роли",
+    need_discovery: "Выявление потребностей",
+    discovery: "Выявление потребностей",
+    qualification: "Выявление потребностей",
+    value_clarification: "Уточнение ценности",
+    value_discussion: "Уточнение ценности",
+    objection_handling: "Работа с возражениями",
+    trust_building: "Укрепление доверия",
+    next_step_negotiation: "Согласование следующего шага",
+    next_step: "Согласование следующего шага",
+    finished_success: "Успешно завершена",
+    closed_won: "Успешно завершена",
+    finished_failed: "Завершена без результата",
+    closed_lost: "Завершена без результата",
+  };
+  return value ? labels[value] ?? "Другой этап" : "Не указан";
+}
+
 export function metricNameLabel(key: string): string {
   const labels: Record<string, string> = {
     final_interest_score: "Итоговый интерес",

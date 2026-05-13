@@ -85,6 +85,23 @@ const usageSummary: UsageSummaryDTO = {
   usage_events_count: 0,
 };
 
+const historySession: HistorySessionSummaryDTO = {
+  session_id: "session-technical-id",
+  user_id: "user-1",
+  user_email: "manager@example.com",
+  client_account_id: "org-1",
+  training_config_id: "config-1",
+  scenario_id: "first_contact_discovery",
+  status: "finished",
+  started_at: "2026-05-13T06:30:00Z",
+  finished_at: "2026-05-13T06:45:00Z",
+  last_activity_at: "2026-05-13T06:45:00Z",
+  turn_count: 2,
+  final_interest_score: 68,
+  final_stage: "need_discovery",
+  summary: null,
+};
+
 function setupApiMocks(): void {
   vi.mocked(listOrganizations).mockResolvedValue([organization]);
   vi.mocked(listUsers).mockResolvedValue([]);
@@ -177,5 +194,19 @@ describe("OrganizationDetailPage training configs", () => {
     expect(screen.queryByText("Показать технические данные")).not.toBeInTheDocument();
     expect(screen.queryByText("config-technical-id")).not.toBeInTheDocument();
     expect(screen.queryByText("{")).not.toBeInTheDocument();
+  });
+
+  it("renders organization history without short technical session ids", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listOrganizationHistory).mockResolvedValue([historySession]);
+
+    render(<OrganizationDetailPage organizationId="org-1" onNavigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "История" }));
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Первичный контакт и разведка")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "ID сессии" })).not.toBeInTheDocument();
+    expect(screen.queryByText("session-")).not.toBeInTheDocument();
   });
 });
