@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from app.access.service import AccessService
 from app.api.dependencies import get_speech_service
 from app.api.schemas import ErrorResponse, SpeechTranscriptionResponse
+from app.api.speech_rate_limit import SpeechRateLimitExceeded
 from app.application.speech_service import SpeechService
 from app.domain.errors import (
     SpeechConcurrencyLimitError,
@@ -41,6 +42,7 @@ def build_speech_router() -> APIRouter:
         responses=ERROR_RESPONSES,
     )
     async def transcribe_speech(
+        request: Request,
         audio: UploadFile = File(...),
         session_id: str | None = Form(default=None),
         speech_service: SpeechService = Depends(get_speech_service),
@@ -51,11 +53,17 @@ def build_speech_router() -> APIRouter:
         try:
             if session_id is not None:
                 access_service.require_session_access(session_id, current_session.user.id)
+            request.app.state.speech_rate_limiter.hit(user_id=str(current_session.user.id))
             payload = await speech_service.transcribe_upload(
                 upload=audio,
                 session_id=session_id,
                 user_id=str(current_session.user.id),
             )
+        except SpeechRateLimitExceeded as error:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many speech transcription requests. Please try again later.",
+            ) from error
         except SpeechUploadTooLargeError as error:
             raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error)) from error
         except UnsupportedAudioTypeError as error:
