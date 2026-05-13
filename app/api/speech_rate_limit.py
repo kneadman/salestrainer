@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -10,6 +11,8 @@ from redis.exceptions import RedisError
 
 from app.infrastructure.config import Settings
 from app.infrastructure.redis_client import create_redis_client
+
+logger = logging.getLogger(__name__)
 
 
 class SpeechRateLimitExceeded(Exception):
@@ -105,6 +108,7 @@ class RedisSpeechRateLimiter(SpeechRateLimiter):
                 if count == 1:
                     self._client.expire(redis_key, self._window_seconds)
             except RedisError:
+                logger.warning("speech_rate_limiter_redis_hit_failed", exc_info=True)
                 continue
             if count > max_attempts:
                 raise SpeechRateLimitExceeded
@@ -130,6 +134,7 @@ def build_speech_rate_limiter(settings: Settings) -> SpeechRateLimiter:
             window_seconds=settings.stt_rate_limit_window_seconds,
         )
     except RedisError:
+        logger.warning("speech_rate_limiter_redis_unavailable_falling_back_to_in_memory", exc_info=True)
         return InMemorySpeechRateLimiter(
             max_user_attempts=settings.stt_rate_limit_attempts,
             max_global_attempts=settings.stt_global_rate_limit_attempts,
