@@ -58,19 +58,6 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async (nextStatus = status, nextTrainingConfigId = trainingConfigId) => {
-    /** Load history from the client-facing history endpoint. */
-    setLoading(true);
-    setError(null);
-    try {
-      setHistory(await getHistorySessions({ status: nextStatus, training_config_id: nextTrainingConfigId, limit: 100, offset: 0 }));
-    } catch (loadError) {
-      setError(getClientErrorMessage(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     /** Load filter options and initial history on mount. */
     const loadInitial = async () => {

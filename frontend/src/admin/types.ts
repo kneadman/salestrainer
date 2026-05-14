@@ -113,19 +113,6 @@ export type AuditLogDTO = {
   created_at: string;
 };
 
-export type ScenarioOptionDTO = {
-  scenario_id: string;
-  name: string;
-  training_format: string;
-  default_starting_interest: number;
-  default_stage: string;
-  manager_goal: string;
-  success_condition: string;
-  failure_condition: string;
-  evaluation_focus: string[];
-  client_behavior_hint: string;
-};
-
 export type HistorySessionSummaryDTO = {
   session_id: string;
   user_id: string;

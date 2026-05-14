@@ -1,17 +1,3 @@
-export const SCENARIO_OPTIONS = [
-  "generic_b2b_first_contact",
-  "sales_audit_cold_outreach",
-  "accounting_outsource_cold_outreach",
-  "first_contact_discovery",
-  "qualification_and_authority",
-  "needs_diagnosis",
-  "objection_handling",
-  "price_and_value",
-  "bad_experience_recovery",
-  "next_step_booking",
-  "follow_up_after_pause",
-];
-
 export function roleLabel(role: string): string {
   const labels: Record<string, string> = {
     internal_admin: "Администратор платформы",
