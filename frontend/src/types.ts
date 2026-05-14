@@ -142,7 +142,6 @@ export type JudgeSessionOutputDTO = {
 
 export type SpeechTranscriptionResponse = {
   text: string;
-  raw_text: string;
   normalized: boolean;
   duration_ms: number | null;
 };

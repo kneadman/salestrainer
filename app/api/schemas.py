@@ -128,7 +128,6 @@ class SessionReportResponse(BaseModel):
 
 class SpeechTranscriptionResponse(BaseModel):
     text: str
-    raw_text: str
     normalized: bool
     duration_ms: int | None = None
 

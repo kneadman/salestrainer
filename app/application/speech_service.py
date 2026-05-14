@@ -123,7 +123,6 @@ class SpeechService:
             )
             return {
                 "text": final_text,
-                "raw_text": raw_text,
                 "normalized": normalized,
                 "duration_ms": stt_result.duration_ms if stt_result.duration_ms is not None else duration_ms,
             }

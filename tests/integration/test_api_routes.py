@@ -271,10 +271,10 @@ def test_api_speech_transcribe_accepts_small_audio_and_normalizes_text() -> None
     assert response.status_code == 200
     assert response.json() == {
         "text": "Привет клиенту\n\nкак дела",
-        "raw_text": "привет   клиенту \n\nкак дела",
         "normalized": True,
         "duration_ms": 3450,
     }
+    assert "привет   клиенту" not in response.text
     db_session.close()
 
 
