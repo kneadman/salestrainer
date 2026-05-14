@@ -34,11 +34,11 @@ export function getMe(): Promise<AuthMeResponse> {
   return request<AuthMeResponse>("/auth/me");
 }
 
-export function createSession(): Promise<SessionStateResponse> {
+export function createSession(trainingConfigId?: string): Promise<SessionStateResponse> {
   /** Create a new runtime training session for the current user. */
   return request<SessionStateResponse>("/api/sessions", {
     method: "POST",
-    body: JSON.stringify({}),
+    body: JSON.stringify(trainingConfigId ? { training_config_id: trainingConfigId } : {}),
   });
 }
 

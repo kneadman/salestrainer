@@ -161,3 +161,4 @@ class RuntimeTrainingConfig(BaseModel):
     client_account_id: UUID
     name: str
     persona_generation_context: str = ""
+    is_active: bool = True

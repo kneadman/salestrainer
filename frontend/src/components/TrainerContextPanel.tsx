@@ -6,13 +6,14 @@ type TrainerContextPanelProps = {
   session: SessionPublicDTO;
   factsState: ClientStatePublic;
   mode?: "desktop" | "mobile" | "both";
+  trainingConfigName?: string;
 };
 
-export function TrainerContextPanel({ session, factsState, mode = "both" }: TrainerContextPanelProps) {
+export function TrainerContextPanel({ session, factsState, mode = "both", trainingConfigName }: TrainerContextPanelProps) {
   /** Render metrics and facts with a desktop sidebar and/or a mobile collapsible accordion. */
   const desktop = (
     <div className="trainer-context__desktop">
-      <MetricsPanel session={session} />
+      <MetricsPanel session={session} trainingConfigName={trainingConfigName} />
       <FactsPanel state={factsState} />
     </div>
   );
@@ -26,7 +27,7 @@ export function TrainerContextPanel({ session, factsState, mode = "both" }: Trai
         </strong>
       </summary>
       <div className="trainer-context__mobile-body">
-        <MetricsPanel session={session} />
+        <MetricsPanel session={session} trainingConfigName={trainingConfigName} />
         <FactsPanel state={factsState} />
       </div>
     </details>

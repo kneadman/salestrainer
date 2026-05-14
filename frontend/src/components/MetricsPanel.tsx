@@ -2,6 +2,7 @@ import type { ClientStatePublic, SessionPublicDTO } from "../types";
 
 type MetricsPanelProps = {
   session: SessionPublicDTO;
+  trainingConfigName?: string;
 };
 
 const toneLabels: Record<string, string> = {
@@ -61,7 +62,7 @@ function localizeInterestBand(value: string): string {
   return interestBandLabels[value] ?? value;
 }
 
-export function MetricsPanel({ session }: MetricsPanelProps) {
+export function MetricsPanel({ session, trainingConfigName }: MetricsPanelProps) {
   const state = session.client_state_public;
 
   return (
@@ -72,6 +73,12 @@ export function MetricsPanel({ session }: MetricsPanelProps) {
       <ProgressBar label="Интерес" value={session.interest.score} tone="interest" />
       <ProgressBar label="Доверие" value={readTrust(state)} tone="trust" />
       <dl className="metrics-list">
+        {trainingConfigName ? (
+          <div>
+            <dt>Сценарий</dt>
+            <dd>{trainingConfigName}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>Тон</dt>
           <dd>{localizeTone(state.tone)}</dd>

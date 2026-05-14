@@ -17,6 +17,7 @@ const apiMocks = vi.hoisted(() => ({
   finishSession: vi.fn<() => Promise<FinishSessionResponse>>(),
   sendMessage: vi.fn(),
   transcribeSpeech: vi.fn<() => Promise<SpeechTranscriptionResponse>>(),
+  getTrainingConfigs: vi.fn<() => Promise<{ id: string; name: string; is_default: boolean }[]>>(),
 }));
 
 vi.mock("../api", async () => {
@@ -29,6 +30,14 @@ vi.mock("../api", async () => {
     finishSession: apiMocks.finishSession,
     sendMessage: apiMocks.sendMessage,
     transcribeSpeech: apiMocks.transcribeSpeech,
+  };
+});
+
+vi.mock("./api", async () => {
+  const actual = await vi.importActual<typeof import("./api")>("./api");
+  return {
+    ...actual,
+    getTrainingConfigs: apiMocks.getTrainingConfigs,
   };
 });
 
@@ -113,6 +122,9 @@ describe("TrainerPage", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    apiMocks.getTrainingConfigs.mockResolvedValue([
+      { id: "config-1", name: "B2B discovery", is_default: true },
+    ]);
   });
 
   it("renders the trainer chat panel without phone shell markup and clears report state on new session", async () => {
@@ -155,6 +167,7 @@ describe("TrainerPage", () => {
     await waitFor(() => {
       expect(apiMocks.createSession).toHaveBeenCalledTimes(1);
     });
+    expect(apiMocks.createSession).toHaveBeenCalledWith("config-1");
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Открыть итоговый отчёт" })).not.toBeInTheDocument();
     });
@@ -302,5 +315,34 @@ describe("TrainerPage", () => {
     expect(trainerChatBody).toContainElement(chatWindow as HTMLElement);
     expect(trainerChatBody?.nextElementSibling).toBe(composer);
     expect(trainerChatPanel).toContainElement(trainerChatBody as HTMLElement);
+  });
+
+  it("shows config selector on start screen and passes selected config to createSession", async () => {
+    const user = userEvent.setup();
+
+    apiMocks.getTrainingConfigs.mockResolvedValue([
+      { id: "config-1", name: "B2B discovery", is_default: true },
+      { id: "config-2", name: "Objection practice", is_default: false },
+    ]);
+    apiMocks.createSession.mockResolvedValue({
+      session: {
+        ...activeSession,
+        session_id: "session-2",
+        training_config_id: "config-2",
+      },
+    });
+
+    render(<TrainerPage userId="user-1" />);
+
+    const select = await screen.findByRole("combobox", { name: /сценарий/i });
+    expect(select).toBeInTheDocument();
+    expect(screen.getByText("B2B discovery")).toBeInTheDocument();
+
+    await user.selectOptions(select, "config-2");
+    await user.click(screen.getByRole("button", { name: "Начать тренировку" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createSession).toHaveBeenCalledWith("config-2");
+    });
   });
 });

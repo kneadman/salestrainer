@@ -33,6 +33,7 @@ class SessionPublicDTO(BaseModel):
     turn_count: int
     summary: str
     state_version: int
+    training_config_id: str | None = None
 
 
 class ScenarioOptionDTO(BaseModel):
@@ -59,6 +60,7 @@ class PersonaOptionDTO(BaseModel):
 class SessionCreateRequest(BaseModel):
     scenario_id: str | None = None
     persona_id: str | None = None
+    training_config_id: str | None = None
 
 
 class LandingLeadRequest(BaseModel):

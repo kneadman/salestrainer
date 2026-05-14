@@ -43,6 +43,13 @@ class ValidationError(InternalAdminError):
     pass
 
 
+class _Unset:
+    pass
+
+
+UNSET = _Unset()
+
+
 class InternalAdminService:
     def __init__(self, session: Session, *, settings: Settings) -> None:
         self._session = session
@@ -187,6 +194,7 @@ class InternalAdminService:
         user_id: UUID,
         email: str | None = None,
         role: object | None = None,
+        default_training_config_id: UUID | None | _Unset = UNSET,
     ) -> UserDTO:
         user = self._get_user(user_id)
         if email is not None:
@@ -196,6 +204,38 @@ class InternalAdminService:
             if normalized_role not in CLIENT_ROLES:
                 raise ValidationError("Only client_lead or client_manager can be assigned through this endpoint.")
             user.role = normalized_role.value
+        if not isinstance(default_training_config_id, _Unset):
+            if default_training_config_id is None:
+                self._session.execute(
+                    update(UserTrainingConfig).where(UserTrainingConfig.user_id == user.id).values(is_default=False)
+                )
+                self._audit(
+                    actor_user_id=actor_user_id,
+                    action="default_training_config_cleared",
+                    entity_type="client_training_config",
+                    entity_id=None,
+                    payload=self._client_payload(user.client_account_id, {"user_id": str(user.id)}),
+                )
+                self._session.commit()
+            else:
+                config = self._get_training_config(default_training_config_id)
+                if config.client_account_id != user.client_account_id:
+                    raise ValidationError("Cannot assign a training config from another organization.")
+                if not config.is_active:
+                    raise ValidationError("Disabled training config cannot be made default.")
+                self._session.execute(
+                    update(UserTrainingConfig).where(UserTrainingConfig.user_id == user.id).values(is_default=False)
+                )
+                assignment = self._get_or_create_assignment(user_id=user.id, config_id=config.id)
+                assignment.is_default = True
+                self._audit(
+                    actor_user_id=actor_user_id,
+                    action="default_training_config_changed",
+                    entity_type="client_training_config",
+                    entity_id=config.id,
+                    payload=self._client_payload(user.client_account_id, {"user_id": str(user.id)}),
+                )
+                self._session.commit()
         self._audit(
             actor_user_id=actor_user_id,
             action="user_updated",
@@ -641,6 +681,12 @@ class InternalAdminService:
 
     def _user_dto(self, user: User) -> UserDTO:
         account = user.client_account
+        default_config_id = self._session.scalar(
+            select(UserTrainingConfig.training_config_id).where(
+                UserTrainingConfig.user_id == user.id,
+                UserTrainingConfig.is_default.is_(True),
+            )
+        )
         return UserDTO(
             id=user.id,
             client_account_id=user.client_account_id,
@@ -650,6 +696,7 @@ class InternalAdminService:
             must_change_password=user.must_change_password,
             created_at=user.created_at,
             updated_at=user.updated_at,
+            default_training_config_id=default_config_id,
             client_account=ClientAccountBriefDTO(id=account.id, name=account.name, slug=account.slug) if account else None,
         )
 

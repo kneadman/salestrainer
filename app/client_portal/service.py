@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
@@ -59,30 +59,22 @@ class ClientPortalService:
         return self._user_analytics(user)
 
     def list_training_configs(self, *, requester: User) -> list[ClientTrainingConfigOptionDTO]:
-        """Return active training configs explicitly available to the current client user."""
-        if normalize_role(requester.role) == UserRole.CLIENT_LEAD:
-            statement = (
-                select(ClientTrainingConfig)
-                .where(
-                    ClientTrainingConfig.client_account_id == requester.client_account_id,
-                    ClientTrainingConfig.is_active.is_(True),
-                )
-                .order_by(ClientTrainingConfig.name.asc())
-            )
-            return [
-                ClientTrainingConfigOptionDTO(id=config.id, name=config.name, is_default=False)
-                for config in self._session.scalars(statement)
-            ]
-
+        """Return active training configs implicitly available to the current client user."""
         statement = (
-            select(ClientTrainingConfig, UserTrainingConfig.is_default)
-            .join(UserTrainingConfig, UserTrainingConfig.training_config_id == ClientTrainingConfig.id)
+            select(ClientTrainingConfig, func.coalesce(UserTrainingConfig.is_default, False))
+            .join(
+                UserTrainingConfig,
+                and_(
+                    UserTrainingConfig.training_config_id == ClientTrainingConfig.id,
+                    UserTrainingConfig.user_id == requester.id,
+                ),
+                isouter=True,
+            )
             .where(
-                UserTrainingConfig.user_id == requester.id,
                 ClientTrainingConfig.client_account_id == requester.client_account_id,
                 ClientTrainingConfig.is_active.is_(True),
             )
-            .order_by(UserTrainingConfig.is_default.desc(), ClientTrainingConfig.name.asc())
+            .order_by(ClientTrainingConfig.name.asc())
         )
         return [
             ClientTrainingConfigOptionDTO(id=config.id, name=config.name, is_default=bool(is_default))

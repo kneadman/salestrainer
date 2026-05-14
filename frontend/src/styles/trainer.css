@@ -478,3 +478,33 @@ button:disabled {
   width: min(520px, 100%);
   padding: 32px;
 }
+
+
+.trainer-config-select {
+  margin: 12px 0 8px;
+}
+
+.trainer-config-select label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+.trainer-config-select select {
+  appearance: none;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.trainer-config-select select:focus-visible {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.15);
+}

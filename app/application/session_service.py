@@ -92,6 +92,7 @@ class TrainingSessionService:
             recent_turns=[],
             turn_count=0,
             state_version=1,
+            training_config_id=training_config.id if training_config else None,
             created_at=now,
             updated_at=now,
         )

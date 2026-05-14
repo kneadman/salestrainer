@@ -319,7 +319,7 @@ def test_client_lead_training_configs_returns_all_active_org_options() -> None:
         {
             "id": str(lead_config.id),
             "name": "Lead default",
-            "is_default": False,
+            "is_default": True,
         },
         {
             "id": str(manager_only_config.id),
@@ -328,6 +328,59 @@ def test_client_lead_training_configs_returns_all_active_org_options() -> None:
         },
     ]
     assert all(set(item) == {"id", "name", "is_default"} for item in response.json())
+    assert str(inactive_config.id) not in response.text
+    db_session.close()
+
+
+def test_client_manager_training_configs_returns_all_active_org_options() -> None:
+    """Client managers should see all active organization configs, not only explicitly assigned ones."""
+    db_session = _create_db_session()
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    account = identity_repository.create_client_account(name="Manager Configs", slug="manager-configs")
+    manager = identity_repository.create_user(
+        client_account_id=account.id,
+        email="manager@example.com",
+        password_hash=hash_password("password"),
+        role="client_manager",
+        must_change_password=False,
+    )
+    default_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Default",
+    )
+    unassigned_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Unassigned",
+    )
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=manager.id,
+        training_config_id=default_config.id,
+        is_default=True,
+    )
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(default_config.id),
+            "name": "Default",
+            "is_default": True,
+        },
+        {
+            "id": str(unassigned_config.id),
+            "name": "Unassigned",
+            "is_default": False,
+        },
+    ]
     assert str(inactive_config.id) not in response.text
     db_session.close()
 

@@ -8,6 +8,7 @@ import {
   listOrganizations,
   listTrainingConfigs,
   listUsers,
+  updateUser,
 } from "./api";
 import type { AuditLogDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO, UsageSummaryDTO, UserDTO } from "./types";
 
@@ -21,6 +22,7 @@ vi.mock("./api", async () => {
     listOrganizations: vi.fn(),
     listTrainingConfigs: vi.fn(),
     listUsers: vi.fn(),
+    updateUser: vi.fn(),
   };
 });
 
@@ -55,6 +57,7 @@ const organizationUser: UserDTO = {
   must_change_password: false,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
+  default_training_config_id: null,
   client_account: {
     id: "org-1",
     name: "Acme",
@@ -206,5 +209,47 @@ describe("OrganizationDetailPage training configs", () => {
     expect(screen.getByText("Первичный контакт и разведка")).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "ID сессии" })).not.toBeInTheDocument();
     expect(screen.queryByText(/session-/)).not.toBeInTheDocument();
+  });
+
+  it("shows default training config column and allows editing it", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listUsers).mockResolvedValue([{ ...organizationUser, default_training_config_id: "config-1" }]);
+    vi.mocked(updateUser).mockResolvedValue({ ...organizationUser, default_training_config_id: "config-1" });
+
+    render(<OrganizationDetailPage organizationId="org-1" onNavigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "Пользователи" }));
+    expect(await screen.findByText("Existing config")).toBeInTheDocument();
+
+    const editButton = screen.getAllByRole("button").find((b) => b.textContent?.includes("Изменить"));
+    expect(editButton).toBeDefined();
+    await user.click(editButton as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Existing config")).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText("Конфиг по умолчанию"), "");
+    await user.click(screen.getByRole("button", { name: "Обновить пользователя" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(updateUser)).toHaveBeenCalledWith("user-1", {
+        email: "manager@example.com",
+        role: "client_manager",
+        default_training_config_id: null,
+      });
+    });
+  });
+
+  it("renders dash when user has no default training config", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listUsers).mockResolvedValue([organizationUser]);
+
+    render(<OrganizationDetailPage organizationId="org-1" onNavigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "Пользователи" }));
+
+    const table = await screen.findByRole("table");
+    expect(table.textContent).toContain("—");
   });
 });
