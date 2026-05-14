@@ -26,7 +26,6 @@ class SessionPublicDTO(BaseModel):
     session_id: str
     scenario_id: str
     status: str
-    persona_name: str
     public_brief: str
     stage: str
     interest: InterestDTO
@@ -129,7 +128,6 @@ class SessionReportResponse(BaseModel):
 
 class SpeechTranscriptionResponse(BaseModel):
     text: str
-    raw_text: str
     normalized: bool
     duration_ms: int | None = None
 

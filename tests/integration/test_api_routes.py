@@ -176,7 +176,7 @@ def test_api_session_flow() -> None:
     session_payload = create_response.json()["session"]
     session_id = session_payload["session_id"]
     assert session_payload["status"] == "active"
-    assert session_payload["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in session_payload
     assert session_payload["scenario_id"] == "first_contact_discovery"
     assert "public_brief" in session_payload
 
@@ -271,10 +271,10 @@ def test_api_speech_transcribe_accepts_small_audio_and_normalizes_text() -> None
     assert response.status_code == 200
     assert response.json() == {
         "text": "Привет клиенту\n\nкак дела",
-        "raw_text": "привет   клиенту \n\nкак дела",
         "normalized": True,
         "duration_ms": 3450,
     }
+    assert "привет   клиенту" not in response.text
     db_session.close()
 
 
@@ -568,8 +568,8 @@ def test_api_message_idempotency_key_returns_saved_result_for_duplicate_request(
     assert first_response.status_code == 200
     assert duplicate_response.status_code == 200
     assert duplicate_response.json() == first_response.json()
-    assert first_response.json()["session"]["persona_name"] == "Unknown B2B contact"
-    assert duplicate_response.json()["session"]["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in first_response.json()["session"]
+    assert "persona_name" not in duplicate_response.json()["session"]
     assert saved_session is not None
     assert saved_session.turn_count == 1
     assert len(saved_session.recent_message_submissions) == 1
@@ -666,8 +666,8 @@ def test_api_message_idempotency_first_and_cached_responses_use_public_safe_proj
     assert duplicate_response.json()["session"] == expected_session
     assert first_response.json()["turns"] == expected_turns
     assert duplicate_response.json()["turns"] == expected_turns
-    assert first_response.json()["session"]["persona_name"] == "Unknown B2B contact"
-    assert duplicate_response.json()["session"]["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in first_response.json()["session"]
+    assert "persona_name" not in duplicate_response.json()["session"]
     assert hidden_display_name not in first_response.text
     assert hidden_display_name not in duplicate_response.text
     assert first_response.json()["session"]["client_state_public"]["known_pains"] == expected_session["client_state_public"]["known_pains"]
@@ -677,7 +677,7 @@ def test_api_message_idempotency_first_and_cached_responses_use_public_safe_proj
     assert first_response.json()["session"]["state_version"] == expected_session["state_version"]
     assert saved_session is not None
     assert saved_session.persona.display_name == hidden_display_name
-    assert saved_session.recent_message_submissions[0].response_payload["session"]["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in saved_session.recent_message_submissions[0].response_payload["session"]
     assert len(saved_session.turns) == 1
     assert len(turns) == 1
     assert turns[0].turn_index == 1

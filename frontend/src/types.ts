@@ -32,7 +32,6 @@ export type SessionPublicDTO = {
   session_id: string;
   scenario_id: string;
   status: string;
-  persona_name: string;
   public_brief: string;
   stage: string;
   interest: InterestDTO;
@@ -143,7 +142,6 @@ export type JudgeSessionOutputDTO = {
 
 export type SpeechTranscriptionResponse = {
   text: string;
-  raw_text: string;
   normalized: boolean;
   duration_ms: number | null;
 };

@@ -35,12 +35,16 @@ const ACTION_FILTERS = [
   "config_created",
   "config_updated",
   "config_assigned",
+  "llm_provider_config_created",
+  "llm_provider_config_updated",
+  "llm_provider_config_enabled",
+  "llm_provider_config_disabled",
   "login_success",
   "login_failed",
   "logout",
 ];
 
-const ENTITY_FILTERS = ["organization", "user", "training_config", "client_training_config", "user_training_config", "login_session"];
+const ENTITY_FILTERS = ["organization", "user", "training_config", "client_training_config", "user_training_config", "llm_provider_config", "login_session"];
 
 export function AuditLogPage() {
   /** Render audit log with backend-supported filters and limit/offset pagination. */

@@ -79,7 +79,6 @@ const finishedSession = {
   session_id: "session-1",
   scenario_id: "cold-b2b",
   status: "finished",
-  persona_name: "Ирина",
   public_brief: "Краткий бриф",
   stage: "closed",
   interest: { score: 74, band: "warm" },
@@ -95,6 +94,8 @@ const activeSession = {
   status: "active",
   stage: "discovery",
 };
+
+const trainerStorageKey = "salestrainer.currentSessionId.user-1";
 
 const makeTurn = (turnIndex: number) => ({
   turn_index: turnIndex,
@@ -117,7 +118,7 @@ describe("TrainerPage", () => {
   it("renders the trainer chat panel without phone shell markup and clears report state on new session", async () => {
     const user = userEvent.setup();
 
-    localStorage.setItem("salestrainer.currentSessionId", finishedSession.session_id);
+    localStorage.setItem(trainerStorageKey, finishedSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: finishedSession,
@@ -135,7 +136,7 @@ describe("TrainerPage", () => {
       },
     });
 
-    const { container } = render(<TrainerPage />);
+    const { container } = render(<TrainerPage userId="user-1" />);
 
     const reportButton = await screen.findByRole("button", { name: "Открыть итоговый отчёт" });
     expect(reportButton).toBeInTheDocument();
@@ -164,7 +165,7 @@ describe("TrainerPage", () => {
   it("opens the report modal immediately after finish returns a report payload", async () => {
     const user = userEvent.setup();
 
-    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: activeSession,
@@ -176,7 +177,7 @@ describe("TrainerPage", () => {
       report_payload: structuredReportPayload,
     });
 
-    render(<TrainerPage />);
+    render(<TrainerPage userId="user-1" />);
 
     const finishButton = await screen.findByRole("button", { name: "Завершить" });
     await user.click(finishButton);
@@ -190,7 +191,7 @@ describe("TrainerPage", () => {
   it("keeps the error banner inside trainer-chat-body while composer remains a direct panel child", async () => {
     const user = userEvent.setup();
 
-    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: activeSession,
@@ -198,7 +199,7 @@ describe("TrainerPage", () => {
     });
     apiMocks.sendMessage.mockRejectedValue(new Error("Сервис временно недоступен"));
 
-    const { container } = render(<TrainerPage />);
+    const { container } = render(<TrainerPage userId="user-1" />);
 
     const textarea = await screen.findByPlaceholderText("Введите сообщение клиенту");
     await user.type(textarea, "Привет");
@@ -236,7 +237,7 @@ describe("TrainerPage", () => {
         },
       });
 
-      localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+      localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
       apiMocks.getSession.mockResolvedValue({
         session: activeSession,
@@ -256,7 +257,7 @@ describe("TrainerPage", () => {
           turn_index: 1,
         });
 
-      const { container } = render(<TrainerPage />);
+      const { container } = render(<TrainerPage userId="user-1" />);
 
       const textarea = await screen.findByRole("textbox");
       const sendButton = container.querySelector(".composer__send");
@@ -278,14 +279,14 @@ describe("TrainerPage", () => {
   });
 
   it("keeps chat-window inside trainer-chat-body for long conversations", async () => {
-    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: activeSession,
       turns: Array.from({ length: 32 }, (_, index) => makeTurn(index + 1)),
     });
 
-    const { container } = render(<TrainerPage />);
+    const { container } = render(<TrainerPage userId="user-1" />);
 
     await screen.findByText("Ответ 32");
 

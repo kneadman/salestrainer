@@ -337,7 +337,6 @@
     width: 100%;
   }
 }
-
 @media (max-width: 420px) {
   .trainer-start__shell {
     padding: 18px;
@@ -1090,4 +1089,3 @@
     min-height: 44px;
   }
 }
-

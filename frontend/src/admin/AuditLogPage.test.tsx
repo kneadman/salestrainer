@@ -48,7 +48,7 @@ describe("AuditLogPage", () => {
   });
 
   it("renders audit rows and filters without raw enum text, ids, or JSON payloads", async () => {
-    render(<AuditLogPage />);
+    const { container } = render(<AuditLogPage />);
 
     await waitFor(() => expect(screen.queryByText("Загрузка журнала аудита")).not.toBeInTheDocument());
 
@@ -60,6 +60,8 @@ describe("AuditLogPage", () => {
     expect(screen.queryByText("client_training_config")).not.toBeInTheDocument();
     expect(screen.queryByText("user-1")).not.toBeInTheDocument();
     expect(screen.queryByText("config-1")).not.toBeInTheDocument();
+    expect(container.querySelector('option[value="llm_provider_config_created"]')).not.toBeNull();
+    expect(container.querySelector('option[value="llm_provider_config"]')).not.toBeNull();
     expect(screen.queryByText("Показать технические данные")).not.toBeInTheDocument();
   });
 });

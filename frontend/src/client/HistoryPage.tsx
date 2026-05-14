@@ -3,7 +3,7 @@ import { getHistorySessionDetail, getHistorySessions } from "./api";
 import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, HistoryTurnDTO } from "./types";
-import { scenarioLabel, statusLabel } from "../labels";
+import { SCENARIO_OPTIONS, scenarioLabel, stageLabel, statusLabel } from "../labels";
 import { formatClientDate, getClientErrorMessage } from "./utils";
 
 type HistoryPageProps = {
@@ -151,7 +151,14 @@ function HistoryFilters(props: {
         </label>
         <label>
           <span>Сценарий</span>
-          <input value={props.scenarioId} onChange={(event) => props.setScenarioId(event.target.value)} />
+          <select value={props.scenarioId} onChange={(event) => props.setScenarioId(event.target.value)}>
+            <option value="">Все сценарии</option>
+            {SCENARIO_OPTIONS.map((scenarioId) => (
+              <option key={scenarioId} value={scenarioId}>
+                {scenarioLabel(scenarioId)}
+              </option>
+            ))}
+          </select>
         </label>
         <button type="submit" className="client-button client-button--primary">
           Применить
@@ -219,7 +226,7 @@ function HistoryTurnsList({ turns }: { turns: HistoryTurnDTO[] }) {
               <p><strong>Менеджер:</strong> {turn.manager_message}</p>
               <p><strong>Клиент:</strong> {turn.client_answer}</p>
               <p className="client-muted">
-                Интерес {turn.interest_before} → {turn.interest_after}; этап {turn.stage_before} → {turn.stage_after}
+                Интерес {turn.interest_before} → {turn.interest_after}; этап {stageLabel(turn.stage_before)} → {stageLabel(turn.stage_after)}
               </p>
             </article>
           ))}
