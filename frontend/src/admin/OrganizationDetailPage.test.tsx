@@ -7,7 +7,6 @@ import {
   listOrganizationHistory,
   listOrganizations,
   listTrainingConfigs,
-  listUserTrainingConfigs,
   listUsers,
 } from "./api";
 import type { AuditLogDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO, UsageSummaryDTO, UserDTO } from "./types";
@@ -21,7 +20,6 @@ vi.mock("./api", async () => {
     listOrganizationHistory: vi.fn(),
     listOrganizations: vi.fn(),
     listTrainingConfigs: vi.fn(),
-    listUserTrainingConfigs: vi.fn(),
     listUsers: vi.fn(),
   };
 });
@@ -110,7 +108,6 @@ function setupApiMocks(): void {
   vi.mocked(listOrganizationHistory).mockResolvedValue([] as HistorySessionSummaryDTO[]);
   vi.mocked(getUsageSummary).mockResolvedValue(null as unknown as UsageSummaryDTO);
   vi.mocked(listAuditLog).mockResolvedValue([] as AuditLogDTO[]);
-  vi.mocked(listUserTrainingConfigs).mockResolvedValue([]);
 }
 
 async function renderConfigsTab(): Promise<ReturnType<typeof userEvent.setup>> {

@@ -11,7 +11,6 @@ import type {
   UsageSummaryDTO,
   UserCreatePayload,
   UserDTO,
-  UserTrainingConfigAssignmentDTO,
   UserUpdatePayload,
 } from "./types";
 
@@ -146,35 +145,6 @@ export function enableTrainingConfig(configId: string): Promise<TrainingConfigDT
 export function disableTrainingConfig(configId: string): Promise<TrainingConfigDTO> {
   /** Disable a training config after confirmation. */
   return request<TrainingConfigDTO>(`/api/internal/training-configs/${configId}/disable`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
-export function listUserTrainingConfigs(userId: string): Promise<UserTrainingConfigAssignmentDTO[]> {
-  /** Load training config assignments for one user. */
-  return request<UserTrainingConfigAssignmentDTO[]>(`/api/internal/users/${userId}/training-configs`);
-}
-
-export function assignTrainingConfig(userId: string, configId: string): Promise<UserTrainingConfigAssignmentDTO> {
-  /** Assign a config to one user. */
-  return request<UserTrainingConfigAssignmentDTO>(`/api/internal/users/${userId}/training-configs/${configId}/assign`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
-export function makeDefaultTrainingConfig(userId: string, configId: string): Promise<UserTrainingConfigAssignmentDTO> {
-  /** Mark one assigned training config as a user's default. */
-  return request<UserTrainingConfigAssignmentDTO>(`/api/internal/users/${userId}/training-configs/${configId}/make-default`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
-export function unassignTrainingConfig(userId: string, configId: string): Promise<{ status: string }> {
-  /** Remove a training config assignment from one user. */
-  return request<{ status: string }>(`/api/internal/users/${userId}/training-configs/${configId}/unassign`, {
     method: "POST",
     body: JSON.stringify({}),
   });

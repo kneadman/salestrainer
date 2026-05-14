@@ -94,13 +94,6 @@ export type TrainingConfigPayload = {
   persona_generation_context: string;
 };
 
-export type UserTrainingConfigAssignmentDTO = {
-  user_id: string;
-  training_config_id: string;
-  is_default: boolean;
-  training_config: TrainingConfigDTO;
-};
-
 export type AuditLogDTO = {
   id: string;
   actor_user_id: string | null;

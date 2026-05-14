@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { auditActionLabel, auditEntityLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
 import {
-  assignTrainingConfig,
   createTrainingConfig,
   createUser,
   disableTrainingConfig,
@@ -13,11 +12,8 @@ import {
   listOrganizationHistory,
   listOrganizations,
   listTrainingConfigs,
-  listUserTrainingConfigs,
   listUsers,
-  makeDefaultTrainingConfig,
   resetUserPassword,
-  unassignTrainingConfig,
   updateTrainingConfig,
   updateUser,
 } from "./api";
@@ -30,7 +26,6 @@ import type {
   TrainingConfigDTO,
   UsageSummaryDTO,
   UserDTO,
-  UserTrainingConfigAssignmentDTO,
 } from "./types";
 import { auditPayloadSummary, formatDate, getErrorMessage, statusLabel } from "./utils";
 
@@ -75,7 +70,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [usage, setUsage] = useState<UsageSummaryDTO | null>(null);
   const [audit, setAudit] = useState<AuditLogDTO[]>([]);
-  const [assignmentsByUser, setAssignmentsByUser] = useState<Record<string, UserTrainingConfigAssignmentDTO[]>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,10 +102,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
       setHistory(loadedHistory);
       setUsage(loadedUsage);
       setAudit(loadedAudit);
-      const assignmentEntries = await Promise.all(
-        loadedUsers.map(async (user) => [user.id, await listUserTrainingConfigs(user.id).catch(() => [])] as const),
-      );
-      setAssignmentsByUser(Object.fromEntries(assignmentEntries));
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -246,30 +236,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
     }
   };
 
-  const handleAssignment = async (userId: string, configId: string, action: "assign" | "default" | "unassign") => {
-    /** Run one training config assignment action for a user. */
-    if (action === "unassign" && !window.confirm("Убрать этот конфиг у пользователя?")) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      if (action === "assign") {
-        await assignTrainingConfig(userId, configId);
-      } else if (action === "default") {
-        await makeDefaultTrainingConfig(userId, configId);
-      } else {
-        await unassignTrainingConfig(userId, configId);
-      }
-      setSuccess("Назначение обновлено.");
-      await loadAll();
-    } catch (assignmentError) {
-      setError(getErrorMessage(assignmentError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (loading) {
     return <LoadingState title="Загрузка организации" />;
   }
@@ -311,8 +277,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
       {activeTab === "users" ? (
         <UsersSection
           users={users}
-          configs={configs}
-          assignmentsByUser={assignmentsByUser}
           userForm={userForm}
           setUserForm={setUserForm}
           editingUserId={editingUserId}
@@ -323,7 +287,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
           onSubmit={submitUser}
           onToggle={toggleUser}
           onReset={resetPassword}
-          onAssignment={handleAssignment}
           onOpenAnalytics={(userId) => onNavigate(`/admin/organizations/${organizationId}/users/${userId}/analytics`)}
         />
       ) : null}
@@ -368,8 +331,6 @@ function OverviewSection({ organization, usage }: { organization: OrganizationDT
 
 function UsersSection(props: {
   users: UserDTO[];
-  configs: TrainingConfigDTO[];
-  assignmentsByUser: Record<string, UserTrainingConfigAssignmentDTO[]>;
   userForm: UserForm;
   setUserForm: (form: UserForm) => void;
   editingUserId: string | null;
@@ -380,7 +341,6 @@ function UsersSection(props: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggle: (user: UserDTO) => void;
   onReset: (user: UserDTO) => void;
-  onAssignment: (userId: string, configId: string, action: "assign" | "default" | "unassign") => void;
   onOpenAnalytics: (userId: string) => void;
 }) {
   /** Render user form, assignments, and reset-password actions. */
@@ -398,57 +358,37 @@ function UsersSection(props: {
       {props.users.length === 0 ? <EmptyState title="Пользователей нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Конфиги</th><th>Пароль</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Пароль</th><th>Действия</th></tr></thead>
             <tbody>
-              {props.users.map((user) => {
-                const assignments = props.assignmentsByUser[user.id] ?? [];
-                return (
-                  <tr key={user.id}>
-                    <td>{user.email}</td>
-                    <td>{roleLabel(user.role)}</td>
-                    <td><Badge tone={user.is_active ? "good" : "danger"}>{statusLabel(user.is_active)}</Badge></td>
-                    <td>
-                      <div className="admin-assignment-list">
-                        {props.configs.map((config) => {
-                          const assigned = assignments.find((item) => item.training_config_id === config.id);
-                          return (
-                            <div key={config.id}>
-                              <span>{config.name}</span>
-                              {assigned?.is_default ? <Badge tone="good">по умолчанию</Badge> : null}
-                              <button type="button" className="admin-link-button" onClick={() => props.onAssignment(user.id, config.id, assigned ? "default" : "assign")}>
-                                {assigned ? "По умолчанию" : "Назначить"}
-                              </button>
-                              {assigned ? <button type="button" className="admin-link-button" onClick={() => props.onAssignment(user.id, config.id, "unassign")}>Убрать</button> : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-password-reset">
-                        <input
-                          type="password"
-                          placeholder="Новый временный пароль"
-                          minLength={8}
-                          value={props.resetPasswordByUser[user.id] ?? ""}
-                          onChange={(event) => props.setResetPasswordByUser({ ...props.resetPasswordByUser, [user.id]: event.target.value })}
-                        />
-                        <button type="button" className="admin-link-button" onClick={() => props.onReset(user)}>Сбросить</button>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-row-actions">
-                        <button type="button" className="admin-link-button" onClick={() => props.onOpenAnalytics(user.id)}>Аналитика</button>
-                        <button type="button" className="admin-link-button" onClick={() => {
-                          props.setEditingUserId(user.id);
-                          props.setUserForm({ email: user.email, password: "", role: user.role === "client_lead" ? "client_lead" : "client_manager" });
-                        }}>Изменить</button>
-                        <button type="button" className="admin-link-button" onClick={() => props.onToggle(user)}>{user.is_active ? "Отключить" : "Включить"}</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {props.users.map((user) => (
+                <tr key={user.id}>
+                  <td>{user.email}</td>
+                  <td>{roleLabel(user.role)}</td>
+                  <td><Badge tone={user.is_active ? "good" : "danger"}>{statusLabel(user.is_active)}</Badge></td>
+                  <td>
+                    <div className="admin-password-reset">
+                      <input
+                        type="password"
+                        placeholder="Новый временный пароль"
+                        minLength={8}
+                        value={props.resetPasswordByUser[user.id] ?? ""}
+                        onChange={(event) => props.setResetPasswordByUser({ ...props.resetPasswordByUser, [user.id]: event.target.value })}
+                      />
+                      <button type="button" className="admin-link-button" onClick={() => props.onReset(user)}>Сбросить</button>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="admin-row-actions">
+                      <button type="button" className="admin-link-button" onClick={() => props.onOpenAnalytics(user.id)}>Аналитика</button>
+                      <button type="button" className="admin-link-button" onClick={() => {
+                        props.setEditingUserId(user.id);
+                        props.setUserForm({ email: user.email, password: "", role: user.role === "client_lead" ? "client_lead" : "client_manager" });
+                      }}>Изменить</button>
+                      <button type="button" className="admin-link-button" onClick={() => props.onToggle(user)}>{user.is_active ? "Отключить" : "Включить"}</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
