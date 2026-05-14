@@ -132,6 +132,7 @@ export type HistorySessionSummaryDTO = {
   user_email: string;
   client_account_id: string;
   training_config_id: string | null;
+  training_config_name: string | null;
   scenario_id: string;
   status: string;
   started_at: string;

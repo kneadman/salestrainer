@@ -12,6 +12,7 @@ class HistorySessionSummaryDTO(BaseModel):
     user_email: str
     client_account_id: UUID
     training_config_id: UUID | None
+    training_config_name: str | None = None
     scenario_id: str
     status: str
     started_at: datetime
@@ -26,6 +27,7 @@ class HistorySessionSummaryDTO(BaseModel):
 class ClientHistorySessionSummaryDTO(BaseModel):
     session_id: UUID
     user_email: str
+    training_config_name: str | None = None
     scenario_id: str
     status: str
     started_at: datetime

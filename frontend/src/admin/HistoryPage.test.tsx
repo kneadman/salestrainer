@@ -1,12 +1,13 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { HistoryPage } from "./HistoryPage";
-import { getHistorySession, listOrganizationHistory, listOrganizations } from "./api";
-import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO } from "./types";
+import { getHistorySession, listOrganizationHistory, listOrganizations, listTrainingConfigs } from "./api";
+import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO } from "./types";
 
 vi.mock("./api", () => ({
   getHistorySession: vi.fn(),
   listOrganizationHistory: vi.fn(),
   listOrganizations: vi.fn(),
+  listTrainingConfigs: vi.fn(),
 }));
 
 const organization: OrganizationDTO = {
@@ -27,6 +28,7 @@ const sessionSummary: HistorySessionSummaryDTO = {
   user_email: "manager@example.com",
   client_account_id: "org-1",
   training_config_id: "config-1",
+  training_config_name: "B2B discovery",
   scenario_id: "first_contact_discovery",
   status: "finished",
   started_at: "2026-05-13T06:30:00Z",
@@ -36,6 +38,16 @@ const sessionSummary: HistorySessionSummaryDTO = {
   final_interest_score: 68,
   final_stage: "need_discovery",
   summary: "Менеджер провёл первичный контакт.",
+};
+
+const trainingConfig: TrainingConfigDTO = {
+  id: "config-1",
+  client_account_id: "org-1",
+  name: "B2B discovery",
+  is_active: true,
+  persona_generation_context: "Context",
+  created_at: "2026-05-13T06:00:00Z",
+  updated_at: "2026-05-13T06:00:00Z",
 };
 
 const sessionDetail: HistorySessionDetailDTO = {
@@ -62,6 +74,7 @@ const sessionDetail: HistorySessionDetailDTO = {
 describe("HistoryPage", () => {
   beforeEach(() => {
     vi.mocked(listOrganizations).mockResolvedValue([organization]);
+    vi.mocked(listTrainingConfigs).mockResolvedValue([trainingConfig]);
     vi.mocked(listOrganizationHistory).mockResolvedValue([sessionSummary]);
     vi.mocked(getHistorySession).mockResolvedValue(sessionDetail);
   });
@@ -70,7 +83,7 @@ describe("HistoryPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders history list without session ids or raw scenario filter input", async () => {
+  it("renders history list with training config filters and without raw scenario filter input", async () => {
     render(<HistoryPage onNavigate={vi.fn()} />);
 
     await waitFor(() => expect(screen.queryByText("Загрузка истории тренировок")).not.toBeInTheDocument());
@@ -78,7 +91,13 @@ describe("HistoryPage", () => {
     expect(screen.queryByRole("columnheader", { name: "ID сессии" })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Начало" })).toBeInTheDocument();
     expect(screen.getByText("manager@example.com")).toBeInTheDocument();
-    expect(screen.getAllByText("Первичный контакт и разведка").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("B2B discovery").length).toBeGreaterThan(0);
+    expect(listOrganizationHistory).toHaveBeenCalledWith("org-1", {
+      status: "",
+      training_config_id: "",
+      limit: 100,
+      offset: 0,
+    });
     expect(screen.queryByText(/session-/)).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue("first_contact_discovery")).not.toBeInTheDocument();
   });

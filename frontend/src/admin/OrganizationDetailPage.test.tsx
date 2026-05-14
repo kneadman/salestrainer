@@ -91,6 +91,7 @@ const historySession: HistorySessionSummaryDTO = {
   user_email: "manager@example.com",
   client_account_id: "org-1",
   training_config_id: "config-1",
+  training_config_name: "B2B discovery",
   scenario_id: "first_contact_discovery",
   status: "finished",
   started_at: "2026-05-13T06:30:00Z",

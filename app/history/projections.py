@@ -4,7 +4,12 @@ from app.history.models import TrainingReportRecord, TrainingSessionRecord, Trai
 from app.history.schemas import ClientHistorySessionSummaryDTO, HistoryReportDTO, HistorySessionSummaryDTO, HistoryTurnDTO
 
 
-def session_summary_dto(record: TrainingSessionRecord, *, user_email: str) -> HistorySessionSummaryDTO:
+def session_summary_dto(
+    record: TrainingSessionRecord,
+    *,
+    user_email: str,
+    training_config_name: str | None = None,
+) -> HistorySessionSummaryDTO:
     """Project a persistent session record to the public-safe history summary DTO."""
     return HistorySessionSummaryDTO(
         session_id=record.id,
@@ -12,6 +17,7 @@ def session_summary_dto(record: TrainingSessionRecord, *, user_email: str) -> Hi
         user_email=user_email,
         client_account_id=record.client_account_id,
         training_config_id=record.training_config_id,
+        training_config_name=training_config_name,
         scenario_id=record.scenario_id,
         status=record.status,
         started_at=record.started_at,
@@ -24,11 +30,17 @@ def session_summary_dto(record: TrainingSessionRecord, *, user_email: str) -> Hi
     )
 
 
-def client_session_summary_dto(record: TrainingSessionRecord, *, user_email: str) -> ClientHistorySessionSummaryDTO:
+def client_session_summary_dto(
+    record: TrainingSessionRecord,
+    *,
+    user_email: str,
+    training_config_name: str | None = None,
+) -> ClientHistorySessionSummaryDTO:
     """Project a persistent session record without tenant/config ownership identifiers."""
     return ClientHistorySessionSummaryDTO(
         session_id=record.id,
         user_email=user_email,
+        training_config_name=training_config_name,
         scenario_id=record.scenario_id,
         status=record.status,
         started_at=record.started_at,

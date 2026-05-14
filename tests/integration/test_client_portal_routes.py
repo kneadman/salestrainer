@@ -221,9 +221,44 @@ def test_client_lead_can_read_same_org_team_users_and_usage_summary() -> None:
     assert summary_response.json()["users"]
     assert history_response.status_code == 200
     assert history_response.json()[0]["user_email"] == "manager@example.com"
+    assert history_response.json()[0]["training_config_name"] == "Default"
     assert "user_id" not in history_response.json()[0]
     assert "client_account_id" not in history_response.json()[0]
     assert "training_config_id" not in history_response.json()[0]
+    db_session.close()
+
+
+def test_client_training_configs_returns_assigned_active_options() -> None:
+    """Client config selector should expose safe names and ids for assigned active configs only."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="config-options",
+        users=[("manager@example.com", "client_manager")],
+    )
+    access_repository = AccessRepository(db_session)
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=users["manager@example.com"].id,
+        training_config_id=inactive_config.id,
+    )
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(config.id),
+            "name": "Default",
+            "is_default": True,
+        }
+    ]
     db_session.close()
 
 
