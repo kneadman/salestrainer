@@ -3,11 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from app.access.service import AccessService
-from app.api.dependencies import get_speech_service
+from app.api.dependencies import get_session_service, get_speech_service
 from app.api.schemas import ErrorResponse, SpeechTranscriptionResponse
 from app.api.speech_rate_limit import SpeechRateLimitExceeded
 from app.application.speech_service import SpeechService
+from app.application.session_service import TrainingSessionService
 from app.domain.errors import (
+    SessionNotFoundError,
     SpeechConcurrencyLimitError,
     SpeechDisabledError,
     SpeechDurationUnknownError,
@@ -46,6 +48,7 @@ def build_speech_router() -> APIRouter:
         audio: UploadFile = File(...),
         session_id: str | None = Form(default=None),
         speech_service: SpeechService = Depends(get_speech_service),
+        session_service: TrainingSessionService = Depends(get_session_service),
         access_service: AccessService = Depends(get_access_service),
         current_session: CurrentSession = Depends(require_current_user),
     ) -> SpeechTranscriptionResponse:
@@ -53,6 +56,7 @@ def build_speech_router() -> APIRouter:
         try:
             if session_id is not None:
                 access_service.require_session_access(session_id, current_session.user.id)
+                session_service.touch_session(session_id)
             request.app.state.speech_rate_limiter.hit(user_id=str(current_session.user.id))
             payload = await speech_service.transcribe_upload(
                 upload=audio,
@@ -80,6 +84,8 @@ def build_speech_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
         except SpeechTranscriptionError as error:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+        except SessionNotFoundError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
         except LookupError as error:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
         return SpeechTranscriptionResponse.model_validate(payload)

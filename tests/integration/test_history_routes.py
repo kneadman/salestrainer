@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -44,7 +44,7 @@ def _create_db_session() -> Session:
 def _create_client(db_session: Session, repository: InMemorySessionRepository) -> TestClient:
     """Create a TestClient wired to the provided database and runtime repository."""
     app = create_app(
-        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, session_ttl_seconds=1800),
         repository=repository,
         llm_client=FakeLLMClient(),
     )
@@ -227,6 +227,39 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert report_response.json()["report"] == report.report_text
     assert "report_payload" in report_response.json()
     assert report_response.json()["report_payload"] == report.report_payload
+    db_session.close()
+
+
+def test_create_session_expires_stale_active_history_for_user() -> None:
+    """Starting a new session closes the user's stale active durable sessions."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-ttl",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    first_response = client.post("/api/sessions", json={})
+    assert first_response.status_code == 201
+    first_session_id = UUID(first_response.json()["session"]["session_id"])
+    first_record = db_session.get(TrainingSessionRecord, first_session_id)
+    assert first_record is not None
+    stale_activity_at = datetime.now(tz=UTC) - timedelta(minutes=31)
+    first_record.last_activity_at = stale_activity_at
+    db_session.commit()
+
+    second_response = client.post("/api/sessions", json={})
+    second_session_id = UUID(second_response.json()["session"]["session_id"])
+    db_session.refresh(first_record)
+    second_record = db_session.get(TrainingSessionRecord, second_session_id)
+
+    assert second_response.status_code == 201
+    assert first_record.status == "expired"
+    assert first_record.finished_at is not None
+    assert second_record is not None
+    assert second_record.status == "active"
     db_session.close()
 
 

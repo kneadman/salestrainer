@@ -124,7 +124,10 @@ class InternalAdminService:
         user = self._get_user(user_id)
         if user.client_account_id != organization_id:
             raise NotFoundError("User not found.")
-        analytics = ClientPortalService(self._session).get_user_analytics_for_admin(user_id=user.id)
+        analytics = ClientPortalService(
+            self._session,
+            inactive_ttl_seconds=self._settings.session_ttl_seconds,
+        ).get_user_analytics_for_admin(user_id=user.id)
         history_rows = HistoryRepository(self._session).list_sessions_for_user(
             user_id=user.id,
             filters=SessionListFilters(),

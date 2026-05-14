@@ -20,6 +20,9 @@ class SessionRepository(Protocol):
     def save(self, session: TrainingSessionState, *, expected_version: int | None = None) -> None:
         ...
 
+    def touch(self, session_id: str) -> None:
+        ...
+
     def delete(self, session_id: str) -> None:
         ...
 
@@ -53,13 +56,18 @@ class InMemorySessionRepository:
                 )
             self._store[session_id] = session.model_dump_json()
 
+    def touch(self, session_id: str) -> None:
+        with self._lock:
+            if str(session_id) not in self._store:
+                raise SessionNotFoundError(f"Session '{session_id}' not found.")
+
     def delete(self, session_id: str) -> None:
         with self._lock:
             self._store.pop(str(session_id), None)
 
 
 class RedisSessionRepository:
-    def __init__(self, client: Redis, ttl_seconds: int = 86400) -> None:
+    def __init__(self, client: Redis, ttl_seconds: int = 1800) -> None:
         self._client = client
         self._ttl_seconds = ttl_seconds
 
@@ -83,6 +91,11 @@ class RedisSessionRepository:
         if payload is None:
             return None
         return TrainingSessionState.model_validate_json(payload)
+
+    def touch(self, session_id: str) -> None:
+        key = self._session_key(str(session_id))
+        if not self._client.expire(key, self._ttl_seconds):
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
 
     def save(self, session: TrainingSessionState, *, expected_version: int | None = None) -> None:
         session_id = str(session.session_id)

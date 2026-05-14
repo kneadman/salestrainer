@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.application.turn_service import TurnResult
@@ -26,9 +26,29 @@ class HistoryAccessDeniedError(LookupError):
 
 
 class HistoryService:
-    def __init__(self, repository: HistoryRepository) -> None:
+    def __init__(self, repository: HistoryRepository, *, inactive_ttl_seconds: int = 1800) -> None:
         """Keep the repository that owns all persistent history database access."""
         self._repository = repository
+        self._inactive_ttl_seconds = inactive_ttl_seconds
+
+    def expire_inactive_sessions(
+        self,
+        *,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+        now: datetime | None = None,
+    ) -> int:
+        """Close active durable sessions that exceeded the configured trainer inactivity TTL."""
+        cutoff = (now or datetime.now(tz=UTC)) - timedelta(seconds=self._inactive_ttl_seconds)
+        return self._repository.expire_active_sessions(
+            last_activity_before=cutoff,
+            client_account_id=client_account_id,
+            user_id=user_id,
+        )
+
+    def record_runtime_session_expired(self, session_id: UUID) -> None:
+        """Close durable history when the corresponding runtime session has already expired."""
+        self._repository.expire_session(session_id=session_id)
 
     def record_session_started(
         self,
@@ -339,6 +359,7 @@ class HistoryService:
         """Return history scoped by requester role without exposing hidden snapshots."""
         normalized_role = normalize_role(requester_role)
         if normalized_role == UserRole.CLIENT_MANAGER:
+            self.expire_inactive_sessions(user_id=requester_user_id)
             rows = self._repository.list_sessions_for_user(
                 user_id=requester_user_id,
                 filters=SessionListFilters(
@@ -351,6 +372,7 @@ class HistoryService:
                 offset=offset,
             )
         elif normalized_role == UserRole.CLIENT_LEAD:
+            self.expire_inactive_sessions(client_account_id=requester_client_account_id)
             rows = self._repository.list_sessions_for_client_account(
                 client_account_id=requester_client_account_id,
                 filters=filters,
@@ -358,6 +380,7 @@ class HistoryService:
                 offset=offset,
             )
         else:
+            self.expire_inactive_sessions()
             rows = self._repository.list_all_sessions(filters=filters, limit=limit, offset=offset)
         self.record_usage_event(
             event_type=UsageEventType.HISTORY_VIEWED.value,
@@ -443,6 +466,7 @@ class HistoryService:
         offset: int,
     ) -> list[HistorySessionSummaryDTO]:
         """Return organization-scoped history for internal admin endpoints."""
+        self.expire_inactive_sessions(client_account_id=client_account_id)
         rows = self._repository.list_sessions_for_client_account(
             client_account_id=client_account_id,
             filters=filters,
@@ -468,6 +492,7 @@ class HistoryService:
         offset: int,
     ) -> list[HistorySessionSummaryDTO]:
         """Return one user's history for internal admin endpoints."""
+        self.expire_inactive_sessions(user_id=user_id)
         rows = self._repository.list_sessions_for_user(user_id=user_id, filters=filters, limit=limit, offset=offset)
         training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
         return [
@@ -481,6 +506,7 @@ class HistoryService:
 
     def get_client_usage_summary(self, *, client_account_id: UUID) -> UsageSummaryDTO:
         """Return basic organization usage metrics as an API DTO."""
+        self.expire_inactive_sessions(client_account_id=client_account_id)
         return UsageSummaryDTO.model_validate(self._repository.usage_summary(client_account_id))
 
     def _require_access(

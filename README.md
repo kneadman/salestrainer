@@ -236,6 +236,8 @@ POST /api/sessions
 5. Пишет durable history row и usage event в PostgreSQL.
 6. Возвращает public-safe DTO без скрытой persona.
 
+Runtime-сессии живут по `SESSION_TTL_SECONDS` (по умолчанию 1800 секунд): действия в тренажёре продлевают Redis TTL, а зависшие durable `active` записи закрываются как `expired` при следующем создании/просмотре истории или аналитики.
+
 Сообщение менеджера:
 
 ```http

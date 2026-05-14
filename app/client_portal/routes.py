@@ -7,18 +7,23 @@ from sqlalchemy.orm import Session
 
 from app.client_portal.schemas import ClientTrainingConfigOptionDTO, ClientUserAnalyticsDTO, TeamUsageSummaryDTO, TeamUserDTO, TeamUserDetailDTO
 from app.client_portal.service import ClientPortalAccessError, ClientPortalNotFoundError, ClientPortalService
+from app.api.dependencies import get_app_settings
 from app.history.repository import SessionListFilters
 from app.history.schemas import ClientHistorySessionSummaryDTO
 from app.identity.dependencies import require_current_user
 from app.identity.service import CurrentSession
+from app.infrastructure.config import Settings
 from app.infrastructure.db import get_db_session
 
 router = APIRouter(prefix="/api", tags=["client-portal"])
 
 
-def get_client_portal_service(db_session: Session = Depends(get_db_session)) -> ClientPortalService:
+def get_client_portal_service(
+    db_session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> ClientPortalService:
     """Build the client portal service for request handlers."""
-    return ClientPortalService(db_session)
+    return ClientPortalService(db_session, inactive_ttl_seconds=settings.session_ttl_seconds)
 
 
 def _handle_client_portal_error(error: Exception) -> None:

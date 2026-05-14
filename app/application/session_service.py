@@ -108,6 +108,10 @@ class TrainingSessionService:
         """Return a runtime session snapshot if it still exists in the session repository."""
         return self._repository.get(session_id)
 
+    def touch_session(self, session_id: str) -> None:
+        """Refresh runtime session expiry after a user action that does not mutate state."""
+        self._repository.touch(session_id)
+
     def delete_session(self, session_id: str) -> None:
         """Remove a runtime session during API-side compensation or cleanup."""
         self._repository.delete(session_id)

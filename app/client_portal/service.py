@@ -36,19 +36,22 @@ class ClientPortalNotFoundError(LookupError):
 
 
 class ClientPortalService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, inactive_ttl_seconds: int = 1800) -> None:
         """Keep the request-scoped DB session for client portal queries."""
         self._session = session
         self._history = HistoryRepository(session)
+        self._inactive_ttl_seconds = inactive_ttl_seconds
 
     def get_my_analytics(self, *, user_id: UUID) -> ClientUserAnalyticsDTO:
         """Return analytics for the current authenticated user only."""
         user = self._get_user(user_id)
+        self._expire_inactive_sessions(user_id=user.id)
         return self._user_analytics(user)
 
     def get_user_analytics_for_admin(self, *, user_id: UUID) -> ClientUserAnalyticsDTO:
         """Return analytics for one user so internal admin services can reuse one analytics source."""
         user = self._get_user(user_id)
+        self._expire_inactive_sessions(user_id=user.id)
         return self._user_analytics(user)
 
     def list_training_configs(self, *, requester: User) -> list[ClientTrainingConfigOptionDTO]:
@@ -85,6 +88,7 @@ class ClientPortalService:
     def list_team_users(self, *, requester: User) -> list[TeamUserDTO]:
         """Return same-organization users for a client lead."""
         self._require_client_lead(requester)
+        self._expire_inactive_sessions(client_account_id=requester.client_account_id)
         users = self._list_users_for_account(requester.client_account_id)
         # TODO: This performs per-user analytics and judgement aggregation; replace with bulk aggregation for larger teams.
         return [self._team_user_dto(user) for user in users]
@@ -92,6 +96,7 @@ class ClientPortalService:
     def get_team_usage_summary(self, *, requester: User) -> TeamUsageSummaryDTO:
         """Return organization usage summary for a client lead."""
         self._require_client_lead(requester)
+        self._expire_inactive_sessions(client_account_id=requester.client_account_id)
         summary = UsageSummaryDTO.model_validate(self._history.usage_summary(requester.client_account_id))
         judgement_analytics = self._judgement_analytics_for_account(requester.client_account_id)
         return TeamUsageSummaryDTO(
@@ -113,6 +118,7 @@ class ClientPortalService:
         """Return one same-organization user's history for a client lead."""
         self._require_client_lead(requester)
         user = self._require_same_account_user(user_id=user_id, client_account_id=requester.client_account_id)
+        self._expire_inactive_sessions(user_id=user.id)
         rows = self._history.list_sessions_for_user(user_id=user.id, filters=filters, limit=limit, offset=offset)
         training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
         return [
@@ -159,6 +165,20 @@ class ClientPortalService:
         if user.client_account_id != client_account_id:
             raise ClientPortalNotFoundError("User not found.")
         return user
+
+    def _expire_inactive_sessions(
+        self,
+        *,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+    ) -> int:
+        """Close stale active history rows before analytics or team history reads."""
+        cutoff = datetime.now(UTC) - timedelta(seconds=self._inactive_ttl_seconds)
+        return self._history.expire_active_sessions(
+            last_activity_before=cutoff,
+            client_account_id=client_account_id,
+            user_id=user_id,
+        )
 
     def _training_config_names_for_rows(self, records: list[TrainingSessionRecord]) -> dict[UUID, str]:
         """Load safe training config display names for client-facing history rows."""
