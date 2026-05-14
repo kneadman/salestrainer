@@ -4,7 +4,8 @@ import type { ClientRouteState } from "./types";
 
 export function parseClientPath(path: string): ClientRouteState {
   /** Convert /app browser paths to the lightweight client route state. */
-  const segments = path.split("/").filter(Boolean);
+  const [pathname] = path.split("?");
+  const segments = pathname.split("/").filter(Boolean);
   if (segments[0] !== "app") {
     return { route: "dashboard" };
   }
