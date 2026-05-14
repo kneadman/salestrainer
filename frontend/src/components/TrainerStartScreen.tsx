@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 type TrainerStartScreenProps = {
   kicker?: string;
   title: string;
@@ -8,6 +10,7 @@ type TrainerStartScreenProps = {
   disabled?: boolean;
   error?: string | null;
   variant?: "runtime" | "demo";
+  children?: ReactNode;
 };
 
 export function TrainerStartScreen({
@@ -20,6 +23,7 @@ export function TrainerStartScreen({
   disabled = false,
   error = null,
   variant = "runtime",
+  children,
 }: TrainerStartScreenProps) {
   /** Render a full-bleed, product-like start screen for training sessions. */
   return (
@@ -38,6 +42,8 @@ export function TrainerStartScreen({
           </div>
 
           {error ? <div className="client-alert client-alert--error">{error}</div> : null}
+
+          {children}
 
           <div className="trainer-start__actions">
             <button

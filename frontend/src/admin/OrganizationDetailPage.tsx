@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { auditActionLabel, auditEntityLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
 import {
-  assignTrainingConfig,
   createTrainingConfig,
   createUser,
   disableTrainingConfig,
@@ -13,11 +12,8 @@ import {
   listOrganizationHistory,
   listOrganizations,
   listTrainingConfigs,
-  listUserTrainingConfigs,
   listUsers,
-  makeDefaultTrainingConfig,
   resetUserPassword,
-  unassignTrainingConfig,
   updateTrainingConfig,
   updateUser,
 } from "./api";
@@ -30,7 +26,6 @@ import type {
   TrainingConfigDTO,
   UsageSummaryDTO,
   UserDTO,
-  UserTrainingConfigAssignmentDTO,
 } from "./types";
 import { auditPayloadSummary, formatDate, getErrorMessage, statusLabel } from "./utils";
 
@@ -44,6 +39,7 @@ type UserForm = {
   email: string;
   password: string;
   role: "client_lead" | "client_manager";
+  default_training_config_id: string | null;
 };
 
 type ConfigForm = {
@@ -75,12 +71,11 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [usage, setUsage] = useState<UsageSummaryDTO | null>(null);
   const [audit, setAudit] = useState<AuditLogDTO[]>([]);
-  const [assignmentsByUser, setAssignmentsByUser] = useState<Record<string, UserTrainingConfigAssignmentDTO[]>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [userForm, setUserForm] = useState<UserForm>({ email: "", password: "", role: "client_manager" });
+  const [userForm, setUserForm] = useState<UserForm>({ email: "", password: "", role: "client_manager", default_training_config_id: null });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [resetPasswordByUser, setResetPasswordByUser] = useState<Record<string, string>>({});
   const [configForm, setConfigForm] = useState<ConfigForm>(DEFAULT_CONFIG_FORM);
@@ -108,10 +103,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
       setHistory(loadedHistory);
       setUsage(loadedUsage);
       setAudit(loadedAudit);
-      const assignmentEntries = await Promise.all(
-        loadedUsers.map(async (user) => [user.id, await listUserTrainingConfigs(user.id).catch(() => [])] as const),
-      );
-      setAssignmentsByUser(Object.fromEntries(assignmentEntries));
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -137,13 +128,17 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
     setSuccess(null);
     try {
       if (editingUserId) {
-        await updateUser(editingUserId, { email: userForm.email, role: userForm.role });
+        await updateUser(editingUserId, {
+          email: userForm.email,
+          role: userForm.role,
+          default_training_config_id: userForm.default_training_config_id,
+        });
         setSuccess("Пользователь обновлён.");
       } else {
-        await createUser(organizationId, userForm);
+        await createUser(organizationId, { email: userForm.email, password: userForm.password, role: userForm.role });
         setSuccess("Пользователь создан.");
       }
-      setUserForm({ email: "", password: "", role: "client_manager" });
+      setUserForm({ email: "", password: "", role: "client_manager", default_training_config_id: null });
       setEditingUserId(null);
       await loadAll();
     } catch (submitError) {
@@ -246,30 +241,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
     }
   };
 
-  const handleAssignment = async (userId: string, configId: string, action: "assign" | "default" | "unassign") => {
-    /** Run one training config assignment action for a user. */
-    if (action === "unassign" && !window.confirm("Убрать этот конфиг у пользователя?")) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      if (action === "assign") {
-        await assignTrainingConfig(userId, configId);
-      } else if (action === "default") {
-        await makeDefaultTrainingConfig(userId, configId);
-      } else {
-        await unassignTrainingConfig(userId, configId);
-      }
-      setSuccess("Назначение обновлено.");
-      await loadAll();
-    } catch (assignmentError) {
-      setError(getErrorMessage(assignmentError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (loading) {
     return <LoadingState title="Загрузка организации" />;
   }
@@ -312,7 +283,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
         <UsersSection
           users={users}
           configs={configs}
-          assignmentsByUser={assignmentsByUser}
           userForm={userForm}
           setUserForm={setUserForm}
           editingUserId={editingUserId}
@@ -323,7 +293,6 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
           onSubmit={submitUser}
           onToggle={toggleUser}
           onReset={resetPassword}
-          onAssignment={handleAssignment}
           onOpenAnalytics={(userId) => onNavigate(`/admin/organizations/${organizationId}/users/${userId}/analytics`)}
         />
       ) : null}
@@ -369,7 +338,6 @@ function OverviewSection({ organization, usage }: { organization: OrganizationDT
 function UsersSection(props: {
   users: UserDTO[];
   configs: TrainingConfigDTO[];
-  assignmentsByUser: Record<string, UserTrainingConfigAssignmentDTO[]>;
   userForm: UserForm;
   setUserForm: (form: UserForm) => void;
   editingUserId: string | null;
@@ -380,10 +348,10 @@ function UsersSection(props: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggle: (user: UserDTO) => void;
   onReset: (user: UserDTO) => void;
-  onAssignment: (userId: string, configId: string, action: "assign" | "default" | "unassign") => void;
   onOpenAnalytics: (userId: string) => void;
 }) {
   /** Render user form, assignments, and reset-password actions. */
+  const activeConfigs = props.configs.filter((c) => c.is_active);
   return (
     <section className="admin-panel">
       <div className="admin-panel__header"><h2>Пользователи</h2></div>
@@ -392,38 +360,36 @@ function UsersSection(props: {
           <label><span>Email</span><input type="email" value={props.userForm.email} onChange={(event) => props.setUserForm({ ...props.userForm, email: event.target.value })} required /></label>
           <label><span>Пароль</span><input type="password" minLength={8} value={props.userForm.password} onChange={(event) => props.setUserForm({ ...props.userForm, password: event.target.value })} required={!props.editingUserId} /></label>
           <label><span>Роль</span><select value={props.userForm.role} onChange={(event) => props.setUserForm({ ...props.userForm, role: event.target.value as UserForm["role"] })}><option value="client_manager">Менеджер</option><option value="client_lead">Руководитель</option></select></label>
+          {props.editingUserId ? (
+            <label>
+              <span>Конфиг по умолчанию</span>
+              <select
+                value={props.userForm.default_training_config_id ?? ""}
+                onChange={(event) => props.setUserForm({ ...props.userForm, default_training_config_id: event.target.value || null })}
+              >
+                <option value="">— Не выбран —</option>
+                {activeConfigs.map((config) => (
+                  <option key={config.id} value={config.id}>{config.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
         <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.editingUserId ? "Обновить пользователя" : "Создать пользователя"}</button>
       </form>
       {props.users.length === 0 ? <EmptyState title="Пользователей нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Конфиги</th><th>Пароль</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Конфиг по умолчанию</th><th>Пароль</th><th>Действия</th></tr></thead>
             <tbody>
               {props.users.map((user) => {
-                const assignments = props.assignmentsByUser[user.id] ?? [];
+                const defaultConfig = props.configs.find((c) => c.id === user.default_training_config_id);
                 return (
                   <tr key={user.id}>
                     <td>{user.email}</td>
                     <td>{roleLabel(user.role)}</td>
                     <td><Badge tone={user.is_active ? "good" : "danger"}>{statusLabel(user.is_active)}</Badge></td>
-                    <td>
-                      <div className="admin-assignment-list">
-                        {props.configs.map((config) => {
-                          const assigned = assignments.find((item) => item.training_config_id === config.id);
-                          return (
-                            <div key={config.id}>
-                              <span>{config.name}</span>
-                              {assigned?.is_default ? <Badge tone="good">по умолчанию</Badge> : null}
-                              <button type="button" className="admin-link-button" onClick={() => props.onAssignment(user.id, config.id, assigned ? "default" : "assign")}>
-                                {assigned ? "По умолчанию" : "Назначить"}
-                              </button>
-                              {assigned ? <button type="button" className="admin-link-button" onClick={() => props.onAssignment(user.id, config.id, "unassign")}>Убрать</button> : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
+                    <td>{defaultConfig?.name ?? "—"}</td>
                     <td>
                       <div className="admin-password-reset">
                         <input
@@ -441,7 +407,12 @@ function UsersSection(props: {
                         <button type="button" className="admin-link-button" onClick={() => props.onOpenAnalytics(user.id)}>Аналитика</button>
                         <button type="button" className="admin-link-button" onClick={() => {
                           props.setEditingUserId(user.id);
-                          props.setUserForm({ email: user.email, password: "", role: user.role === "client_lead" ? "client_lead" : "client_manager" });
+                          props.setUserForm({
+                            email: user.email,
+                            password: "",
+                            role: user.role === "client_lead" ? "client_lead" : "client_manager",
+                            default_training_config_id: user.default_training_config_id ?? null,
+                          });
                         }}>Изменить</button>
                         <button type="button" className="admin-link-button" onClick={() => props.onToggle(user)}>{user.is_active ? "Отключить" : "Включить"}</button>
                       </div>

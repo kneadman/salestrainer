@@ -689,3 +689,145 @@ def test_audit_log_filters_by_organization_before_limit_and_payload_has_org_id()
         assert "organization_id" in record.payload
         assert "client_account_id" in record.payload
     session.close()
+
+
+def test_update_user_changes_default_training_config() -> None:
+    """PATCH user with default_training_config_id updates the default and clears previous ones."""
+    db_session = _create_session()
+    client = _admin_client(db_session)
+    org = _create_org(client)
+    config1 = _create_training_config(client, str(org["id"]), "Config 1")
+    config2 = _create_training_config(client, str(org["id"]), "Config 2")
+    user_response = client.post(
+        f"/api/internal/organizations/{org['id']}/users",
+        json={"email": "user@example.com", "password": "password", "role": "client_manager"},
+    )
+    assert user_response.status_code == 201
+    user_id = user_response.json()["id"]
+
+    patch = client.patch(
+        f"/api/internal/users/{user_id}",
+        json={"default_training_config_id": config2["id"]},
+    )
+
+    assert patch.status_code == 200
+    assert patch.json()["default_training_config_id"] == config2["id"]
+    assignments = list(db_session.scalars(select(UserTrainingConfig).where(UserTrainingConfig.user_id == UUID(user_id))))
+    assert len([a for a in assignments if a.is_default]) == 1
+    assert any(a.training_config_id == UUID(config2["id"]) and a.is_default for a in assignments)
+    db_session.close()
+
+
+def test_update_user_clears_default_training_config() -> None:
+    """PATCH user with default_training_config_id=null removes the default."""
+    db_session = _create_session()
+    client = _admin_client(db_session)
+    org = _create_org(client)
+    config = _create_training_config(client, str(org["id"]))
+    user_response = client.post(
+        f"/api/internal/organizations/{org['id']}/users",
+        json={"email": "user@example.com", "password": "password", "role": "client_manager"},
+    )
+    assert user_response.status_code == 201
+    user_id = user_response.json()["id"]
+    client.patch(f"/api/internal/users/{user_id}", json={"default_training_config_id": config["id"]})
+
+    patch = client.patch(
+        f"/api/internal/users/{user_id}",
+        json={"default_training_config_id": None},
+    )
+
+    assert patch.status_code == 200
+    assert patch.json()["default_training_config_id"] is None
+    assignments = list(db_session.scalars(select(UserTrainingConfig).where(UserTrainingConfig.user_id == UUID(user_id))))
+    assert not any(a.is_default for a in assignments)
+    db_session.close()
+
+
+def test_update_user_rejects_disabled_default_training_config() -> None:
+    """PATCH user with a disabled training config must return 422 and not change existing default."""
+    db_session = _create_session()
+    client = _admin_client(db_session)
+    org = _create_org(client)
+    config = _create_training_config(client, str(org["id"]), "Active")
+    disabled = _create_training_config(client, str(org["id"]), "Disabled")
+    user_response = client.post(
+        f"/api/internal/organizations/{org['id']}/users",
+        json={"email": "user@example.com", "password": "password", "role": "client_manager"},
+    )
+    assert user_response.status_code == 201
+    user_id = user_response.json()["id"]
+    client.patch(f"/api/internal/users/{user_id}", json={"default_training_config_id": config["id"]})
+
+    client.post(f"/api/internal/training-configs/{disabled['id']}/disable")
+    patch = client.patch(
+        f"/api/internal/users/{user_id}",
+        json={"default_training_config_id": disabled["id"]},
+    )
+
+    assert patch.status_code == 422
+    assignments = list(db_session.scalars(select(UserTrainingConfig).where(UserTrainingConfig.user_id == UUID(user_id))))
+    assert any(a.training_config_id == UUID(config["id"]) and a.is_default for a in assignments)
+    db_session.close()
+
+
+def test_update_user_rejects_cross_organization_default_training_config() -> None:
+    """PATCH user with a training config from another organization must return 422."""
+    db_session = _create_session()
+    client = _admin_client(db_session)
+    org_a = _create_org(client, "org-a")
+    org_b = _create_org(client, "org-b")
+    config_a = _create_training_config(client, str(org_a["id"]), "A")
+    config_b = _create_training_config(client, str(org_b["id"]), "B")
+    user_response = client.post(
+        f"/api/internal/organizations/{org_a['id']}/users",
+        json={"email": "user@example.com", "password": "password", "role": "client_manager"},
+    )
+    assert user_response.status_code == 201
+    user_id = user_response.json()["id"]
+    client.patch(f"/api/internal/users/{user_id}", json={"default_training_config_id": config_a["id"]})
+
+    patch = client.patch(
+        f"/api/internal/users/{user_id}",
+        json={"default_training_config_id": config_b["id"]},
+    )
+
+    assert patch.status_code == 422
+    assignments = list(db_session.scalars(select(UserTrainingConfig).where(UserTrainingConfig.user_id == UUID(user_id))))
+    assert any(a.training_config_id == UUID(config_a["id"]) and a.is_default for a in assignments)
+    db_session.close()
+
+
+def test_update_user_is_atomic_email_conflict_rolls_back_default_config() -> None:
+    """If email conflict happens, default config change must not be partially applied."""
+    db_session = _create_session()
+    client = _admin_client(db_session)
+    org = _create_org(client)
+    old_config = _create_training_config(client, str(org["id"]), "Old")
+    new_config = _create_training_config(client, str(org["id"]), "New")
+    user_a = client.post(
+        f"/api/internal/organizations/{org['id']}/users",
+        json={"email": "usera@example.com", "password": "password", "role": "client_manager"},
+    )
+    user_b = client.post(
+        f"/api/internal/organizations/{org['id']}/users",
+        json={"email": "userb@example.com", "password": "password", "role": "client_manager"},
+    )
+    assert user_a.status_code == 201
+    assert user_b.status_code == 201
+    user_a_id = user_a.json()["id"]
+    client.patch(f"/api/internal/users/{user_a_id}", json={"default_training_config_id": old_config["id"]})
+
+    patch = client.patch(
+        f"/api/internal/users/{user_a_id}",
+        json={"email": "userb@example.com", "default_training_config_id": new_config["id"]},
+    )
+
+    assert patch.status_code == 409
+    user_a_row = db_session.get(User, UUID(user_a_id))
+    assert user_a_row is not None
+    assert user_a_row.email == "usera@example.com"
+    assignments = list(db_session.scalars(select(UserTrainingConfig).where(UserTrainingConfig.user_id == UUID(user_a_id))))
+    assert any(a.training_config_id == UUID(old_config["id"]) and a.is_default for a in assignments)
+    assert not any(a.training_config_id == UUID(new_config["id"]) for a in assignments)
+    db_session.close()

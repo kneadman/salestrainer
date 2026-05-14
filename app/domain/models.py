@@ -258,6 +258,7 @@ class TrainingSessionState(BaseModel):
     history_sync_status: Literal["ok", "pending_retry"] = "ok"
     history_sync_error: str | None = None
     recent_message_submissions: list["MessageSubmissionRecord"] = Field(default_factory=list)
+    training_config_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 

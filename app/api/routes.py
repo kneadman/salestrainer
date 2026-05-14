@@ -260,14 +260,41 @@ def create_session(
                 detail="persona_id is not allowed for client sessions.",
             )
 
-        try:
-            training_config = access_service.get_default_training_config_for_user(current_session.user.id)
-        except LookupError as error:
-            if is_internal_admin(user_role) and request.persona_id is not None:
-                raise not_found(
-                    "Default training config is required for internal admin debug sessions."
+        training_config = None
+        if request.training_config_id is not None:
+            try:
+                config_id = UUID(request.training_config_id)
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Invalid training_config_id format.",
                 ) from error
-            raise
+            training_config = access_service.get_training_config_by_id(config_id)
+            if training_config is None:
+                raise not_found("Training config not found.")
+            if training_config.client_account_id != current_session.user.client_account_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Training config does not belong to your organization.",
+                )
+
+        if training_config is None:
+            try:
+                training_config = access_service.get_default_training_config_for_user(current_session.user.id)
+            except LookupError as error:
+                if is_internal_admin(user_role) and request.persona_id is not None:
+                    raise not_found(
+                        "Default training config is required for internal admin debug sessions."
+                    ) from error
+                raise not_found(
+                    "Сценарий по умолчанию не назначен. Обратитесь к администратору."
+                ) from error
+
+        if not training_config.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Training config is disabled.",
+            )
 
         history_service.expire_inactive_sessions(
             client_account_id=training_config.client_account_id,

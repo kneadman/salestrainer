@@ -31,6 +31,7 @@ def build_session_public_dto(session: TrainingSessionState) -> SessionPublicDTO:
         turn_count=session.turn_count,
         summary=session.summary,
         state_version=session.state_version,
+        training_config_id=str(session.training_config_id) if session.training_config_id else None,
     )
 
 

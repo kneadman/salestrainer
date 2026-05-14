@@ -93,6 +93,7 @@ class AccessRepository:
                 "client_account_id": training_config.client_account_id,
                 "name": training_config.name,
                 "persona_generation_context": training_config.persona_generation_context,
+                "is_active": training_config.is_active,
             }
         )
 

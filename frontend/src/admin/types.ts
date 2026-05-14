@@ -55,6 +55,7 @@ export type UserDTO = {
   must_change_password: boolean;
   created_at: string;
   updated_at: string;
+  default_training_config_id?: string | null;
   client_account?: {
     id: string;
     name: string;
@@ -77,6 +78,7 @@ export type UserCreatePayload = {
 export type UserUpdatePayload = {
   email?: string;
   role?: "client_lead" | "client_manager";
+  default_training_config_id?: string | null;
 };
 
 export type TrainingConfigDTO = {
@@ -92,13 +94,6 @@ export type TrainingConfigDTO = {
 export type TrainingConfigPayload = {
   name: string;
   persona_generation_context: string;
-};
-
-export type UserTrainingConfigAssignmentDTO = {
-  user_id: string;
-  training_config_id: string;
-  is_default: boolean;
-  training_config: TrainingConfigDTO;
 };
 
 export type AuditLogDTO = {

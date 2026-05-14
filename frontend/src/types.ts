@@ -39,6 +39,7 @@ export type SessionPublicDTO = {
   turn_count: number;
   summary: string;
   state_version: number;
+  training_config_id?: string | null;
 };
 
 export type SessionStateResponse = {

@@ -7,6 +7,8 @@ import { TrainerContextPanel } from "../components/TrainerContextPanel";
 import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
+import type { TrainingConfigOptionDTO } from "./types";
+import { getTrainingConfigs } from "./api";
 import {
   clearStoredTrainerSessionId,
   getStoredTrainerSessionId,
@@ -35,6 +37,8 @@ export function TrainerPage({ userId }: TrainerPageProps) {
   const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [pendingMessageSubmission, setPendingMessageSubmission] = useState<PendingMessageSubmission | null>(null);
+  const [trainingConfigs, setTrainingConfigs] = useState<TrainingConfigOptionDTO[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
 
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity across page reloads. */
@@ -74,15 +78,43 @@ export function TrainerPage({ userId }: TrainerPageProps) {
     void restore();
   }, [userId]);
 
+  useEffect(() => {
+    /** Load available training configs for pre-training selection. */
+    const loadConfigs = async () => {
+      try {
+        const configs = await getTrainingConfigs();
+        setTrainingConfigs(configs);
+        const defaultConfig = configs.find((c) => c.is_default);
+        if (defaultConfig) {
+          setSelectedConfigId(defaultConfig.id);
+        } else if (configs.length > 0) {
+          setSelectedConfigId(configs[0].id);
+        }
+      } catch {
+        setError("Настройки тренировки недоступны. Обновите страницу или обратитесь к администратору.");
+        setTrainingConfigs([]);
+      }
+    };
+    void loadConfigs();
+  }, []);
+
   const loading = busyAction !== null;
   const isSending = busyAction === "send";
   const canSend = session?.status === "active" && !loading;
   const voiceDisabled = !session || session.status !== "active" || loading;
   const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
   const canShowReportButton = session?.status === "finished" && (report !== null || reportPayload !== null);
+  const activeConfigName = useMemo(() => {
+    if (!session?.training_config_id) return undefined;
+    return trainingConfigs.find((c) => c.id === session.training_config_id)?.name;
+  }, [session?.training_config_id, trainingConfigs]);
 
   const startNewSession = async () => {
     /** Start a new runtime session and clear finished-session UI state before the request. */
+    if (!selectedConfigId) {
+      setError("Выберите сценарий перед началом тренировки.");
+      return;
+    }
     setBusyAction("create");
     setError(null);
     setVoiceError(null);
@@ -94,7 +126,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
     setInputValue("");
 
     try {
-      const response = await createSession();
+      const response = await createSession(selectedConfigId);
       setSession(response.session);
       storeTrainerSessionId(userId, response.session.session_id);
     } catch (startError) {
@@ -191,10 +223,26 @@ export function TrainerPage({ userId }: TrainerPageProps) {
         hint="Тренировка создаст новую симуляцию клиента и откроет рабочий диалог."
         buttonLabel="Начать тренировку"
         onStart={startNewSession}
-        disabled={loading}
+        disabled={loading || trainingConfigs.length === 0}
         variant="runtime"
         error={error}
-      />
+      >
+        {trainingConfigs.length > 0 ? (
+          <div className="trainer-config-select">
+            <label>
+              <span>Сценарий</span>
+              <select
+                value={selectedConfigId ?? ""}
+                onChange={(event) => setSelectedConfigId(event.target.value || null)}
+              >
+                {trainingConfigs.map((config) => (
+                  <option key={config.id} value={config.id}>{config.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
+      </TrainerStartScreen>
     );
   }
 
@@ -202,7 +250,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
     <>
       <main className="client-trainer-layout">
         <aside className="trainer-side-panels trainer-side-panels--desktop" aria-label="Метрики и факты тренировки">
-          <TrainerContextPanel session={session} factsState={factsState} mode="desktop" />
+          <TrainerContextPanel session={session} factsState={factsState} mode="desktop" trainingConfigName={activeConfigName} />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
           <section className="trainer-chat-panel">
@@ -215,7 +263,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
               onFinish={handleFinish}
             />
             <div className="trainer-context-slot trainer-context-slot--mobile">
-              <TrainerContextPanel session={session} factsState={factsState} mode="mobile" />
+              <TrainerContextPanel session={session} factsState={factsState} mode="mobile" trainingConfigName={activeConfigName} />
             </div>
             <div className="trainer-chat-body">
               {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
