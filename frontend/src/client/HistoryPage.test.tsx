@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { HistoryPage } from "./HistoryPage";
-import type { HistorySessionDetailDTO } from "./types";
+import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
 
 const apiMocks = vi.hoisted(() => ({
@@ -57,6 +57,7 @@ function makeDetail(
   reportPayload: ReportPayload | null,
   overrides: Partial<Pick<HistorySessionDetailDTO, "public_brief">> & {
     session?: Partial<HistorySessionDetailDTO["session"]>;
+    turns?: HistorySessionDetailDTO["turns"];
   } = {},
 ): HistorySessionDetailDTO {
   return {
@@ -75,7 +76,7 @@ function makeDetail(
       ...overrides.session,
     },
     public_brief: "public_brief" in overrides ? overrides.public_brief ?? null : "Публичный бриф",
-    turns: [],
+    turns: overrides.turns ?? [],
     report: {
       session_id: "session-123456",
       report: "LEGACY TEXT REPORT",
@@ -86,6 +87,40 @@ function makeDetail(
     },
   };
 }
+
+function makeSummary(overrides: Partial<HistorySessionSummaryDTO> = {}): HistorySessionSummaryDTO {
+  return {
+    session_id: "session-123456",
+    user_email: "manager@example.com",
+    scenario_id: "generic_b2b_first_contact",
+    status: "finished",
+    started_at: "2026-05-08T19:23:00Z",
+    finished_at: "2026-05-08T19:53:00Z",
+    last_activity_at: "2026-05-08T19:53:00Z",
+    turn_count: 1,
+    final_interest_score: 72,
+    final_stage: "next_step",
+    summary: "Summary",
+    ...overrides,
+  };
+}
+
+describe("HistoryPage list filters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders scenario filters and rows without raw scenario ids in visible text", async () => {
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    const { container } = render(<HistoryPage onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("generic_b2b_first_contact");
+    expect(container.textContent).not.toContain("sales_audit_cold_outreach");
+    expect(screen.getAllByRole("combobox")[1].textContent).not.toContain("generic_b2b_first_contact");
+  });
+});
 
 describe("HistoryPage detail header and layout", () => {
   beforeEach(() => {
@@ -117,6 +152,33 @@ describe("HistoryPage detail header and layout", () => {
     render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
 
     expect(await screen.findByRole("heading", { name: "Тренировка" })).toBeInTheDocument();
+  });
+  it("renders turn stages through shared labels instead of raw stage ids", async () => {
+    apiMocks.getHistorySessionDetail.mockResolvedValue(
+      makeDetail(null, {
+        turns: [
+          {
+            turn_index: 1,
+            manager_message: "Need details?",
+            client_answer: "Can discuss process.",
+            interest_before: 40,
+            interest_delta: 8,
+            interest_after: 48,
+            stage_before: "first_contact",
+            stage_after: "need_discovery",
+            client_state_public: null,
+            evaluation: null,
+            created_at: "2026-05-08T19:24:00Z",
+          },
+        ],
+      }),
+    );
+
+    const { container } = render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("Need details?")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("first_contact");
+    expect(container.textContent).not.toContain("need_discovery");
   });
 });
 
