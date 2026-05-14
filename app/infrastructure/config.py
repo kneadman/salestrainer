@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer"
-    session_ttl_seconds: int = 86400
+    session_ttl_seconds: int = Field(default=1800, ge=60)
     app_env: str = "local"
     log_level: str = "INFO"
     debug_cli: bool = False

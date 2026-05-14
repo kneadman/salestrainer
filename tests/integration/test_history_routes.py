@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -44,7 +44,7 @@ def _create_db_session() -> Session:
 def _create_client(db_session: Session, repository: InMemorySessionRepository) -> TestClient:
     """Create a TestClient wired to the provided database and runtime repository."""
     app = create_app(
-        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, session_ttl_seconds=1800),
         repository=repository,
         llm_client=FakeLLMClient(),
     )
@@ -227,6 +227,124 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert report_response.json()["report"] == report.report_text
     assert "report_payload" in report_response.json()
     assert report_response.json()["report_payload"] == report.report_payload
+    db_session.close()
+
+
+def test_create_session_expires_stale_active_history_for_user() -> None:
+    """Starting a new session closes the user's stale active durable sessions."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-ttl",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    first_response = client.post("/api/sessions", json={})
+    assert first_response.status_code == 201
+    first_session_id = UUID(first_response.json()["session"]["session_id"])
+    first_record = db_session.get(TrainingSessionRecord, first_session_id)
+    assert first_record is not None
+    stale_activity_at = datetime.now(tz=UTC) - timedelta(minutes=31)
+    first_record.last_activity_at = stale_activity_at
+    db_session.commit()
+
+    second_response = client.post("/api/sessions", json={})
+    second_session_id = UUID(second_response.json()["session"]["session_id"])
+    db_session.refresh(first_record)
+    second_record = db_session.get(TrainingSessionRecord, second_session_id)
+
+    assert second_response.status_code == 201
+    assert first_record.status == "expired"
+    assert first_record.finished_at is not None
+    assert second_record is not None
+    assert second_record.status == "active"
+    db_session.close()
+
+
+def test_session_touch_refreshes_durable_activity_before_history_expire() -> None:
+    """Runtime touch should keep durable activity fresh enough to avoid premature expiry."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-touch",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    create_response = client.post("/api/sessions", json={})
+    assert create_response.status_code == 201
+    session_id = UUID(create_response.json()["session"]["session_id"])
+    record = db_session.get(TrainingSessionRecord, session_id)
+    assert record is not None
+    stale_activity_at = datetime.now(tz=UTC) - timedelta(minutes=31)
+    record.last_activity_at = stale_activity_at
+    db_session.commit()
+
+    touch_response = client.get(f"/api/sessions/{session_id}")
+    db_session.refresh(record)
+    refreshed_activity_at = record.last_activity_at
+    history_response = client.get("/api/history/sessions")
+    db_session.refresh(record)
+
+    assert touch_response.status_code == 200
+    assert record.status == "active"
+    assert refreshed_activity_at != stale_activity_at
+    assert history_response.status_code == 200
+    assert record.status == "active"
+    db_session.close()
+
+
+def test_history_repository_touch_session_activity_updates_only_active_sessions() -> None:
+    """Durable activity touch must not reactivate expired or finished sessions."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-touch-repository",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    create_response = client.post("/api/sessions", json={})
+    assert create_response.status_code == 201
+    session_id = UUID(create_response.json()["session"]["session_id"])
+    history_repository = HistoryRepository(db_session)
+    active_touched_at = datetime.now(tz=UTC)
+
+    active_record = history_repository.touch_session_activity(
+        session_id=session_id,
+        touched_at=active_touched_at,
+    )
+    assert active_record is not None
+    assert active_record.status == "active"
+    assert active_record.last_activity_at is not None
+
+    active_record.status = "expired"
+    expired_activity_at = datetime.now(tz=UTC) - timedelta(hours=2)
+    active_record.last_activity_at = expired_activity_at
+    db_session.commit()
+    expired_record = history_repository.touch_session_activity(
+        session_id=session_id,
+        touched_at=datetime.now(tz=UTC),
+    )
+    assert expired_record is not None
+    assert expired_record.status == "expired"
+    assert expired_record.last_activity_at == expired_activity_at
+
+    expired_record.status = "finished"
+    finished_activity_at = datetime.now(tz=UTC) - timedelta(hours=1)
+    expired_record.last_activity_at = finished_activity_at
+    db_session.commit()
+    finished_record = history_repository.touch_session_activity(
+        session_id=session_id,
+        touched_at=datetime.now(tz=UTC),
+    )
+    assert finished_record is not None
+    assert finished_record.status == "finished"
+    assert finished_record.last_activity_at == finished_activity_at
     db_session.close()
 
 

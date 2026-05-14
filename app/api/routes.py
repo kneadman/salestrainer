@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -115,6 +116,31 @@ def _reconcile_pending_history_sync(
             "The previous turn was processed, but session history is still being reconciled. "
             "Please retry this action instead of resending the last message."
         ) from None
+
+
+def _record_runtime_expiry(session_id: str, history_service: HistoryService) -> None:
+    """Best-effort close of durable history after the runtime session key expired."""
+    try:
+        history_service.record_runtime_session_expired(UUID(session_id))
+    except (ValueError, LookupError):
+        return
+    except Exception:
+        logger.warning("runtime_session_expiry_record_failed session_id=%s", session_id, exc_info=True)
+
+
+def _touch_runtime_session(
+    *,
+    session_id: str,
+    session_service: TrainingSessionService,
+    history_service: HistoryService,
+) -> None:
+    """Refresh both runtime TTL and durable last activity for one active session."""
+    session_service.touch_session(session_id)
+    try:
+        durable_session_id = UUID(session_id)
+    except ValueError as error:
+        raise not_found("Session not found.") from error
+    history_service.touch_runtime_session_activity(durable_session_id)
 
 
 @router.get("/health")
@@ -243,6 +269,10 @@ def create_session(
                 ) from error
             raise
 
+        history_service.expire_inactive_sessions(
+            client_account_id=training_config.client_account_id,
+            user_id=current_session.user.id,
+        )
         session = None
         if is_internal_admin(user_role) and request.persona_id is not None:
             session = session_service.start_session(
@@ -299,7 +329,13 @@ def get_session(
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found.")
+    _touch_runtime_session(
+        session_id=session_id,
+        session_service=session_service,
+        history_service=history_service,
+    )
     history_service.record_usage_event(
         event_type=UsageEventType.SESSION_VIEWED.value,
         client_account_id=ownership.client_account_id,
@@ -332,6 +368,11 @@ def resume_session(
         )
         ownership = access_service.get_session_ownership(session_id)
         session = session_service.resume_session(session_id)
+        _touch_runtime_session(
+            session_id=session_id,
+            session_service=session_service,
+            history_service=history_service,
+        )
         history_service.record_usage_event(
             event_type=UsageEventType.SESSION_RESUMED.value,
             client_account_id=ownership.client_account_id,
@@ -372,6 +413,11 @@ def post_manager_message(
                     raise conflict(
                         "This idempotency key was already used for a different manager_message."
                     )
+                _touch_runtime_session(
+                    session_id=session_id,
+                    session_service=session_service,
+                    history_service=history_service,
+                )
                 return TurnResponse.model_validate(existing_submission.response_payload)
         ownership = access_service.get_session_ownership(session_id)
         turn_result = turn_service.process_message(
@@ -380,11 +426,14 @@ def post_manager_message(
             idempotency_key=request.idempotency_key,
         )
     except SalesTrainerError as error:
+        if isinstance(error, SessionNotFoundError):
+            _record_runtime_expiry(session_id, history_service)
         raise_api_error(error)
     except LookupError as error:
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found after turn.")
     response = (
         TurnResponse.model_validate(turn_result.response_payload)
@@ -443,11 +492,14 @@ def finish_session(
         ownership = access_service.get_session_ownership(session_id)
         report_text = report_service.finish_session(session_id)
     except SalesTrainerError as error:
+        if isinstance(error, SessionNotFoundError):
+            _record_runtime_expiry(session_id, history_service)
         raise_api_error(error)
     except LookupError as error:
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found after finish.")
     report_payload = report_service.generate_report_payload_safely(session_id)
     history_service.record_session_finished_with_report(
@@ -481,6 +533,7 @@ def get_report(
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found.")
     if session.status != "finished":
         raise conflict("Session is not finished yet.")
@@ -492,6 +545,7 @@ def get_report(
         report_payload = saved_report_payload
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found after report.")
     if saved_report_payload is None:
         history_service.record_report_generated(

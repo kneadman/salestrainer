@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, and_, desc, distinct, func, select
+from sqlalchemy import Select, and_, desc, distinct, func, select, update
 from sqlalchemy.orm import Session
 
 from app.history.models import (
@@ -121,6 +121,58 @@ class HistoryRepository:
         self._session.commit()
         self._session.refresh(record)
         return record
+
+    def expire_session(self, *, session_id: UUID, expired_at: datetime | None = None) -> TrainingSessionRecord | None:
+        """Mark one active persistent session as expired without exposing hidden runtime state."""
+        record = self.get_session(session_id)
+        if record is None or record.status != "active":
+            return record
+        record.status = "expired"
+        record.finished_at = expired_at or record.last_activity_at
+        self._session.commit()
+        self._session.refresh(record)
+        return record
+
+    def touch_session_activity(self, *, session_id: UUID, touched_at: datetime) -> TrainingSessionRecord | None:
+        """Refresh durable last activity for one active persistent session."""
+        record = self.get_session(session_id)
+        if record is None or record.status != "active":
+            return record
+        record.last_activity_at = touched_at
+        record.updated_at = touched_at
+        self._session.commit()
+        self._session.refresh(record)
+        return record
+
+    def expire_active_sessions(
+        self,
+        *,
+        last_activity_before: datetime,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+    ) -> int:
+        """Bulk-expire active persistent sessions whose durable last activity is stale."""
+        conditions = [
+            TrainingSessionRecord.status == "active",
+            TrainingSessionRecord.last_activity_at < last_activity_before,
+        ]
+        if client_account_id is not None:
+            conditions.append(TrainingSessionRecord.client_account_id == client_account_id)
+        if user_id is not None:
+            conditions.append(TrainingSessionRecord.user_id == user_id)
+        statement = (
+            update(TrainingSessionRecord)
+            .where(and_(*conditions))
+            .values(
+                status="expired",
+                finished_at=TrainingSessionRecord.last_activity_at,
+                updated_at=func.now(),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        result = self._session.execute(statement)
+        self._session.commit()
+        return int(result.rowcount or 0)
 
     def append_turn(
         self,
