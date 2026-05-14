@@ -2,17 +2,6 @@ import { ApiError } from "../apiClient";
 import { formatDate as formatSharedDate, statusLabel as sharedStatusLabel } from "../labels";
 import type { AdminRouteState, JsonObject, OrganizationDetailTab } from "./types";
 
-export const FALLBACK_SCENARIOS = [
-  "first_contact_discovery",
-  "qualification_and_authority",
-  "needs_diagnosis",
-  "objection_handling",
-  "price_and_value",
-  "bad_experience_recovery",
-  "next_step_booking",
-  "follow_up_after_pause",
-];
-
 const ORGANIZATION_DETAIL_TABS = new Set<OrganizationDetailTab>(["overview", "users", "configs", "history", "usage", "audit"]);
 
 export function parseAdminPath(path: string): AdminRouteState {

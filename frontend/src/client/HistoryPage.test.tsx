@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HistoryPage } from "./HistoryPage";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
@@ -6,6 +7,7 @@ import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
 const apiMocks = vi.hoisted(() => ({
   getHistorySessionDetail: vi.fn<() => Promise<HistorySessionDetailDTO>>(),
   getHistorySessions: vi.fn(),
+  getTrainingConfigs: vi.fn(),
 }));
 
 vi.mock("./api", async () => {
@@ -14,6 +16,7 @@ vi.mock("./api", async () => {
     ...actual,
     getHistorySessionDetail: apiMocks.getHistorySessionDetail,
     getHistorySessions: apiMocks.getHistorySessions,
+    getTrainingConfigs: apiMocks.getTrainingConfigs,
   };
 });
 
@@ -64,6 +67,7 @@ function makeDetail(
       session: {
         session_id: "session-123456",
         user_email: "manager@example.com",
+        training_config_name: "B2B discovery",
         scenario_id: "generic_b2b_first_contact",
         status: "finished",
       started_at: "2026-05-08T19:23:00Z",
@@ -92,6 +96,7 @@ function makeSummary(overrides: Partial<HistorySessionSummaryDTO> = {}): History
   return {
     session_id: "session-123456",
     user_email: "manager@example.com",
+    training_config_name: "B2B discovery",
     scenario_id: "generic_b2b_first_contact",
     status: "finished",
     started_at: "2026-05-08T19:23:00Z",
@@ -108,9 +113,13 @@ function makeSummary(overrides: Partial<HistorySessionSummaryDTO> = {}): History
 describe("HistoryPage list filters", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.getTrainingConfigs.mockResolvedValue([
+      { id: "config-1", name: "B2B discovery", is_default: true },
+      { id: "config-2", name: "Objection practice", is_default: false },
+    ]);
   });
 
-  it("renders scenario filters and rows without raw scenario ids in visible text", async () => {
+  it("renders training config filters and rows without raw scenario ids in visible text", async () => {
     apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
 
     const { container } = render(<HistoryPage onNavigate={vi.fn()} />);
@@ -118,7 +127,41 @@ describe("HistoryPage list filters", () => {
     expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
     expect(container.textContent).not.toContain("generic_b2b_first_contact");
     expect(container.textContent).not.toContain("sales_audit_cold_outreach");
+    expect(screen.getAllByText("B2B discovery").length).toBeGreaterThan(0);
+    expect(screen.getByText("Objection practice")).toBeInTheDocument();
     expect(screen.getAllByRole("combobox")[1].textContent).not.toContain("generic_b2b_first_contact");
+  });
+
+  it("loads history with training config filters from query params", async () => {
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history?status=finished&training_config_id=config-2" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(apiMocks.getHistorySessions).toHaveBeenCalledWith({
+      status: "finished",
+      training_config_id: "config-2",
+      limit: 100,
+      offset: 0,
+    });
+  });
+
+  it("navigates on filter submit without reloading history immediately", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history" onNavigate={onNavigate} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    const initialHistoryCalls = apiMocks.getHistorySessions.mock.calls.length;
+    const [statusSelect, trainingConfigSelect] = screen.getAllByRole("combobox");
+    await user.selectOptions(statusSelect, "finished");
+    await user.selectOptions(trainingConfigSelect, "config-2");
+    await user.click(screen.getByRole("button", { name: "Применить" }));
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?status=finished&training_config_id=config-2", true);
+    expect(apiMocks.getHistorySessions).toHaveBeenCalledTimes(initialHistoryCalls);
   });
 });
 

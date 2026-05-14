@@ -365,7 +365,15 @@ class HistoryService:
             user_id=requester_user_id,
             event_payload={"limit": limit, "offset": offset},
         )
-        return [session_summary_dto(record, user_email=email) for record, email in rows]
+        training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
+        return [
+            session_summary_dto(
+                record,
+                user_email=email,
+                training_config_name=training_config_names.get(record.training_config_id),
+            )
+            for record, email in rows
+        ]
 
     def get_session_history_detail(
         self,
@@ -391,8 +399,9 @@ class HistoryService:
         )
         email = self._repository.get_user_email(record.user_id) or ""
         report = self._repository.get_report(record.id)
+        training_config_name = self._training_config_names_for_rows([record]).get(record.training_config_id)
         return HistorySessionDetailDTO(
-            session=session_summary_dto(record, user_email=email),
+            session=session_summary_dto(record, user_email=email, training_config_name=training_config_name),
             public_brief=record.public_brief,
             turns=[turn_dto(turn) for turn in self._repository.list_turns_for_session(record.id)],
             report=report_dto(report) if report is not None else None,
@@ -440,7 +449,15 @@ class HistoryService:
             limit=limit,
             offset=offset,
         )
-        return [session_summary_dto(record, user_email=email) for record, email in rows]
+        training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
+        return [
+            session_summary_dto(
+                record,
+                user_email=email,
+                training_config_name=training_config_names.get(record.training_config_id),
+            )
+            for record, email in rows
+        ]
 
     def list_user_history(
         self,
@@ -452,7 +469,15 @@ class HistoryService:
     ) -> list[HistorySessionSummaryDTO]:
         """Return one user's history for internal admin endpoints."""
         rows = self._repository.list_sessions_for_user(user_id=user_id, filters=filters, limit=limit, offset=offset)
-        return [session_summary_dto(record, user_email=email) for record, email in rows]
+        training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
+        return [
+            session_summary_dto(
+                record,
+                user_email=email,
+                training_config_name=training_config_names.get(record.training_config_id),
+            )
+            for record, email in rows
+        ]
 
     def get_client_usage_summary(self, *, client_account_id: UUID) -> UsageSummaryDTO:
         """Return basic organization usage metrics as an API DTO."""
@@ -476,6 +501,15 @@ class HistoryService:
         if normalized_role == UserRole.CLIENT_LEAD and record.client_account_id != requester_client_account_id:
             raise HistoryAccessDeniedError("Session not found.")
         return record
+
+    def _training_config_names_for_rows(self, records: list[object]) -> dict[UUID, str]:
+        """Load training config display names for the provided persistent session rows."""
+        config_ids = {
+            record.training_config_id
+            for record in records
+            if getattr(record, "training_config_id", None) is not None
+        }
+        return self._repository.training_config_names(config_ids)
 
     def _session_snapshot(self, session: TrainingSessionState) -> dict[str, object]:
         """Build a bounded state snapshot that excludes the hidden persona object."""

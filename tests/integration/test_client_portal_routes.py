@@ -221,9 +221,114 @@ def test_client_lead_can_read_same_org_team_users_and_usage_summary() -> None:
     assert summary_response.json()["users"]
     assert history_response.status_code == 200
     assert history_response.json()[0]["user_email"] == "manager@example.com"
+    assert history_response.json()[0]["training_config_name"] == "Default"
     assert "user_id" not in history_response.json()[0]
     assert "client_account_id" not in history_response.json()[0]
     assert "training_config_id" not in history_response.json()[0]
+    db_session.close()
+
+
+def test_client_training_configs_returns_assigned_active_options() -> None:
+    """Client config selector should expose safe names and ids for assigned active configs only."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="config-options",
+        users=[("manager@example.com", "client_manager")],
+    )
+    access_repository = AccessRepository(db_session)
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=users["manager@example.com"].id,
+        training_config_id=inactive_config.id,
+    )
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(config.id),
+            "name": "Default",
+            "is_default": True,
+        }
+    ]
+    db_session.close()
+
+
+def test_client_lead_training_configs_returns_all_active_org_options() -> None:
+    """Client leads should filter team history by all active organization configs."""
+    db_session = _create_db_session()
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    account = identity_repository.create_client_account(name="Lead Configs", slug="lead-configs")
+    lead = identity_repository.create_user(
+        client_account_id=account.id,
+        email="lead@example.com",
+        password_hash=hash_password("password"),
+        role="client_lead",
+        must_change_password=False,
+    )
+    manager = identity_repository.create_user(
+        client_account_id=account.id,
+        email="manager@example.com",
+        password_hash=hash_password("password"),
+        role="client_manager",
+        must_change_password=False,
+    )
+    lead_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Lead default",
+    )
+    manager_only_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Manager only",
+    )
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=lead.id,
+        training_config_id=lead_config.id,
+        is_default=True,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=manager.id,
+        training_config_id=manager_only_config.id,
+        is_default=True,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=lead.id,
+        training_config_id=inactive_config.id,
+    )
+    client = _create_client(db_session)
+    _login(client, "lead@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(lead_config.id),
+            "name": "Lead default",
+            "is_default": False,
+        },
+        {
+            "id": str(manager_only_config.id),
+            "name": "Manager only",
+            "is_default": False,
+        },
+    ]
+    assert all(set(item) == {"id", "name", "is_default"} for item in response.json())
+    assert str(inactive_config.id) not in response.text
     db_session.close()
 
 

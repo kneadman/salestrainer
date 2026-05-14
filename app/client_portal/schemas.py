@@ -47,6 +47,12 @@ class ClientUserAnalyticsDTO(BaseModel):
     trends_7d: ClientAnalyticsTrendsDTO
 
 
+class ClientTrainingConfigOptionDTO(BaseModel):
+    id: UUID
+    name: str
+    is_default: bool
+
+
 class TeamUserDTO(BaseModel):
     id: UUID
     email: str

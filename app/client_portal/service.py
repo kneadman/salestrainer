@@ -7,6 +7,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
+from app.access.models import ClientTrainingConfig, UserTrainingConfig
 from app.domain.judgement_models import JudgeSessionOutput
 from app.history.models import TrainingSessionRecord
 from app.history.models import TrainingReportRecord
@@ -17,6 +18,7 @@ from app.identity.models import User
 from app.identity.roles import UserRole, normalize_role
 from app.client_portal.schemas import (
     ClientAnalyticsTrendsDTO,
+    ClientTrainingConfigOptionDTO,
     ClientUserAnalyticsDTO,
     MetricTrendDTO,
     TeamUsageSummaryDTO,
@@ -48,6 +50,37 @@ class ClientPortalService:
         """Return analytics for one user so internal admin services can reuse one analytics source."""
         user = self._get_user(user_id)
         return self._user_analytics(user)
+
+    def list_training_configs(self, *, requester: User) -> list[ClientTrainingConfigOptionDTO]:
+        """Return active training configs explicitly available to the current client user."""
+        if normalize_role(requester.role) == UserRole.CLIENT_LEAD:
+            statement = (
+                select(ClientTrainingConfig)
+                .where(
+                    ClientTrainingConfig.client_account_id == requester.client_account_id,
+                    ClientTrainingConfig.is_active.is_(True),
+                )
+                .order_by(ClientTrainingConfig.name.asc())
+            )
+            return [
+                ClientTrainingConfigOptionDTO(id=config.id, name=config.name, is_default=False)
+                for config in self._session.scalars(statement)
+            ]
+
+        statement = (
+            select(ClientTrainingConfig, UserTrainingConfig.is_default)
+            .join(UserTrainingConfig, UserTrainingConfig.training_config_id == ClientTrainingConfig.id)
+            .where(
+                UserTrainingConfig.user_id == requester.id,
+                ClientTrainingConfig.client_account_id == requester.client_account_id,
+                ClientTrainingConfig.is_active.is_(True),
+            )
+            .order_by(UserTrainingConfig.is_default.desc(), ClientTrainingConfig.name.asc())
+        )
+        return [
+            ClientTrainingConfigOptionDTO(id=config.id, name=config.name, is_default=bool(is_default))
+            for config, is_default in self._session.execute(statement)
+        ]
 
     def list_team_users(self, *, requester: User) -> list[TeamUserDTO]:
         """Return same-organization users for a client lead."""
@@ -81,7 +114,15 @@ class ClientPortalService:
         self._require_client_lead(requester)
         user = self._require_same_account_user(user_id=user_id, client_account_id=requester.client_account_id)
         rows = self._history.list_sessions_for_user(user_id=user.id, filters=filters, limit=limit, offset=offset)
-        return [client_session_summary_dto(record, user_email=email) for record, email in rows]
+        training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
+        return [
+            client_session_summary_dto(
+                record,
+                user_email=email,
+                training_config_name=training_config_names.get(record.training_config_id),
+            )
+            for record, email in rows
+        ]
 
     def get_team_user_detail(self, *, requester: User, user_id: UUID) -> TeamUserDetailDTO:
         """Return one same-organization user's analytics and latest history."""
@@ -118,6 +159,11 @@ class ClientPortalService:
         if user.client_account_id != client_account_id:
             raise ClientPortalNotFoundError("User not found.")
         return user
+
+    def _training_config_names_for_rows(self, records: list[TrainingSessionRecord]) -> dict[UUID, str]:
+        """Load safe training config display names for client-facing history rows."""
+        config_ids = {record.training_config_id for record in records if record.training_config_id is not None}
+        return self._history.training_config_names(config_ids)
 
     def _list_users_for_account(self, client_account_id: UUID) -> list[User]:
         """List client account users in stable email order."""

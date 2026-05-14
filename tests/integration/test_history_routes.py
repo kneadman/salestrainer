@@ -209,11 +209,13 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
 
     assert history_list_response.status_code == 200
     assert history_list_response.json()[0]["session_id"] == session_id
+    assert history_list_response.json()[0]["training_config_name"] == "Default config"
     assert "user_id" not in history_list_response.json()[0]
     assert "client_account_id" not in history_list_response.json()[0]
     assert "training_config_id" not in history_list_response.json()[0]
     assert history_response.status_code == 200
     assert history_response.json()["session"]["session_id"] == session_id
+    assert history_response.json()["session"]["training_config_name"] == "Default config"
     assert "user_id" not in history_response.json()["session"]
     assert "client_account_id" not in history_response.json()["session"]
     assert "training_config_id" not in history_response.json()["session"]

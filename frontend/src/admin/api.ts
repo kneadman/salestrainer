@@ -6,7 +6,6 @@ import type {
   HistorySessionSummaryDTO,
   OrganizationDTO,
   OrganizationPayload,
-  ScenarioOptionDTO,
   TrainingConfigDTO,
   TrainingConfigPayload,
   UsageSummaryDTO,
@@ -179,11 +178,6 @@ export function unassignTrainingConfig(userId: string, configId: string): Promis
     method: "POST",
     body: JSON.stringify({}),
   });
-}
-
-export function listScenarios(): Promise<ScenarioOptionDTO[]> {
-  /** Load scenario options for training config forms. */
-  return request<ScenarioOptionDTO[]>("/api/scenarios");
 }
 
 export function listOrganizationHistory(organizationId: string, params: Record<string, string | number | null | undefined>): Promise<HistorySessionSummaryDTO[]> {

@@ -13,6 +13,7 @@ from app.history.models import (
     TrainingTurnRecord,
     UsageEventRecord,
 )
+from app.access.models import ClientTrainingConfig
 from app.identity.models import User
 
 
@@ -352,6 +353,13 @@ class HistoryRepository:
     def get_user_email(self, user_id: UUID) -> str | None:
         """Load the email needed for history summary DTOs."""
         return self._session.scalar(select(User.email).where(User.id == user_id))
+
+    def training_config_names(self, training_config_ids: set[UUID]) -> dict[UUID, str]:
+        """Return safe display names for training config ids used in history rows."""
+        if not training_config_ids:
+            return {}
+        statement = select(ClientTrainingConfig.id, ClientTrainingConfig.name).where(ClientTrainingConfig.id.in_(training_config_ids))
+        return {config_id: name for config_id, name in self._session.execute(statement)}
 
     def usage_summary(self, client_account_id: UUID) -> dict[str, object]:
         """Aggregate basic organization usage metrics from history and event tables."""

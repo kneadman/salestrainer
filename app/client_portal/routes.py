@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.client_portal.schemas import ClientUserAnalyticsDTO, TeamUsageSummaryDTO, TeamUserDTO, TeamUserDetailDTO
+from app.client_portal.schemas import ClientTrainingConfigOptionDTO, ClientUserAnalyticsDTO, TeamUsageSummaryDTO, TeamUserDTO, TeamUserDetailDTO
 from app.client_portal.service import ClientPortalAccessError, ClientPortalNotFoundError, ClientPortalService
 from app.history.repository import SessionListFilters
 from app.history.schemas import ClientHistorySessionSummaryDTO
@@ -37,6 +37,15 @@ def get_my_analytics(
 ) -> ClientUserAnalyticsDTO:
     """Return personal analytics for the current client user."""
     return service.get_my_analytics(user_id=current_session.user.id)
+
+
+@router.get("/client/training-configs", response_model=list[ClientTrainingConfigOptionDTO])
+def list_my_training_configs(
+    service: ClientPortalService = Depends(get_client_portal_service),
+    current_session: CurrentSession = Depends(require_current_user),
+) -> list[ClientTrainingConfigOptionDTO]:
+    """Return active training configs available to the current client user."""
+    return service.list_training_configs(requester=current_session.user)
 
 
 @router.get("/team/users", response_model=list[TeamUserDTO])

@@ -1,54 +1,88 @@
 import { FormEvent, useEffect, useState } from "react";
-import { getHistorySessionDetail, getHistorySessions } from "./api";
+import { getHistorySessionDetail, getHistorySessions, getTrainingConfigs } from "./api";
 import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
-import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, HistoryTurnDTO } from "./types";
-import { SCENARIO_OPTIONS, scenarioLabel, stageLabel, statusLabel } from "../labels";
+import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, HistoryTurnDTO, TrainingConfigOptionDTO } from "./types";
+import { scenarioLabel, stageLabel, statusLabel } from "../labels";
 import { formatClientDate, getClientErrorMessage } from "./utils";
 
 type HistoryPageProps = {
   sessionId?: string;
-  onNavigate: (path: string) => void;
+  path?: string;
+  onNavigate: (path: string, replace?: boolean) => void;
 };
 
-export function HistoryPage({ sessionId, onNavigate }: HistoryPageProps) {
+export function HistoryPage({ sessionId, path = "/app/history", onNavigate }: HistoryPageProps) {
   /** Route history list and detail screens within the client cabinet. */
   if (sessionId) {
     return <HistoryDetail sessionId={sessionId} onNavigate={onNavigate} />;
   }
-  return <HistoryList onNavigate={onNavigate} />;
+  return <HistoryList path={path} onNavigate={onNavigate} />;
 }
 
-function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
+function historyFiltersFromPath(path: string): { status: string; trainingConfigId: string } {
+  /** Read history filters from the current URL query string. */
+  const query = path.includes("?") ? path.slice(path.indexOf("?")) : "";
+  const params = new URLSearchParams(query);
+  return {
+    status: params.get("status") ?? "",
+    trainingConfigId: params.get("training_config_id") ?? "",
+  };
+}
+
+function historyFiltersPath(status: string, trainingConfigId: string): string {
+  /** Build the canonical client history URL for selected filters. */
+  const params = new URLSearchParams();
+  if (status) {
+    params.set("status", status);
+  }
+  if (trainingConfigId) {
+    params.set("training_config_id", trainingConfigId);
+  }
+  const query = params.toString();
+  return query ? `/app/history?${query}` : "/app/history";
+}
+
+function trainingConfigLabel(item: HistorySessionSummaryDTO): string {
+  /** Prefer the saved training config name and keep scenario label only as legacy fallback. */
+  return item.training_config_name || scenarioLabel(item.scenario_id);
+}
+
+function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: string, replace?: boolean) => void }) {
   /** Render role-scoped persistent training history with simple filters. */
+  const initialFilters = historyFiltersFromPath(path);
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
-  const [status, setStatus] = useState("");
-  const [scenarioId, setScenarioId] = useState("");
+  const [trainingConfigs, setTrainingConfigs] = useState<TrainingConfigOptionDTO[]>([]);
+  const [status, setStatus] = useState(initialFilters.status);
+  const [trainingConfigId, setTrainingConfigId] = useState(initialFilters.trainingConfigId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    /** Load history from the client-facing history endpoint. */
-    setLoading(true);
-    setError(null);
-    try {
-      setHistory(await getHistorySessions({ status, scenario_id: scenarioId, limit: 100, offset: 0 }));
-    } catch (loadError) {
-      setError(getClientErrorMessage(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    /** Load initial history on mount. */
-    void load();
+    /** Load filter options and initial history on mount. */
+    const loadInitial = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [configs, historyRows] = await Promise.all([
+          getTrainingConfigs(),
+          getHistorySessions({ status, training_config_id: trainingConfigId, limit: 100, offset: 0 }),
+        ]);
+        setTrainingConfigs(configs);
+        setHistory(historyRows);
+      } catch (loadError) {
+        setError(getClientErrorMessage(loadError));
+      } finally {
+        setLoading(false);
+      }
+    };
+    void loadInitial();
   }, []);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
-    /** Apply filters without navigating. */
+    /** Apply filters and keep the URL query string shareable. */
     event.preventDefault();
-    void load();
+    onNavigate(historyFiltersPath(status, trainingConfigId), true);
   };
 
   if (loading) {
@@ -65,7 +99,14 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
           <h1>Тренировки</h1>
         </div>
       </div>
-      <HistoryFilters status={status} scenarioId={scenarioId} setStatus={setStatus} setScenarioId={setScenarioId} onSubmit={submit} />
+      <HistoryFilters
+        status={status}
+        trainingConfigId={trainingConfigId}
+        trainingConfigs={trainingConfigs}
+        setStatus={setStatus}
+        setTrainingConfigId={setTrainingConfigId}
+        onSubmit={submit}
+      />
       <section className="client-panel">
         {history.length === 0 ? <ClientState title="История появится после первых тренировок." /> : <HistoryTable history={history} onNavigate={onNavigate} />}
       </section>
@@ -131,9 +172,10 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
 
 function HistoryFilters(props: {
   status: string;
-  scenarioId: string;
+  trainingConfigId: string;
+  trainingConfigs: TrainingConfigOptionDTO[];
   setStatus: (value: string) => void;
-  setScenarioId: (value: string) => void;
+  setTrainingConfigId: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   /** Render client-safe history filters without exposing backend enum names as input hints. */
@@ -150,12 +192,12 @@ function HistoryFilters(props: {
           </select>
         </label>
         <label>
-          <span>Сценарий</span>
-          <select value={props.scenarioId} onChange={(event) => props.setScenarioId(event.target.value)}>
-            <option value="">Все сценарии</option>
-            {SCENARIO_OPTIONS.map((scenarioId) => (
-              <option key={scenarioId} value={scenarioId}>
-                {scenarioLabel(scenarioId)}
+          <span>Настройка тренировки</span>
+          <select value={props.trainingConfigId} onChange={(event) => props.setTrainingConfigId(event.target.value)}>
+            <option value="">Все настройки</option>
+            {props.trainingConfigs.map((config) => (
+              <option key={config.id} value={config.id}>
+                {config.name}
               </option>
             ))}
           </select>
@@ -178,7 +220,7 @@ function HistoryTable({ history, onNavigate }: { history: HistorySessionSummaryD
             <th>Дата</th>
             <th>Пользователь</th>
             <th>Статус</th>
-            <th>Сценарий</th>
+            <th>Настройка</th>
             <th>Ходы</th>
             <th>Интерес</th>
             <th>Действия</th>
@@ -199,7 +241,7 @@ function HistoryTableRow({ item, onNavigate }: { item: HistorySessionSummaryDTO;
       <td>{formatClientDate(item.started_at)}</td>
       <td>{item.user_email}</td>
       <td><ClientBadge>{statusLabel(item.status)}</ClientBadge></td>
-      <td>{scenarioLabel(item.scenario_id)}</td>
+      <td>{trainingConfigLabel(item)}</td>
       <td>{item.turn_count}</td>
       <td>{item.final_interest_score ?? "—"}</td>
       <td>

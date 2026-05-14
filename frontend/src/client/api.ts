@@ -8,6 +8,7 @@ import type {
   TeamUsageSummaryDTO,
   TeamUserDTO,
   TeamUserDetailDTO,
+  TrainingConfigOptionDTO,
 } from "./types";
 
 function queryString(params: Record<string, string | number | null | undefined>): string {
@@ -35,6 +36,11 @@ export function getHistorySessionDetail(sessionId: string): Promise<HistorySessi
 export function getHistoryReport(sessionId: string): Promise<HistoryReportDTO> {
   /** Load a saved persistent report for one history session. */
   return request<HistoryReportDTO>(`/api/history/sessions/${sessionId}/report`);
+}
+
+export function getTrainingConfigs(): Promise<TrainingConfigOptionDTO[]> {
+  /** Load training config options available in the client cabinet. */
+  return request<TrainingConfigOptionDTO[]>("/api/client/training-configs");
 }
 
 export function getMyAnalytics(): Promise<ClientUserAnalyticsDTO> {

@@ -61,6 +61,7 @@ export type ClientUserAnalyticsDTO = {
 export type HistorySessionSummaryDTO = {
   session_id: string;
   user_email: string;
+  training_config_name: string | null;
   scenario_id: string;
   status: string;
   started_at: string;
@@ -70,6 +71,12 @@ export type HistorySessionSummaryDTO = {
   final_interest_score: number | null;
   final_stage: string | null;
   summary: string | null;
+};
+
+export type TrainingConfigOptionDTO = {
+  id: string;
+  name: string;
+  is_default: boolean;
 };
 
 export type HistoryTurnDTO = {

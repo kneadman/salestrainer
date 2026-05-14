@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { ReportSurface } from "../components/ReportSurface";
 import { scenarioLabel, stageLabel, statusLabel } from "../labels";
-import { getHistorySession, listOrganizationHistory, listOrganizations } from "./api";
+import { getHistorySession, listOrganizationHistory, listOrganizations, listTrainingConfigs } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
-import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO } from "./types";
-import { FALLBACK_SCENARIOS, formatDate, getErrorMessage } from "./utils";
+import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO } from "./types";
+import { formatDate, getErrorMessage } from "./utils";
 
 type HistoryPageProps = {
   sessionId?: string;
@@ -22,17 +22,19 @@ export function HistoryPage({ sessionId, onNavigate }: HistoryPageProps) {
 function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
   /** Load organization-scoped history for the selected organization filter. */
   const [organizations, setOrganizations] = useState<OrganizationDTO[]>([]);
+  const [trainingConfigs, setTrainingConfigs] = useState<TrainingConfigDTO[]>([]);
   const [organizationId, setOrganizationId] = useState("");
   const [status, setStatus] = useState("");
-  const [scenarioId, setScenarioId] = useState("");
+  const [trainingConfigId, setTrainingConfigId] = useState("");
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async (selectedOrganizationId: string, selectedStatus = status, selectedScenarioId = scenarioId) => {
+  const load = async (selectedOrganizationId: string, selectedStatus = status, selectedTrainingConfigId = trainingConfigId) => {
     /** Fetch history rows only when an organization is selected. */
     if (!selectedOrganizationId) {
       setHistory([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -41,7 +43,7 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
       setHistory(
         await listOrganizationHistory(selectedOrganizationId, {
           status: selectedStatus,
-          scenario_id: selectedScenarioId,
+          training_config_id: selectedTrainingConfigId,
           limit: 100,
           offset: 0,
         }),
@@ -63,7 +65,11 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
         setOrganizations(orgs);
         const firstId = orgs[0]?.id ?? "";
         setOrganizationId(firstId);
-        await load(firstId, "", "");
+        const [configs] = await Promise.all([
+          firstId ? listTrainingConfigs(firstId) : Promise.resolve([]),
+          load(firstId, "", ""),
+        ]);
+        setTrainingConfigs(configs);
       } catch (bootstrapError) {
         setError(getErrorMessage(bootstrapError));
         setLoading(false);
@@ -102,7 +108,10 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
               value={organizationId}
               onChange={(event) => {
                 setOrganizationId(event.target.value);
-                void load(event.target.value);
+                setTrainingConfigId("");
+                const selectedOrganizationId = event.target.value;
+                void listTrainingConfigs(selectedOrganizationId).then(setTrainingConfigs).catch(() => setTrainingConfigs([]));
+                void load(selectedOrganizationId, status, "");
               }}
             >
               {organizations.map((org) => (
@@ -122,11 +131,11 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
             </select>
           </label>
           <label>
-            <span>Сценарий</span>
-            <select value={scenarioId} onChange={(event) => setScenarioId(event.target.value)}>
-              <option value="">Все сценарии</option>
-              {FALLBACK_SCENARIOS.map((id) => (
-                <option key={id} value={id}>{scenarioLabel(id)}</option>
+            <span>Настройка тренировки</span>
+            <select value={trainingConfigId} onChange={(event) => setTrainingConfigId(event.target.value)}>
+              <option value="">Все настройки</option>
+              {trainingConfigs.map((config) => (
+                <option key={config.id} value={config.id}>{config.name}</option>
               ))}
             </select>
           </label>
@@ -146,7 +155,7 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
                   <th>Начало</th>
                   <th>Пользователь</th>
                   <th>Статус</th>
-                  <th>Сценарий</th>
+                  <th>Настройка</th>
                   <th>Ходы</th>
                   <th>Интерес</th>
                   <th>Действия</th>
@@ -160,7 +169,7 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
                     <td>
                       <Badge>{statusLabel(session.status)}</Badge>
                     </td>
-                    <td>{scenarioLabel(session.scenario_id)}</td>
+                    <td>{trainingConfigLabel(session)}</td>
                     <td>{session.turn_count}</td>
                     <td>{session.final_interest_score ?? "—"}</td>
                     <td>
@@ -222,7 +231,7 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
           </button>
           <h1>Тренировка от {formatDate(detail.session.started_at)}</h1>
           <p className="admin-muted">
-            {detail.session.user_email} · {scenarioLabel(detail.session.scenario_id)}
+            {detail.session.user_email} · {trainingConfigLabel(detail.session)}
           </p>
         </div>
         <Badge>{statusLabel(detail.session.status)}</Badge>
@@ -280,4 +289,9 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
       </section>
     </div>
   );
+}
+
+function trainingConfigLabel(session: HistorySessionSummaryDTO): string {
+  /** Prefer safe training config display names and keep scenario labels only for legacy rows. */
+  return session.training_config_name || scenarioLabel(session.scenario_id);
 }
