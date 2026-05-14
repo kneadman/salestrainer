@@ -96,7 +96,6 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
     /** Apply filters and keep the URL query string shareable. */
     event.preventDefault();
     onNavigate(historyFiltersPath(status, trainingConfigId), true);
-    void load(status, trainingConfigId);
   };
 
   if (loading) {

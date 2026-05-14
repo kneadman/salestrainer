@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HistoryPage } from "./HistoryPage";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
@@ -143,6 +144,24 @@ describe("HistoryPage list filters", () => {
       limit: 100,
       offset: 0,
     });
+  });
+
+  it("navigates on filter submit without reloading history immediately", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history" onNavigate={onNavigate} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    const initialHistoryCalls = apiMocks.getHistorySessions.mock.calls.length;
+    const [statusSelect, trainingConfigSelect] = screen.getAllByRole("combobox");
+    await user.selectOptions(statusSelect, "finished");
+    await user.selectOptions(trainingConfigSelect, "config-2");
+    await user.click(screen.getByRole("button", { name: "Применить" }));
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?status=finished&training_config_id=config-2", true);
+    expect(apiMocks.getHistorySessions).toHaveBeenCalledTimes(initialHistoryCalls);
   });
 });
 

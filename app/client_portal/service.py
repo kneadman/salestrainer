@@ -53,6 +53,20 @@ class ClientPortalService:
 
     def list_training_configs(self, *, requester: User) -> list[ClientTrainingConfigOptionDTO]:
         """Return active training configs explicitly available to the current client user."""
+        if normalize_role(requester.role) == UserRole.CLIENT_LEAD:
+            statement = (
+                select(ClientTrainingConfig)
+                .where(
+                    ClientTrainingConfig.client_account_id == requester.client_account_id,
+                    ClientTrainingConfig.is_active.is_(True),
+                )
+                .order_by(ClientTrainingConfig.name.asc())
+            )
+            return [
+                ClientTrainingConfigOptionDTO(id=config.id, name=config.name, is_default=False)
+                for config in self._session.scalars(statement)
+            ]
+
         statement = (
             select(ClientTrainingConfig, UserTrainingConfig.is_default)
             .join(UserTrainingConfig, UserTrainingConfig.training_config_id == ClientTrainingConfig.id)

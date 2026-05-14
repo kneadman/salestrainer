@@ -262,6 +262,76 @@ def test_client_training_configs_returns_assigned_active_options() -> None:
     db_session.close()
 
 
+def test_client_lead_training_configs_returns_all_active_org_options() -> None:
+    """Client leads should filter team history by all active organization configs."""
+    db_session = _create_db_session()
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    account = identity_repository.create_client_account(name="Lead Configs", slug="lead-configs")
+    lead = identity_repository.create_user(
+        client_account_id=account.id,
+        email="lead@example.com",
+        password_hash=hash_password("password"),
+        role="client_lead",
+        must_change_password=False,
+    )
+    manager = identity_repository.create_user(
+        client_account_id=account.id,
+        email="manager@example.com",
+        password_hash=hash_password("password"),
+        role="client_manager",
+        must_change_password=False,
+    )
+    lead_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Lead default",
+    )
+    manager_only_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Manager only",
+    )
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=lead.id,
+        training_config_id=lead_config.id,
+        is_default=True,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=manager.id,
+        training_config_id=manager_only_config.id,
+        is_default=True,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=lead.id,
+        training_config_id=inactive_config.id,
+    )
+    client = _create_client(db_session)
+    _login(client, "lead@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(lead_config.id),
+            "name": "Lead default",
+            "is_default": False,
+        },
+        {
+            "id": str(manager_only_config.id),
+            "name": "Manager only",
+            "is_default": False,
+        },
+    ]
+    assert all(set(item) == {"id", "name", "is_default"} for item in response.json())
+    assert str(inactive_config.id) not in response.text
+    db_session.close()
+
+
 def test_personal_analytics_aggregates_saved_judgement_payloads_and_ignores_invalid_ones() -> None:
     """Personal analytics should aggregate only valid saved judge payloads and expose weakest skill data."""
     db_session = _create_db_session()
