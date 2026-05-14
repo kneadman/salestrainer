@@ -17,7 +17,7 @@ def test_public_projection_hides_internal_persona_structure_and_exposes_public_s
     public_session = build_session_public_dto(updated)
     public_turns = build_turn_public_dto(updated)
 
-    assert public_session.persona_name == "Unknown B2B contact"
+    assert "persona_name" not in public_session.model_dump()
     assert public_session.public_brief
     assert public_session.client_state_public["trust"] == updated.client_state.trust
     assert "visible_objections" in public_session.client_state_public

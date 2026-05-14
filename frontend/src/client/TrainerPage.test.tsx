@@ -79,7 +79,6 @@ const finishedSession = {
   session_id: "session-1",
   scenario_id: "cold-b2b",
   status: "finished",
-  persona_name: "Ирина",
   public_brief: "Краткий бриф",
   stage: "closed",
   interest: { score: 74, band: "warm" },

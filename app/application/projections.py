@@ -10,7 +10,6 @@ def build_session_public_dto(session: TrainingSessionState) -> SessionPublicDTO:
         session_id=str(session.session_id),
         scenario_id=session.scenario_id,
         status=session.status,
-        persona_name="Unknown B2B contact",
         public_brief=session.public_brief,
         stage=session.stage,
         interest=InterestDTO(

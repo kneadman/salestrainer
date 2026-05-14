@@ -268,7 +268,6 @@ function buildSession(metrics: DemoTurn["metrics"], turnCount: number, clientSta
     session_id: "demo-session",
     scenario_id: "generic_b2b_first_contact",
     status: "active",
-    persona_name: "Алексей, руководитель маркетинга",
     public_brief:
       "Вы — менеджер по продажам B2B-решений. Клиент: руководитель отдела маркетинга в средней компании. Ваша задача — провести discovery, выявить процесс, боли, критерии и договориться о следующем шаге.",
     stage: turnCount < 5 ? "discovery" : turnCount < 12 ? "qualification" : "next_step",

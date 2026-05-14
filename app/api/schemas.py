@@ -26,7 +26,6 @@ class SessionPublicDTO(BaseModel):
     session_id: str
     scenario_id: str
     status: str
-    persona_name: str
     public_brief: str
     stage: str
     interest: InterestDTO
