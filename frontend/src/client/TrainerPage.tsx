@@ -91,6 +91,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
           setSelectedConfigId(configs[0].id);
         }
       } catch {
+        setError("Настройки тренировки недоступны. Обновите страницу или обратитесь к администратору.");
         setTrainingConfigs([]);
       }
     };

@@ -345,4 +345,13 @@ describe("TrainerPage", () => {
       expect(apiMocks.createSession).toHaveBeenCalledWith("config-2");
     });
   });
+
+  it("shows error and disables start button when training configs fail to load", async () => {
+    apiMocks.getTrainingConfigs.mockRejectedValue(new Error("Network error"));
+
+    render(<TrainerPage userId="user-1" />);
+
+    expect(await screen.findByText(/Настройки тренировки недоступны/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Начать тренировку" })).toBeDisabled();
+  });
 });

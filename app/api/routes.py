@@ -277,11 +277,6 @@ def create_session(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Training config does not belong to your organization.",
                 )
-            if not training_config.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Training config is disabled.",
-                )
 
         if training_config is None:
             try:
@@ -294,6 +289,12 @@ def create_session(
                 raise not_found(
                     "Сценарий по умолчанию не назначен. Обратитесь к администратору."
                 ) from error
+
+        if not training_config.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Training config is disabled.",
+            )
 
         history_service.expire_inactive_sessions(
             client_account_id=training_config.client_account_id,

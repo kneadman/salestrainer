@@ -216,7 +216,6 @@ class InternalAdminService:
                     entity_id=None,
                     payload=self._client_payload(user.client_account_id, {"user_id": str(user.id)}),
                 )
-                self._session.commit()
             else:
                 config = self._get_training_config(default_training_config_id)
                 if config.client_account_id != user.client_account_id:
@@ -226,7 +225,7 @@ class InternalAdminService:
                 self._session.execute(
                     update(UserTrainingConfig).where(UserTrainingConfig.user_id == user.id).values(is_default=False)
                 )
-                assignment = self._get_or_create_assignment(user_id=user.id, config_id=config.id)
+                assignment = self._get_or_create_assignment(user_id=user.id, config_id=config.id, flush=False)
                 assignment.is_default = True
                 self._audit(
                     actor_user_id=actor_user_id,
@@ -235,7 +234,6 @@ class InternalAdminService:
                     entity_id=config.id,
                     payload=self._client_payload(user.client_account_id, {"user_id": str(user.id)}),
                 )
-                self._session.commit()
         self._audit(
             actor_user_id=actor_user_id,
             action="user_updated",
@@ -606,12 +604,13 @@ class InternalAdminService:
             raise NotFoundError("LLM provider config not found.")
         return config
 
-    def _get_or_create_assignment(self, *, user_id: UUID, config_id: UUID) -> UserTrainingConfig:
+    def _get_or_create_assignment(self, *, user_id: UUID, config_id: UUID, flush: bool = True) -> UserTrainingConfig:
         assignment = self._session.get(UserTrainingConfig, {"user_id": user_id, "training_config_id": config_id})
         if assignment is None:
             assignment = UserTrainingConfig(user_id=user_id, training_config_id=config_id, is_default=False)
             self._session.add(assignment)
-            self._session.flush()
+            if flush:
+                self._session.flush()
         return assignment
 
     def _flush_or_conflict(self, message: str) -> None:

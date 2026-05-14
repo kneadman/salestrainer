@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.access.models import LandingLead, TrainingSessionOwnership
+from app.access.models import LandingLead, TrainingSessionOwnership, UserTrainingConfig
 from app.access.repository import AccessRepository
 from app.api.dependencies import get_persona_generation_service
 from app.api.main import create_app
@@ -949,6 +949,112 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert captured["scenario_id"] is None
     assert "llm_generated_cfo_cash_gap" not in response.text
 
+    db_session.close()
+
+
+def test_api_create_session_rejects_disabled_explicit_training_config() -> None:
+    """Explicit training_config_id pointing to a disabled config must return 422 and create nothing."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    user, _ = _seed_authenticated_user(db_session)
+    access_repository = AccessRepository(db_session)
+    disabled_config = access_repository.create_training_config(
+        client_account_id=user.client_account_id,
+        name="Disabled config",
+        is_active=False,
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={"training_config_id": str(disabled_config.id)})
+
+    assert response.status_code == 422
+    assert "Training config is disabled." in response.text
+    assert db_session.scalar(select(TrainingSessionRecord)) is None
+    assert db_session.scalar(select(TrainingSessionOwnership)) is None
+    db_session.close()
+
+
+def test_api_create_session_rejects_disabled_default_training_config() -> None:
+    """Default config that is disabled must block session creation without explicit training_config_id."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    client_account = identity_repository.create_client_account(name="Acme", slug="acme")
+    user = identity_repository.create_user(
+        client_account_id=client_account.id,
+        email="manager@example.com",
+        password_hash=hash_password("password"),
+        role="client_manager",
+        must_change_password=False,
+    )
+    disabled_config = access_repository.create_training_config(
+        client_account_id=client_account.id,
+        name="Disabled default",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=user.id,
+        training_config_id=disabled_config.id,
+        is_default=True,
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={})
+
+    assert response.status_code == 422
+    assert "Training config is disabled." in response.text
+    assert db_session.scalar(select(TrainingSessionRecord)) is None
+    assert db_session.scalar(select(TrainingSessionOwnership)) is None
+    db_session.close()
+
+
+def test_api_create_session_allows_explicit_active_unassigned_training_config() -> None:
+    """Any active org config may be chosen explicitly even if not assigned to the user."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    user, default_config = _seed_authenticated_user(db_session)
+    access_repository = AccessRepository(db_session)
+    unassigned_config = access_repository.create_training_config(
+        client_account_id=user.client_account_id,
+        name="Unassigned config",
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={"training_config_id": str(unassigned_config.id)})
+
+    assert response.status_code == 201
+    session_id = response.json()["session"]["session_id"]
+    saved_session = repository.get(session_id)
+    assert saved_session is not None
+    ownership = db_session.scalar(select(TrainingSessionOwnership).where(TrainingSessionOwnership.session_id == saved_session.session_id))
+    assert ownership is not None
+    assert ownership.training_config_id == unassigned_config.id
+    db_session.close()
+
+
+def test_api_create_session_rejects_explicit_training_config_from_other_org() -> None:
+    """Explicit training_config_id from another organization must return 403."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    user, _ = _seed_authenticated_user(db_session)
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    other_account = identity_repository.create_client_account(name="Other", slug="other")
+    other_config = access_repository.create_training_config(
+        client_account_id=other_account.id,
+        name="Other org config",
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={"training_config_id": str(other_config.id)})
+
+    assert response.status_code == 403
+    assert db_session.scalar(select(TrainingSessionRecord)) is None
     db_session.close()
 
 
