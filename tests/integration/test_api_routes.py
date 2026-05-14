@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 import tempfile
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -16,7 +18,7 @@ from app.api.main import create_app
 from app.application.projections import build_session_public_dto, build_turn_public_dto
 from app.domain.models import PersonaProfile
 from app.history.dependencies import get_history_service
-from app.history.models import TrainingTurnRecord, UsageEventRecord
+from app.history.models import TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
 from app.history.repository import HistoryRepository
 from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
@@ -343,6 +345,41 @@ def test_api_speech_transcribe_does_not_create_turns_or_mutate_session_state() -
     assert session_after.model_dump_json() == session_before_json
     assert db_session.query(TrainingTurnRecord).count() == turns_before
     assert db_session.query(UsageEventRecord).count() == usage_events_before
+    db_session.close()
+
+
+def test_api_speech_transcribe_refreshes_durable_session_activity() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(
+        db_session,
+        repository=repository,
+        settings=_speech_settings(session_ttl_seconds=1800),
+        stt_client=StubSTTClient(),
+    )
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+    record = db_session.get(TrainingSessionRecord, UUID(session_id))
+    assert record is not None
+    stale_activity_at = datetime.now(tz=UTC) - timedelta(minutes=31)
+    record.last_activity_at = stale_activity_at
+    db_session.commit()
+
+    response = client.post(
+        "/api/speech/transcribe",
+        data={"session_id": session_id},
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+    db_session.refresh(record)
+    refreshed_activity_at = record.last_activity_at
+    history_response = client.get("/api/history/sessions")
+    db_session.refresh(record)
+
+    assert response.status_code == 200
+    assert refreshed_activity_at != stale_activity_at
+    assert history_response.status_code == 200
+    assert record.status == "active"
     db_session.close()
 
 

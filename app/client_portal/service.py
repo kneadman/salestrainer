@@ -14,6 +14,7 @@ from app.history.models import TrainingReportRecord
 from app.history.projections import client_session_summary_dto
 from app.history.repository import HistoryRepository, SessionListFilters
 from app.history.schemas import ClientHistorySessionSummaryDTO, UsageSummaryDTO
+from app.history.service import HistoryService
 from app.identity.models import User
 from app.identity.roles import UserRole, normalize_role
 from app.client_portal.schemas import (
@@ -39,8 +40,11 @@ class ClientPortalService:
     def __init__(self, session: Session, *, inactive_ttl_seconds: int = 1800) -> None:
         """Keep the request-scoped DB session for client portal queries."""
         self._session = session
-        self._history = HistoryRepository(session)
-        self._inactive_ttl_seconds = inactive_ttl_seconds
+        self._history_repository = HistoryRepository(session)
+        self._history_service = HistoryService(
+            self._history_repository,
+            inactive_ttl_seconds=inactive_ttl_seconds,
+        )
 
     def get_my_analytics(self, *, user_id: UUID) -> ClientUserAnalyticsDTO:
         """Return analytics for the current authenticated user only."""
@@ -97,7 +101,7 @@ class ClientPortalService:
         """Return organization usage summary for a client lead."""
         self._require_client_lead(requester)
         self._expire_inactive_sessions(client_account_id=requester.client_account_id)
-        summary = UsageSummaryDTO.model_validate(self._history.usage_summary(requester.client_account_id))
+        summary = UsageSummaryDTO.model_validate(self._history_repository.usage_summary(requester.client_account_id))
         judgement_analytics = self._judgement_analytics_for_account(requester.client_account_id)
         return TeamUsageSummaryDTO(
             **summary.model_dump(),
@@ -119,7 +123,7 @@ class ClientPortalService:
         self._require_client_lead(requester)
         user = self._require_same_account_user(user_id=user_id, client_account_id=requester.client_account_id)
         self._expire_inactive_sessions(user_id=user.id)
-        rows = self._history.list_sessions_for_user(user_id=user.id, filters=filters, limit=limit, offset=offset)
+        rows = self._history_repository.list_sessions_for_user(user_id=user.id, filters=filters, limit=limit, offset=offset)
         training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
         return [
             client_session_summary_dto(
@@ -173,9 +177,7 @@ class ClientPortalService:
         user_id: UUID | None = None,
     ) -> int:
         """Close stale active history rows before analytics or team history reads."""
-        cutoff = datetime.now(UTC) - timedelta(seconds=self._inactive_ttl_seconds)
-        return self._history.expire_active_sessions(
-            last_activity_before=cutoff,
+        return self._history_service.expire_inactive_sessions(
             client_account_id=client_account_id,
             user_id=user_id,
         )
@@ -183,7 +185,7 @@ class ClientPortalService:
     def _training_config_names_for_rows(self, records: list[TrainingSessionRecord]) -> dict[UUID, str]:
         """Load safe training config display names for client-facing history rows."""
         config_ids = {record.training_config_id for record in records if record.training_config_id is not None}
-        return self._history.training_config_names(config_ids)
+        return self._history_repository.training_config_names(config_ids)
 
     def _list_users_for_account(self, client_account_id: UUID) -> list[User]:
         """List client account users in stable email order."""

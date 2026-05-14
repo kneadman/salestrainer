@@ -50,6 +50,11 @@ class HistoryService:
         """Close durable history when the corresponding runtime session has already expired."""
         self._repository.expire_session(session_id=session_id)
 
+    def touch_runtime_session_activity(self, session_id: UUID, *, now: datetime | None = None) -> None:
+        """Refresh durable activity timestamp after successful runtime TTL touch."""
+        touched_at = now or datetime.now(tz=UTC)
+        self._repository.touch_session_activity(session_id=session_id, touched_at=touched_at)
+
     def record_session_started(
         self,
         *,

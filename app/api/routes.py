@@ -128,6 +128,21 @@ def _record_runtime_expiry(session_id: str, history_service: HistoryService) -> 
         logger.warning("runtime_session_expiry_record_failed session_id=%s", session_id, exc_info=True)
 
 
+def _touch_runtime_session(
+    *,
+    session_id: str,
+    session_service: TrainingSessionService,
+    history_service: HistoryService,
+) -> None:
+    """Refresh both runtime TTL and durable last activity for one active session."""
+    session_service.touch_session(session_id)
+    try:
+        durable_session_id = UUID(session_id)
+    except ValueError as error:
+        raise not_found("Session not found.") from error
+    history_service.touch_runtime_session_activity(durable_session_id)
+
+
 @router.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
@@ -316,7 +331,11 @@ def get_session(
     if session is None:
         _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found.")
-    session_service.touch_session(session_id)
+    _touch_runtime_session(
+        session_id=session_id,
+        session_service=session_service,
+        history_service=history_service,
+    )
     history_service.record_usage_event(
         event_type=UsageEventType.SESSION_VIEWED.value,
         client_account_id=ownership.client_account_id,
@@ -349,7 +368,11 @@ def resume_session(
         )
         ownership = access_service.get_session_ownership(session_id)
         session = session_service.resume_session(session_id)
-        session_service.touch_session(session_id)
+        _touch_runtime_session(
+            session_id=session_id,
+            session_service=session_service,
+            history_service=history_service,
+        )
         history_service.record_usage_event(
             event_type=UsageEventType.SESSION_RESUMED.value,
             client_account_id=ownership.client_account_id,
@@ -390,7 +413,11 @@ def post_manager_message(
                     raise conflict(
                         "This idempotency key was already used for a different manager_message."
                     )
-                session_service.touch_session(session_id)
+                _touch_runtime_session(
+                    session_id=session_id,
+                    session_service=session_service,
+                    history_service=history_service,
+                )
                 return TurnResponse.model_validate(existing_submission.response_payload)
         ownership = access_service.get_session_ownership(session_id)
         turn_result = turn_service.process_message(

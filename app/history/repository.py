@@ -133,6 +133,17 @@ class HistoryRepository:
         self._session.refresh(record)
         return record
 
+    def touch_session_activity(self, *, session_id: UUID, touched_at: datetime) -> TrainingSessionRecord | None:
+        """Refresh durable last activity for one active persistent session."""
+        record = self.get_session(session_id)
+        if record is None or record.status != "active":
+            return record
+        record.last_activity_at = touched_at
+        record.updated_at = touched_at
+        self._session.commit()
+        self._session.refresh(record)
+        return record
+
     def expire_active_sessions(
         self,
         *,
@@ -157,6 +168,7 @@ class HistoryRepository:
                 finished_at=TrainingSessionRecord.last_activity_at,
                 updated_at=func.now(),
             )
+            .execution_options(synchronize_session=False)
         )
         result = self._session.execute(statement)
         self._session.commit()
