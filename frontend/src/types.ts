@@ -23,14 +23,19 @@ export type ClientStatePublic = {
   tone?: string;
   trust?: number;
   visible_objections?: string[];
-  known_pains?: string[];
   buying_signals?: string[];
   revealed_facts?: RevealedFact[];
-  discovered_role?: string | null;
-  discovered_authority_level?: string | null;
-  discovered_decision_criteria?: string[];
-  discovered_constraints?: string[];
-  discovered_current_process?: string[];
+};
+
+export type FactsPanelItemDTO = {
+  category: RevealedFactCategory;
+  label: string;
+  text: string;
+  turn_index: number;
+};
+
+export type FactsPanelDTO = {
+  items: FactsPanelItemDTO[];
 };
 
 export type TurnPublicDTO = {
@@ -53,6 +58,7 @@ export type SessionPublicDTO = {
   stage: string;
   interest: InterestDTO;
   client_state_public: ClientStatePublic;
+  facts_panel: FactsPanelDTO;
   turn_count: number;
   summary: string;
   state_version: number;

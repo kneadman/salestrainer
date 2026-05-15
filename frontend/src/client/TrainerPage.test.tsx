@@ -92,6 +92,7 @@ const finishedSession = {
   stage: "closed",
   interest: { score: 74, band: "warm" },
   client_state_public: {},
+  facts_panel: { items: [] },
   turn_count: 2,
   summary: "Финальная сводка",
   state_version: 3,

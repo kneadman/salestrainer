@@ -707,7 +707,12 @@ def test_api_message_idempotency_first_and_cached_responses_use_public_safe_proj
     assert "persona_name" not in duplicate_response.json()["session"]
     assert hidden_display_name not in first_response.text
     assert hidden_display_name not in duplicate_response.text
-    assert first_response.json()["session"]["client_state_public"]["known_pains"] == expected_session["client_state_public"]["known_pains"]
+    assert first_response.json()["session"]["facts_panel"] == expected_session["facts_panel"]
+    assert duplicate_response.json()["session"]["facts_panel"] == expected_session["facts_panel"]
+    assert first_response.json()["session"]["client_state_public"]["revealed_facts"] == expected_session["client_state_public"]["revealed_facts"]
+    assert duplicate_response.json()["session"]["client_state_public"]["revealed_facts"] == expected_session["client_state_public"]["revealed_facts"]
+    assert "known_pains" not in first_response.json()["session"]["client_state_public"]
+    assert "known_pains" not in duplicate_response.json()["session"]["client_state_public"]
     assert first_response.json()["session"]["client_state_public"]["visible_objections"] == expected_session["client_state_public"]["visible_objections"]
     assert first_response.json()["session"]["client_state_public"]["buying_signals"] == expected_session["client_state_public"]["buying_signals"]
     assert first_response.json()["session"]["turn_count"] == expected_session["turn_count"]
@@ -715,6 +720,7 @@ def test_api_message_idempotency_first_and_cached_responses_use_public_safe_proj
     assert saved_session is not None
     assert saved_session.persona.display_name == hidden_display_name
     assert "persona_name" not in saved_session.recent_message_submissions[0].response_payload["session"]
+    assert "known_pains" not in saved_session.recent_message_submissions[0].response_payload["session"]["client_state_public"]
     assert len(saved_session.turns) == 1
     assert len(turns) == 1
     assert turns[0].turn_index == 1

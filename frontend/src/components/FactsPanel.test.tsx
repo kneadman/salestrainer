@@ -5,12 +5,8 @@ describe("FactsPanel", () => {
   it("renders only revealed facts and ignores legacy discovered fields", () => {
     render(
       <FactsPanel
-        state={{
-          discovered_role: "cfo",
-          discovered_authority_level: "final_decider",
-          known_pains: ["hidden pain"],
-          buying_signals: ["hidden signal"],
-          revealed_facts: [],
+        factsPanel={{
+          items: [],
         }}
       />,
     );
@@ -23,12 +19,12 @@ describe("FactsPanel", () => {
   it("groups readable revealed facts and filters technical values", () => {
     render(
       <FactsPanel
-        state={{
-          revealed_facts: [
-            { category: "role", text: "финансовый директор", turn_index: 1 },
-            { category: "authority", text: "final_decider", turn_index: 1 },
-            { category: "constraint", text: "current_vendor_loyalty", turn_index: 2 },
-            { category: "pain", text: "долго собираем отчётность", turn_index: 2 },
+        factsPanel={{
+          items: [
+            { category: "role", label: "Роль", text: "финансовый директор", turn_index: 1 },
+            { category: "authority", label: "Полномочия", text: "final_decider", turn_index: 1 },
+            { category: "constraint", label: "Ограничения", text: "current_vendor_loyalty", turn_index: 2 },
+            { category: "pain", label: "Выявленные боли", text: "долго собираем отчётность", turn_index: 2 },
           ],
         }}
       />,

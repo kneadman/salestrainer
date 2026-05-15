@@ -5,13 +5,24 @@ import { SessionHeader } from "../components/SessionHeader";
 import { TrainerContextPanel } from "../components/TrainerContextPanel";
 import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
-import type { ClientStatePublic, JudgeSessionOutputDTO, RevealedFact, SessionPublicDTO, TurnPublicDTO } from "../types";
+import type { ClientStatePublic, FactsPanelDTO, JudgeSessionOutputDTO, RevealedFact, SessionPublicDTO, TurnPublicDTO } from "../types";
+
+type DemoFacts = {
+  discovered_role?: string;
+  discovered_authority_level?: string;
+  discovered_current_process?: string[];
+  known_pains?: string[];
+  discovered_decision_criteria?: string[];
+  discovered_constraints?: string[];
+  buying_signals?: string[];
+  visible_objections?: string[];
+};
 
 type DemoTurn = {
   manager: string;
   client: string;
   metrics: { interest: number; trust: number; tone: string; band: string };
-  facts?: Partial<ClientStatePublic>;
+  facts?: DemoFacts;
 };
 
 const DEMO_TURNS: DemoTurn[] = [
@@ -235,29 +246,17 @@ const demoReportPayload: JudgeSessionOutputDTO = {
   risk_flags: [],
 };
 
-function mergeFacts(current: ClientStatePublic, next: Partial<ClientStatePublic>, turnIndex: number): ClientStatePublic {
+function mergeFacts(current: ClientStatePublic, next: DemoFacts & Partial<ClientStatePublic>, turnIndex: number): ClientStatePublic {
   /** Accumulate array-valued facts and overwrite scalar facts. */
   const merged: ClientStatePublic = { ...current };
-  if (next.discovered_role) merged.discovered_role = next.discovered_role;
-  if (next.discovered_authority_level) merged.discovered_authority_level = next.discovered_authority_level;
   if (next.tone) merged.tone = next.tone;
   if (typeof next.trust === "number") merged.trust = next.trust;
 
-  const arrayKeys: (keyof ClientStatePublic)[] = [
-    "visible_objections",
-    "known_pains",
-    "buying_signals",
-    "discovered_decision_criteria",
-    "discovered_constraints",
-    "discovered_current_process",
-  ];
-
-  for (const key of arrayKeys) {
-    const nextArr = next[key] as string[] | undefined;
-    if (nextArr && nextArr.length > 0) {
-      const currentArr = (merged[key] as string[] | undefined) ?? [];
-      (merged as unknown as Record<string, string[]>)[key] = [...currentArr, ...nextArr];
-    }
+  if (next.visible_objections && next.visible_objections.length > 0) {
+    merged.visible_objections = [...(merged.visible_objections ?? []), ...next.visible_objections];
+  }
+  if (next.buying_signals && next.buying_signals.length > 0) {
+    merged.buying_signals = [...(merged.buying_signals ?? []), ...next.buying_signals];
   }
 
   const revealedAdditions = factsToRevealedFacts(next, turnIndex);
@@ -277,7 +276,7 @@ function mergeFacts(current: ClientStatePublic, next: Partial<ClientStatePublic>
   return merged;
 }
 
-function factsToRevealedFacts(next: Partial<ClientStatePublic>, turnIndex: number): RevealedFact[] {
+function factsToRevealedFacts(next: DemoFacts, turnIndex: number): RevealedFact[] {
   const result: RevealedFact[] = [];
   if (next.discovered_role) {
     result.push({ category: "role", text: next.discovered_role, turn_index: turnIndex });
@@ -306,6 +305,27 @@ function factsToRevealedFacts(next: Partial<ClientStatePublic>, turnIndex: numbe
   return result;
 }
 
+function buildFactsPanel(revealedFacts: RevealedFact[]): FactsPanelDTO {
+  const labels = {
+    role: "Роль",
+    authority: "Полномочия",
+    current_process: "Текущий процесс",
+    decision_criterion: "Критерии решения",
+    constraint: "Ограничения",
+    buying_signal: "Сигналы интереса",
+    pain: "Выявленные боли",
+    objection: "Возражения",
+  } as const;
+  return {
+    items: revealedFacts.map((fact) => ({
+      category: fact.category,
+      label: labels[fact.category],
+      text: fact.text,
+      turn_index: fact.turn_index,
+    })),
+  };
+}
+
 function buildSession(metrics: DemoTurn["metrics"], turnCount: number, clientState: ClientStatePublic): SessionPublicDTO {
   return {
     session_id: "demo-session",
@@ -316,6 +336,7 @@ function buildSession(metrics: DemoTurn["metrics"], turnCount: number, clientSta
     stage: turnCount < 5 ? "discovery" : turnCount < 12 ? "qualification" : "next_step",
     interest: { score: metrics.interest, band: metrics.band },
     client_state_public: clientState,
+    facts_panel: buildFactsPanel(clientState.revealed_facts ?? []),
     turn_count: turnCount,
     summary: "",
     state_version: 1,
@@ -337,7 +358,7 @@ export function DemoTrainer() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [finished, setFinished] = useState(false);
 
-  const factsState = useMemo(() => clientState, [clientState]);
+  const factsPanel = useMemo(() => buildFactsPanel(clientState.revealed_facts ?? []), [clientState]);
 
   const handleStart = () => {
     setStarted(true);
@@ -439,7 +460,7 @@ export function DemoTrainer() {
     <>
       <main className="client-trainer-layout">
         <aside className="trainer-side-panels trainer-side-panels--desktop" aria-label="Метрики и факты тренировки">
-          <TrainerContextPanel session={sessionMetrics} factsState={factsState} mode="desktop" />
+          <TrainerContextPanel session={sessionMetrics} factsPanel={factsPanel} mode="desktop" />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
           <section className="trainer-chat-panel">
@@ -452,7 +473,7 @@ export function DemoTrainer() {
               onOpenReport={() => setReportModalOpen(true)}
             />
             <div className="trainer-context-slot trainer-context-slot--mobile">
-              <TrainerContextPanel session={sessionMetrics} factsState={factsState} mode="mobile" />
+              <TrainerContextPanel session={sessionMetrics} factsPanel={factsPanel} mode="mobile" />
             </div>
             <div className="trainer-chat-body">
               <ChatWindow turns={turns} loading={isSending} publicBrief={sessionMetrics.public_brief} />
