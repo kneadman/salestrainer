@@ -8,12 +8,11 @@ from typing import Any, Callable
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
 from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import TrainingSessionState, Turn
-from app.infrastructure.config import Settings
+from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.llm_client import (
     LLMClientError,
     _response_to_payload,
     _safe_request_metadata,
-    _should_allow_fake_fallback,
 )
 
 logger = logging.getLogger(__name__)
@@ -212,7 +211,7 @@ def build_summary_compressor(settings: Settings) -> SummaryCompressor:
     if backend != "yandex_compatible":
         return FakeSummaryCompressor()
     if not all([settings.yandex_api_key, settings.yandex_folder_id, settings.yandex_agent_id]):
-        if _should_allow_fake_fallback(settings):
+        if is_fake_fallback_allowed(settings):
             logger.warning("summary_compressor_incomplete_config fallback=fake")
             return FakeSummaryCompressor()
         raise LLMProviderConfigurationError(
@@ -225,6 +224,6 @@ def build_summary_compressor(settings: Settings) -> SummaryCompressor:
         agent_id=settings.yandex_agent_id,
         timeout_seconds=settings.llm_request_timeout_seconds,
         max_retries=1,
-        fallback_compressor=FakeSummaryCompressor() if _should_allow_fake_fallback(settings) else None,
+        fallback_compressor=FakeSummaryCompressor() if is_fake_fallback_allowed(settings) else None,
         debug_payload_logging=settings.debug_llm_payload,
     )

@@ -351,6 +351,21 @@ def test_build_judge_client_uses_judge_specific_folder_and_agent_ids() -> None:
     assert client._agent_id == "judge-agent"
 
 
+def test_build_judge_client_allows_fake_fallback_for_incomplete_yandex_in_local_when_flag_is_true() -> None:
+    client = build_judge_client(
+        Settings(
+            app_env="local",
+            llm_backend="yandex_compatible",
+            allow_fake_llm_fallback=True,
+            yandex_api_key="",
+            yandex_judge_folder_id="judge-folder",
+            yandex_judge_agent_id="judge-agent",
+        )
+    )
+
+    assert isinstance(client, FakeJudgeClient)
+
+
 def test_validate_judge_output_accepts_valid_indexes() -> None:
     """Post-validation should accept evidence indexes that point to existing 1-based turns."""
     payload = _build_payload()
@@ -436,13 +451,24 @@ def test_build_judge_client_raises_for_incomplete_yandex_config_when_fallback_di
         build_judge_client(
             Settings(
                 llm_backend="yandex_compatible",
-                app_env="prod",
+                app_env="production",
                 allow_fake_llm_fallback=False,
                 yandex_api_key="secret-key-value",
                 yandex_folder_id="",
                 yandex_agent_id="",
                 yandex_judge_folder_id="judge-folder",
                 yandex_judge_agent_id="",
+            )
+        )
+
+
+def test_build_judge_client_raises_for_unknown_backend_in_production_even_when_flag_is_true() -> None:
+    with pytest.raises(LLMProviderConfigurationError):
+        build_judge_client(
+            Settings(
+                app_env="production",
+                llm_backend="unknown-provider",
+                allow_fake_llm_fallback=True,
             )
         )
 

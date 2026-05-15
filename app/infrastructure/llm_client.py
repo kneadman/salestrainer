@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import LLMTurnInput, LLMTurnResponse
-from app.infrastructure.config import Settings
+from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.fake_llm_client import FakeLLMClient
 from app.prompts.schemas import llm_turn_response_schema_json
 
@@ -62,10 +62,6 @@ def _safe_request_metadata(
         "payload_size": _payload_size(request_payload),
         "input_size": _payload_size(input_payload),
     }
-
-
-def _should_allow_fake_fallback(settings: Settings) -> bool:
-    return settings.allow_fake_llm_fallback or settings.is_local_env
 
 
 def _response_to_payload(response: Any) -> dict[str, Any] | str:
@@ -323,7 +319,7 @@ def build_llm_client(settings: Settings) -> LLMClient:
         folder_id = settings.yandex_dialogue_folder_id or settings.yandex_folder_id
         agent_id = settings.yandex_dialogue_agent_id or settings.yandex_agent_id
         if not all([settings.yandex_api_key, folder_id, agent_id]):
-            if _should_allow_fake_fallback(settings):
+            if is_fake_fallback_allowed(settings):
                 logger.warning("llm_backend_incomplete_config backend=%s fallback=fake", backend)
                 return FakeLLMClient()
             raise LLMProviderConfigurationError(
@@ -336,10 +332,10 @@ def build_llm_client(settings: Settings) -> LLMClient:
             agent_id=agent_id,
             timeout_seconds=settings.llm_request_timeout_seconds,
             max_retries=1,
-            fallback_client=FakeLLMClient() if _should_allow_fake_fallback(settings) else None,
+            fallback_client=FakeLLMClient() if is_fake_fallback_allowed(settings) else None,
             debug_payload_logging=settings.debug_llm_payload,
         )
-    if _should_allow_fake_fallback(settings):
+    if is_fake_fallback_allowed(settings):
         logger.warning("llm_backend_unknown backend=%s fallback=fake", settings.llm_backend)
         return FakeLLMClient()
     raise LLMProviderConfigurationError(

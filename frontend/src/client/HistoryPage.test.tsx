@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HistoryPage } from "./HistoryPage";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
@@ -145,24 +146,77 @@ describe("HistoryPage list filters", () => {
     });
   });
 
-  it("refetches history when the route query filters change", async () => {
+  it("updates the URL and refetches history when status changes", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
     apiMocks.getHistorySessions
       .mockResolvedValueOnce([makeSummary()])
       .mockResolvedValueOnce([makeSummary({ session_id: "session-2", user_email: "filtered@example.com" })]);
 
-    const { rerender } = render(<HistoryPage path="/app/history" onNavigate={vi.fn()} />);
+    const { rerender } = render(<HistoryPage path="/app/history" onNavigate={onNavigate} />);
 
     expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "finished");
 
-    rerender(<HistoryPage path="/app/history?status=finished&training_config_id=config-2" onNavigate={vi.fn()} />);
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?status=finished", true);
 
+    rerender(<HistoryPage path="/app/history?status=finished" onNavigate={onNavigate} />);
     expect(await screen.findByText("filtered@example.com")).toBeInTheDocument();
     expect(apiMocks.getHistorySessions).toHaveBeenNthCalledWith(2, {
       status: "finished",
-      training_config_id: "config-2",
+      training_config_id: "",
       limit: 100,
       offset: 0,
     });
+  });
+
+  it("updates the URL immediately when training config changes", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history" onNavigate={onNavigate} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    await user.selectOptions(screen.getAllByRole("combobox")[1], "config-2");
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?training_config_id=config-2", true);
+  });
+
+  it("combines both filters into a canonical query string", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history?status=finished" onNavigate={onNavigate} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    await user.selectOptions(screen.getAllByRole("combobox")[1], "config-2");
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?status=finished&training_config_id=config-2", true);
+  });
+
+  it("resets filters back to the canonical history route", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history?status=finished&training_config_id=config-2" onNavigate={onNavigate} />);
+
+    const resetButton = await screen.findByRole("button", { name: "Сбросить фильтры" });
+    expect(resetButton).toBeEnabled();
+    await user.click(resetButton);
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history", true);
+  });
+
+  it("keeps the reset button disabled when no filters are active", async () => {
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сбросить фильтры" })).toBeDisabled();
   });
 });
 

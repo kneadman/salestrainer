@@ -27,6 +27,7 @@ from app.infrastructure.redis_client import build_repository
 from app.infrastructure.session_repository import SessionRepository
 from app.infrastructure.stt_client import STTClient, build_stt_client
 from app.infrastructure.stt_concurrency import LocalSTTConcurrencyLimiter
+from app.infrastructure.startup_validation import validate_runtime_settings
 from app.infrastructure.summary_compressor import build_summary_compressor
 from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
 from app.api.rate_limit import LeadRateLimiter, build_lead_rate_limiter
@@ -110,6 +111,7 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     setup_logging(resolved_settings.log_level)
+    validate_runtime_settings(resolved_settings)
     resolved_repository = repository or build_repository(resolved_settings)
     resolved_llm_client = llm_client or build_llm_client(resolved_settings)
     resolved_stt_client = stt_client or build_stt_client(resolved_settings)
