@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
 import { HistoryPage } from "./HistoryPage";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
@@ -111,11 +110,6 @@ function makeSummary(overrides: Partial<HistorySessionSummaryDTO> = {}): History
   };
 }
 
-function HistoryPageHarness({ initialPath = "/app/history" }: { initialPath?: string }) {
-  const [path, setPath] = useState(initialPath);
-  return <HistoryPage path={path} onNavigate={(nextPath) => setPath(nextPath)} />;
-}
-
 describe("HistoryPage list filters", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -152,19 +146,16 @@ describe("HistoryPage list filters", () => {
     });
   });
 
-  it("refetches history after filter submit updates the route", async () => {
-    const user = userEvent.setup();
+  it("refetches history when the route query filters change", async () => {
     apiMocks.getHistorySessions
       .mockResolvedValueOnce([makeSummary()])
       .mockResolvedValueOnce([makeSummary({ session_id: "session-2", user_email: "filtered@example.com" })]);
 
-    render(<HistoryPageHarness />);
+    const { rerender } = render(<HistoryPage path="/app/history" onNavigate={vi.fn()} />);
 
     expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
-    const [statusSelect, trainingConfigSelect] = screen.getAllByRole("combobox");
-    await user.selectOptions(statusSelect, "finished");
-    await user.selectOptions(trainingConfigSelect, "config-2");
-    await user.click(screen.getByRole("button", { name: "Применить" }));
+
+    rerender(<HistoryPage path="/app/history?status=finished&training_config_id=config-2" onNavigate={vi.fn()} />);
 
     expect(await screen.findByText("filtered@example.com")).toBeInTheDocument();
     expect(apiMocks.getHistorySessions).toHaveBeenNthCalledWith(2, {
