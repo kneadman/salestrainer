@@ -227,7 +227,7 @@ def test_fake_llm_client_discovers_current_process_from_russian_accounting_quest
         "Owner wants more control" in item or "Текущее решение" in item
         for item in discovered_process
     )
-    assert "Финансовые данные обсуждаются как часть текущего процесса." in discovered_process
+    assert "Учет финансовых данных обсуждается как часть текущего процесса." in discovered_process
     assert "Бухгалтерия и учёт обсуждаются как часть текущего процесса." not in discovered_process
     assert "current_accounting_model" not in combined_process
     assert "legal_form" not in combined_process
