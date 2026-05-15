@@ -255,7 +255,7 @@ class FakeLLMClient:
             current_process.append(f"Текущее решение: {profile.current_solution}.")
             current_process.extend(profile.business_facts[:2])
             if self._contains_any(message_lower, self.ACCOUNTING_TOKENS):
-                current_process.append("Бухгалтерия и учёт обсуждаются как часть текущего процесса.")
+                current_process.append("Финансовые данные обсуждаются как часть текущего процесса.")
         if self._contains_any(message_lower, self.DECISION_CRITERIA_TOKENS):
             decision_criteria.extend(profile.decision_criteria[:2])
         if self._contains_any(message_lower, self.CONSTRAINT_TOKENS):

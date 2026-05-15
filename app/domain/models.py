@@ -47,6 +47,15 @@ RevealedFactCategory = Literal[
     "objection",
 ]
 
+LEGACY_PERSONA_FIELD_NAMES = (
+    "current_accounting_model",
+    "legal_form",
+    "tax_system",
+    "accounting_software",
+    "accounting_software_mode",
+    "primary_docs_owner",
+)
+
 
 class RevealedFactPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -364,15 +373,7 @@ def normalize_legacy_persona_payload(raw: dict[str, Any]) -> dict[str, Any]:
     itself can reject unknown fields with ``extra="forbid"`` while runtime
     session repositories can still load historical JSON from Redis/PostgreSQL.
     """
-    legacy_keys = [
-        "current_accounting_model",
-        "legal_form",
-        "tax_system",
-        "accounting_software",
-        "accounting_software_mode",
-        "primary_docs_owner",
-    ]
-    if not any(key in raw for key in legacy_keys):
+    if not any(key in raw for key in LEGACY_PERSONA_FIELD_NAMES):
         return raw
 
     raw = raw.copy()
@@ -402,7 +403,7 @@ def normalize_legacy_persona_payload(raw: dict[str, Any]) -> dict[str, Any]:
         ],
     )
 
-    for key in legacy_keys:
+    for key in LEGACY_PERSONA_FIELD_NAMES:
         raw.pop(key, None)
 
     return raw

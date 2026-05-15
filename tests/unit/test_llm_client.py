@@ -222,10 +222,18 @@ def test_fake_llm_client_discovers_current_process_from_russian_accounting_quest
     discovered_process = response.state_patch.add_discovered_current_process
     assert response.revealed_facts
     assert discovered_process
+    combined_process = " ".join(discovered_process)
     assert any(
         "Owner wants more control" in item or "Текущее решение" in item
         for item in discovered_process
     )
+    assert "Финансовые данные обсуждаются как часть текущего процесса." in discovered_process
+    assert "Бухгалтерия и учёт обсуждаются как часть текущего процесса." not in discovered_process
+    assert "current_accounting_model" not in combined_process
+    assert "legal_form" not in combined_process
+    assert "tax_system" not in combined_process
+    assert "accounting_software" not in combined_process
+    assert "primary_docs_owner" not in combined_process
 
 
 def test_fake_llm_client_reveals_decision_criterion_only_when_answer_says_it() -> None:

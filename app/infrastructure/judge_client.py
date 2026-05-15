@@ -424,7 +424,7 @@ class FakeJudgeClient:
     ) -> str:
         """Produce a stable final verdict string."""
         return (
-            f"Детерминированный итог fake judge: уровень «{overall_grade}», оценка {overall_score}/100, "
+            f"Итоговая оценка: уровень «{overall_grade}», оценка {overall_score}/100, "
             f"финальный этап «{payload.final_stage}», обработано ходов: {payload.turn_count}."
         )
 
