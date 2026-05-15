@@ -153,6 +153,23 @@ class StubSTTClient(FakeSTTClient):
         return STTResult(text="  привет   клиенту \n\nкак дела  ", duration_ms=3450)
 
 
+class CountingSessionRepository(InMemorySessionRepository):
+    def __init__(self) -> None:
+        """Track non-mutating runtime TTL refreshes in API consistency tests."""
+        super().__init__()
+        self.touch_count = 0
+
+    def touch(self, session_id: str) -> None:
+        self.touch_count += 1
+        super().touch(session_id)
+
+
+class FailingTouchHistoryService(HistoryService):
+    def touch_runtime_session_activity(self, session_id: UUID, *, now: datetime | None = None) -> bool:
+        """Simulate a durable activity-write outage before runtime TTL is refreshed."""
+        raise RuntimeError("durable touch unavailable")
+
+
 def test_api_session_flow() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
@@ -380,6 +397,127 @@ def test_api_speech_transcribe_refreshes_durable_session_activity() -> None:
     assert refreshed_activity_at != stale_activity_at
     assert history_response.status_code == 200
     assert record.status == "active"
+    db_session.close()
+
+
+def test_api_get_session_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.get(f"/api/sessions/{session_id}")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
+    db_session.close()
+
+
+def test_api_resume_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.post(f"/api/sessions/{session_id}/resume")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
+    db_session.close()
+
+
+def test_api_idempotency_replay_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+    first_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you manage this process today?", "idempotency_key": "msg-activity"},
+    )
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+
+    replay_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you manage this process today?", "idempotency_key": "msg-activity"},
+    )
+
+    assert first_response.status_code == 200
+    assert replay_response.status_code == 409
+    assert replay_response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
+    db_session.close()
+
+
+def test_api_speech_transcribe_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=_speech_settings(),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+        stt_client=StubSTTClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.post(
+        "/api/speech/transcribe",
+        data={"session_id": session_id},
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
     db_session.close()
 
 
@@ -1716,7 +1854,7 @@ def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit()
     repository = InMemorySessionRepository()
     _seed_authenticated_user(db_session)
     app = create_app(
-        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, recent_turn_limit=2),
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, llm_backend="fake", recent_turn_limit=2),
         repository=repository,
         llm_client=FakeLLMClient(),
     )
@@ -1745,12 +1883,66 @@ def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit()
     saved_session = repository.get(session_id)
     assert saved_session is not None
     assert len(saved_session.recent_turns) == 2
-    assert len(saved_session.turns) == 3
+    assert len(saved_session.turns) == 2
 
     detail_response = client.get(f"/api/sessions/{session_id}")
     assert detail_response.status_code == 200
     assert len(detail_response.json()["turns"]) == 3
 
+    db_session.close()
+
+
+def test_api_runtime_payload_stays_bounded_during_long_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, llm_backend="fake", recent_turn_limit=3),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    client = TestClient(app)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+    payload_sizes: list[int] = []
+
+    for index in range(8):
+        response = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"manager_message": f"Question {index}: how do you track this today?"},
+        )
+        assert response.status_code == 200
+        saved_session = repository.get(session_id)
+        assert saved_session is not None
+        payload_sizes.append(len(saved_session.model_dump_json().encode("utf-8")))
+
+    saved_session = repository.get(session_id)
+    assert saved_session is not None
+    durable_turns = list(
+        db_session.scalars(
+            select(TrainingTurnRecord)
+            .where(TrainingTurnRecord.session_id == saved_session.session_id)
+            .order_by(TrainingTurnRecord.turn_index)
+        )
+    )
+    detail_response = client.get(f"/api/sessions/{session_id}")
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+
+    assert saved_session.turn_count == 8
+    assert len(saved_session.turns) == 3
+    assert len(saved_session.turn_evaluations) == 3
+    assert len(saved_session.recent_turns) == 3
+    assert [turn.turn_index for turn in durable_turns] == list(range(1, 9))
+    assert detail_response.status_code == 200
+    assert len(detail_response.json()["turns"]) == 8
+    assert finish_response.status_code == 200
+    assert finish_response.json()["report_payload"]["bento_blocks"][0]["evidence_turn_indexes"] == list(range(1, 9))
+    assert max(payload_sizes[-3:]) - min(payload_sizes[-3:]) < 1500
     db_session.close()
 
 

@@ -12,7 +12,7 @@ from app.domain.contract_versions import (
     PERSONA_PROMPT_VERSION,
     PERSONA_SCHEMA_VERSION,
 )
-from app.domain.models import TrainingSessionState
+from app.domain.models import TrainingSessionState, Turn, TurnEvaluation
 from app.history.events import UsageEventType
 from app.history.projections import report_dto, session_summary_dto, turn_dto
 from app.history.repository import HistoryRepository, SessionListFilters
@@ -58,10 +58,11 @@ class HistoryService:
         """Close durable history when the corresponding runtime session has already expired."""
         self._repository.expire_session(session_id=session_id)
 
-    def touch_runtime_session_activity(self, session_id: UUID, *, now: datetime | None = None) -> None:
+    def touch_runtime_session_activity(self, session_id: UUID, *, now: datetime | None = None) -> bool:
         """Refresh durable activity timestamp after successful runtime TTL touch."""
         touched_at = now or datetime.now(tz=UTC)
-        self._repository.touch_session_activity(session_id=session_id, touched_at=touched_at)
+        record = self._repository.touch_session_activity(session_id=session_id, touched_at=touched_at)
+        return record is not None and record.status == "active"
 
     def record_session_started(
         self,
@@ -503,6 +504,46 @@ class HistoryService:
         if report is None:
             return None
         return report.report_payload
+
+    def get_saved_report_text(self, session_id: UUID) -> str | None:
+        """Return saved human report text when finish flow already persisted it."""
+        report = self._repository.get_report(session_id)
+        if report is None:
+            return None
+        return report.report_text
+
+    def hydrate_session_with_durable_turns(self, session: TrainingSessionState) -> TrainingSessionState:
+        """Return a session copy whose turns/evaluations come from durable history."""
+        durable_turns = self._repository.list_turns_for_session(session.session_id)
+        if not durable_turns:
+            return session
+        turns = [
+            Turn(
+                index=turn.turn_index,
+                manager_message=turn.manager_message,
+                client_answer=turn.client_answer,
+                interest_before=turn.interest_before,
+                interest_delta=turn.interest_delta,
+                interest_after=turn.interest_after,
+                stage_before=turn.stage_before,
+                stage_after=turn.stage_after,
+                created_at=turn.created_at,
+            )
+            for turn in durable_turns
+        ]
+        evaluations = [
+            TurnEvaluation.model_validate(turn.evaluation_snapshot)
+            for turn in durable_turns
+            if turn.evaluation_snapshot is not None
+        ]
+        return session.model_copy(
+            update={
+                "turns": turns,
+                "turn_evaluations": evaluations,
+                "recent_turns": turns[-len(session.recent_turns) :] if session.recent_turns else [],
+            },
+            deep=True,
+        )
 
     def list_organization_history(
         self,
