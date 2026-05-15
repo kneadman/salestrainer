@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.interest import interest_band
-from app.domain.models import LLMTurnInput, LLMTurnResponse, StatePatch
+from app.domain.models import LLMTurnInput, LLMTurnResponse, RevealedFactPatch, StatePatch
 
 
 class FakeLLMClient:
@@ -63,11 +63,13 @@ class FakeLLMClient:
         )
         answer = self._build_answer(band, payload)
         patch = self._build_patch(message_lower, band, profile)
+        revealed_facts = self._build_revealed_facts(message_lower, profile)
         notes = self._build_notes(delta, band, message)
         return LLMTurnResponse(
             answer=answer,
             interest_delta=delta,
             state_patch=patch,
+            revealed_facts=revealed_facts,
             stage=stage,
             internal_notes=notes,
         )
@@ -155,6 +157,42 @@ class FakeLLMClient:
             "gatekeeper": "Сначала мне нужно понять релевантность, потом могу передать дальше.",
             "evaluator": "Я оцениваю экономику и риски, финальное решение не только за мной.",
         }[profile.authority_level]
+
+    def _build_revealed_facts(self, message_lower: str, profile: Any) -> list[RevealedFactPatch]:
+        facts: list[RevealedFactPatch] = []
+        if self._contains_any(message_lower, self.ROLE_TOKENS):
+            facts.append(RevealedFactPatch(category="role", text=self._public_role_label(profile.role)))
+        if self._contains_any(message_lower, self.AUTHORITY_TOKENS):
+            facts.append(RevealedFactPatch(category="authority", text="может принять финальное решение сам"))
+        if self._contains_any(message_lower, self.PAIN_TOKENS):
+            facts.append(RevealedFactPatch(category="pain", text=profile.latent_pains[0]))
+        if self._contains_any(message_lower, self.PROCESS_TOKENS):
+            facts.append(RevealedFactPatch(category="current_process", text=profile.current_business_context))
+            facts.append(RevealedFactPatch(category="current_process", text=f"Текущее решение: {profile.current_solution}."))
+        if self._contains_any(message_lower, ["РїРѕ РєР°РєРёРј РєСЂРёС‚РµСЂРёСЏРј", "С‡С‚Рѕ РІР°Р¶РЅРѕ", "РєР°Рє РІС‹Р±РёСЂР°РµС‚Рµ"]):
+            facts.extend(
+                RevealedFactPatch(category="decision_criterion", text=value)
+                for value in profile.decision_criteria[:2]
+            )
+        if self._contains_any(message_lower, ["С‡С‚Рѕ РјРµС€Р°РµС‚", "РєР°РєРёРµ РѕРіСЂР°РЅРёС‡РµРЅРёСЏ", "СЂРёСЃРєРё"]):
+            facts.append(RevealedFactPatch(category="constraint", text=profile.hidden_constraints[0]))
+        return facts
+
+    def _public_role_label(self, role: str) -> str:
+        labels = {
+            "owner": "собственник",
+            "founder": "основатель компании",
+            "ceo": "генеральный директор",
+            "general_director": "генеральный директор",
+            "managing_partner": "управляющий партнёр",
+            "commercial_director": "коммерческий директор",
+            "cfo": "финансовый директор",
+            "chief_accountant": "главный бухгалтер",
+            "operations_director": "операционный директор",
+            "sales_director": "руководитель отдела продаж",
+            "purchase_manager": "менеджер по закупкам",
+        }
+        return labels.get(role, "руководитель")
 
     def _build_patch(self, message_lower: str, band: str, profile: Any) -> StatePatch:
         add_open_objections: list[str] = []

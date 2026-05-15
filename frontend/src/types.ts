@@ -3,12 +3,29 @@ export type InterestDTO = {
   band: string;
 };
 
+export type RevealedFactCategory =
+  | "role"
+  | "authority"
+  | "pain"
+  | "decision_criterion"
+  | "constraint"
+  | "current_process"
+  | "buying_signal"
+  | "objection";
+
+export type RevealedFact = {
+  category: RevealedFactCategory;
+  text: string;
+  turn_index: number;
+};
+
 export type ClientStatePublic = {
   tone?: string;
   trust?: number;
   visible_objections?: string[];
   known_pains?: string[];
   buying_signals?: string[];
+  revealed_facts?: RevealedFact[];
   discovered_role?: string | null;
   discovered_authority_level?: string | null;
   discovered_decision_criteria?: string[];

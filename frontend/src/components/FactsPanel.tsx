@@ -1,4 +1,4 @@
-import type { ClientStatePublic } from "../types";
+import type { ClientStatePublic, RevealedFactCategory } from "../types";
 
 type FactsPanelProps = {
   state: ClientStatePublic;
@@ -9,45 +9,55 @@ type FactSection = {
   values: string[];
 };
 
-function normalizeList(values?: string[] | null): string[] {
-  if (!values) {
-    return [];
-  }
-  return values.filter((value) => value.trim().length > 0);
+const CATEGORY_LABELS: Record<RevealedFactCategory, string> = {
+  role: "Роль",
+  authority: "Полномочия",
+  current_process: "Текущий процесс",
+  decision_criterion: "Критерии решения",
+  constraint: "Ограничения",
+  buying_signal: "Сигналы интереса",
+  pain: "Выявленные боли",
+  objection: "Возражения",
+};
+
+const CATEGORY_ORDER: RevealedFactCategory[] = [
+  "role",
+  "authority",
+  "current_process",
+  "decision_criterion",
+  "constraint",
+  "buying_signal",
+  "pain",
+  "objection",
+];
+
+function normalizeFactText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function isTechnicalValue(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.length === 0 || normalized.includes("_") || /^[a-z][a-z0-9_]*$/.test(normalized);
 }
 
 export function FactsPanel({ state }: FactsPanelProps) {
-  const sections: FactSection[] = [
-    {
-      label: "Роль",
-      values: state.discovered_role ? [state.discovered_role] : [],
-    },
-    {
-      label: "Уровень влияния",
-      values: state.discovered_authority_level ? [state.discovered_authority_level] : [],
-    },
-    {
-      label: "Текущий процесс",
-      values: normalizeList(state.discovered_current_process),
-    },
-    {
-      label: "Критерии решения",
-      values: normalizeList(state.discovered_decision_criteria),
-    },
-    {
-      label: "Ограничения",
-      values: normalizeList(state.discovered_constraints),
-    },
-    {
-      label: "Сигналы интереса",
-      values: normalizeList(state.buying_signals),
-    },
-    {
-      label: "Выявленные боли",
-      values: normalizeList(state.known_pains),
-    },
-  ];
+  const grouped = new Map<RevealedFactCategory, string[]>();
+  for (const fact of state.revealed_facts ?? []) {
+    const text = normalizeFactText(fact.text);
+    if (isTechnicalValue(text)) {
+      continue;
+    }
+    const values = grouped.get(fact.category) ?? [];
+    if (!values.some((value) => value.toLocaleLowerCase() === text.toLocaleLowerCase())) {
+      values.push(text);
+      grouped.set(fact.category, values);
+    }
+  }
 
+  const sections: FactSection[] = CATEGORY_ORDER.map((category) => ({
+    label: CATEGORY_LABELS[category],
+    values: grouped.get(category) ?? [],
+  }));
   const visibleSections = sections.filter((section) => section.values.length > 0);
 
   return (

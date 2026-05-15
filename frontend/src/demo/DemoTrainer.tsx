@@ -5,7 +5,7 @@ import { SessionHeader } from "../components/SessionHeader";
 import { TrainerContextPanel } from "../components/TrainerContextPanel";
 import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
-import type { ClientStatePublic, JudgeSessionOutputDTO, SessionPublicDTO, TurnPublicDTO } from "../types";
+import type { ClientStatePublic, JudgeSessionOutputDTO, RevealedFact, SessionPublicDTO, TurnPublicDTO } from "../types";
 
 type DemoTurn = {
   manager: string;
@@ -235,7 +235,7 @@ const demoReportPayload: JudgeSessionOutputDTO = {
   risk_flags: [],
 };
 
-function mergeFacts(current: ClientStatePublic, next: Partial<ClientStatePublic>): ClientStatePublic {
+function mergeFacts(current: ClientStatePublic, next: Partial<ClientStatePublic>, turnIndex: number): ClientStatePublic {
   /** Accumulate array-valued facts and overwrite scalar facts. */
   const merged: ClientStatePublic = { ...current };
   if (next.discovered_role) merged.discovered_role = next.discovered_role;
@@ -260,7 +260,50 @@ function mergeFacts(current: ClientStatePublic, next: Partial<ClientStatePublic>
     }
   }
 
+  const revealedAdditions = factsToRevealedFacts(next, turnIndex);
+  if (revealedAdditions.length > 0) {
+    const existing = merged.revealed_facts ?? [];
+    const seen = new Set(existing.map((fact) => `${fact.category}:${fact.text.trim().toLocaleLowerCase()}`));
+    merged.revealed_facts = [...existing];
+    for (const fact of revealedAdditions) {
+      const key = `${fact.category}:${fact.text.trim().toLocaleLowerCase()}`;
+      if (!seen.has(key)) {
+        merged.revealed_facts.push(fact);
+        seen.add(key);
+      }
+    }
+  }
+
   return merged;
+}
+
+function factsToRevealedFacts(next: Partial<ClientStatePublic>, turnIndex: number): RevealedFact[] {
+  const result: RevealedFact[] = [];
+  if (next.discovered_role) {
+    result.push({ category: "role", text: next.discovered_role, turn_index: turnIndex });
+  }
+  if (next.discovered_authority_level) {
+    result.push({ category: "authority", text: next.discovered_authority_level, turn_index: turnIndex });
+  }
+  for (const text of next.discovered_current_process ?? []) {
+    result.push({ category: "current_process", text, turn_index: turnIndex });
+  }
+  for (const text of next.discovered_decision_criteria ?? []) {
+    result.push({ category: "decision_criterion", text, turn_index: turnIndex });
+  }
+  for (const text of next.discovered_constraints ?? []) {
+    result.push({ category: "constraint", text, turn_index: turnIndex });
+  }
+  for (const text of next.buying_signals ?? []) {
+    result.push({ category: "buying_signal", text, turn_index: turnIndex });
+  }
+  for (const text of next.known_pains ?? []) {
+    result.push({ category: "pain", text, turn_index: turnIndex });
+  }
+  for (const text of next.visible_objections ?? []) {
+    result.push({ category: "objection", text, turn_index: turnIndex });
+  }
+  return result;
 }
 
 function buildSession(metrics: DemoTurn["metrics"], turnCount: number, clientState: ClientStatePublic): SessionPublicDTO {
@@ -331,11 +374,15 @@ export function DemoTrainer() {
         created_at: new Date().toISOString(),
       };
 
-      const nextClientState = mergeFacts(clientState, {
-        ...demoTurn.facts,
-        tone: demoTurn.metrics.tone,
-        trust: demoTurn.metrics.trust,
-      });
+      const nextClientState = mergeFacts(
+        clientState,
+        {
+          ...demoTurn.facts,
+          tone: demoTurn.metrics.tone,
+          trust: demoTurn.metrics.trust,
+        },
+        turnIndex + 1,
+      );
 
       const nextSession = buildSession(demoTurn.metrics, turnIndex + 1, nextClientState);
 
