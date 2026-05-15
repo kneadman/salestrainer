@@ -1,29 +1,56 @@
 # Sales Trainer MVP
 
-Sales Trainer MVP — тренажёр B2B-продаж. Менеджер ведёт переписку с симулированным клиентом, а система оценивает ход разговора, обновляет интерес клиента, сохраняет историю и формирует отчёт.
+Sales Trainer MVP — тренажёр B2B-продаж для менеджеров и руководителей команд. Менеджер ведёт диалог с симулированным клиентом, а система оценивает ход разговора, обновляет интерес клиента, сохраняет историю и формирует отчёт.
 
-Главный архитектурный принцип: backend владеет состоянием. LLM не хранит сессию и не принимает бизнес-решения; она только возвращает следующую реплику клиента и ограниченный патч состояния, который backend валидирует через Pydantic.
+Главный архитектурный принцип: backend владеет состоянием. LLM не хранит сессию и не принимает бизнес-решения; она возвращает следующую реплику клиента, ограниченный `state_patch` и новые публично раскрытые `revealed_facts`, которые backend валидирует и мержит.
 
-## Что уже есть
+## Возможности
 
-- FastAPI backend.
-- React 18 + TypeScript + Vite frontend.
-- CLI-тренажёр для локального режима.
-- Cookie auth с HttpOnly session cookie и CSRF для mutating-запросов.
-- Роли: `internal_admin`, `client_lead`, `client_manager`; legacy `client_user` нормализуется в `client_manager`.
-- Клиентский кабинет `/app`.
-- Внутренний админский кабинет `/admin`.
+- Клиентский кабинет `/app` с тренажёром, историей, отчётами, персональной и командной аналитикой.
+- Внутренний админский кабинет `/admin` для организаций, пользователей, training configs, истории, usage summary и audit log.
+- FastAPI backend, React 18 + TypeScript + Vite frontend.
 - Redis для активного runtime-состояния тренировки.
-- PostgreSQL для пользователей, доступов, конфигураций, истории, отчётов, usage events и audit log.
-- Alembic migrations.
-- Yandex/OpenAI-compatible adapters для persona/dialogue/judge LLM.
-- Локальные fake fallback-режимы для разработки и демо.
-- STT: запись голоса в браузере, batch transcription на backend, вставка текста в composer без auto-send.
-- Landing `/` с формой заявки `/api/leads`.
+- PostgreSQL для пользователей, доступов, training configs, durable history, отчётов, usage events и audit log.
+- Cookie auth через HttpOnly session cookie и CSRF для mutating-запросов.
+- Роли `internal_admin`, `client_lead`, `client_manager`; legacy `client_user` нормализуется в `client_manager`.
+- Yandex/OpenAI-compatible LLM adapters для persona generation, dialogue и judge.
+- Fake/local LLM fallback для разработки и демо.
+- Voice input MVP: браузерная запись голоса, batch STT через `/api/speech/transcribe`, вставка текста в composer без auto-send.
+- Public landing `/` и lead form `/api/leads`.
+
+## Стек
+
+- Python 3.13+, FastAPI, Pydantic v2, SQLAlchemy, Alembic.
+- PostgreSQL, Redis.
+- React 18, TypeScript, Vite, nginx.
+- Yandex-compatible LLM agents; fake fallback только для local/dev/demo.
+
+## Архитектура
+
+Поток активной тренировки:
+
+```text
+frontend / API / CLI
+  -> application services
+  -> domain models and rules
+  -> infrastructure adapters
+  -> Redis runtime state
+  -> PostgreSQL durable history
+```
+
+Важные границы:
+
+- Domain layer не импортирует FastAPI, Redis, SQLAlchemy или frontend-типы.
+- Redis хранит активную runtime-сессию.
+- PostgreSQL хранит durable history, auth, analytics и audit.
+- `StatePatch` — предложение модели, а не источник истины.
+- `interest_score` и stage transitions контролируются backend.
+- Hidden persona не попадает в client-facing API, frontend, browser state или обычные логи.
+- Блок «Факты и боли» строится только из `revealed_facts`; legacy `discovered_*` остаются для внутренней логики стадий, отчётов и совместимости.
 
 ## Документация для разработки
 
-Актуальная карта кода для агентов и разработчиков лежит в:
+Подробная карта кода и правил лежит в:
 
 ```text
 docs/agent-reference/README.md
@@ -32,7 +59,7 @@ docs/agent-reference/README.md
 Полезные разделы:
 
 - `ARCHITECTURE.md` — слои и runtime flow.
-- `API_REFERENCE.md` — основные endpoint-ы.
+- `API_REFERENCE.md` — основные endpoints.
 - `DATA_AND_STATE.md` — Redis/PostgreSQL и DTO boundaries.
 - `SECURITY_AND_AUTH.md` — auth, CSRF, роли, audit.
 - `LLM_AND_PROMPTS.md` — persona/dialogue/judge contracts.
@@ -43,11 +70,11 @@ docs/agent-reference/README.md
 
 Требования:
 
-- Python 3.12+.
+- Python 3.13+.
 - Node.js для frontend.
-- Docker, если нужны Redis/PostgreSQL через compose.
+- Docker, если Redis/PostgreSQL запускаются через compose.
 
-Установка backend:
+Backend:
 
 ```bash
 python -m venv .venv
@@ -55,7 +82,7 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
-Инфраструктура:
+Инфраструктура и миграции:
 
 ```bash
 docker compose up -d redis postgres
@@ -82,7 +109,7 @@ npm run dev
 http://localhost:5173
 ```
 
-Vite dev server использует относительные API-пути (`/auth/login`, `/auth/csrf`, `/api/sessions`) и проксирует запросы на backend.
+Vite dev server использует относительные API-пути и проксирует запросы на backend.
 
 ## Docker stack
 
@@ -98,15 +125,7 @@ docker compose up --build
 http://localhost:8080
 ```
 
-Compose поднимает:
-
-- `postgres`
-- `redis`
-- `migrate`
-- `backend`
-- `frontend` на nginx
-
-`migrate` применяет Alembic migrations до старта backend. Nginx проксирует `/api/*` и `/auth/*` в `backend:8000`, а frontend SPA отдаёт статикой.
+Compose поднимает `postgres`, `redis`, `migrate`, `backend` и `frontend` на nginx. `migrate` применяет Alembic migrations до старта backend. Nginx проксирует `/api/*` и `/auth/*` в backend, а frontend отдаёт как SPA.
 
 Smoke checks:
 
@@ -128,54 +147,26 @@ curl -i http://localhost:8080/api/health
 
 Ключевые группы:
 
-- Redis/PostgreSQL:
-  - `REDIS_URL`
-  - `DATABASE_URL`
-- Runtime:
-  - `APP_ENV`
-  - `SESSION_TTL_SECONDS`
-  - `DEFAULT_TRAINING_SCENARIO_ID`
-- Auth/cookies:
-  - `AUTH_SESSION_TTL_SECONDS`
-  - `AUTH_COOKIE_SECURE`
-  - `AUTH_COOKIE_SAMESITE`
-  - `CSRF_TOKEN_TTL_SECONDS`
-- Rate limits/proxy:
-  - `LOGIN_RATE_LIMIT_ATTEMPTS`
-  - `LEAD_RATE_LIMIT_ATTEMPTS`
-  - `TRUSTED_PROXY_IPS`
-- LLM:
-  - `LLM_BACKEND`
-  - `ALLOW_FAKE_LLM_FALLBACK`
-  - `YANDEX_API_KEY`
-  - `YANDEX_BASE_URL`
-  - `YANDEX_PERSONA_FOLDER_ID`
-  - `YANDEX_PERSONA_AGENT_ID`
-  - `YANDEX_DIALOGUE_FOLDER_ID`
-  - `YANDEX_DIALOGUE_AGENT_ID`
-  - `YANDEX_JUDGE_FOLDER_ID`
-  - `YANDEX_JUDGE_AGENT_ID`
-- STT:
-  - `STT_ENABLED`
-  - `STT_BACKEND`
-  - `STT_WHISPER_CPP_BINARY`
-  - `STT_MODEL_PATH`
-  - `STT_RATE_LIMIT_ATTEMPTS`
-  - `STT_GLOBAL_RATE_LIMIT_ATTEMPTS`
+- Redis/PostgreSQL: `REDIS_URL`, `DATABASE_URL`.
+- Runtime: `APP_ENV`, `SESSION_TTL_SECONDS`, `DEFAULT_TRAINING_SCENARIO_ID`.
+- Auth/cookies: `AUTH_SESSION_TTL_SECONDS`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `CSRF_TOKEN_TTL_SECONDS`.
+- Rate limits/proxy: `LOGIN_RATE_LIMIT_ATTEMPTS`, `LEAD_RATE_LIMIT_ATTEMPTS`, `TRUSTED_PROXY_IPS`.
+- LLM: `LLM_BACKEND`, `ALLOW_FAKE_LLM_FALLBACK`, `YANDEX_API_KEY`, `YANDEX_BASE_URL`, `YANDEX_PERSONA_*`, `YANDEX_DIALOGUE_*`, `YANDEX_JUDGE_*`.
+- STT: `STT_ENABLED`, `STT_BACKEND`, `STT_WHISPER_CPP_BINARY`, `STT_MODEL_PATH`, `STT_RATE_LIMIT_ATTEMPTS`, `STT_GLOBAL_RATE_LIMIT_ATTEMPTS`.
 
 `.env` не должен попадать в Git.
 
 ## Auth и роли
 
-Browser auth использует HttpOnly session cookie. Mutating-запросы в `/auth/*`, `/api/*` и `/api/internal/*` требуют CSRF header `X-CSRF-Token`, кроме явно открытых endpoint-ов вроде `/auth/login` и `/api/leads`.
+Browser auth использует HttpOnly session cookie. Mutating-запросы в `/auth/*`, `/api/*` и `/api/internal/*` требуют CSRF header `X-CSRF-Token`, кроме явно открытых endpoints вроде `/auth/login` и `/api/leads`.
 
 Роли:
 
 - `internal_admin` — внутренний оператор платформы, доступ к `/admin` и `/api/internal/*`.
-- `client_lead` — руководитель команды клиента, видит собственные данные и командные разделы своей организации.
+- `client_lead` — руководитель команды клиента, видит свои данные и командные разделы организации.
 - `client_manager` — менеджер, видит только свои тренировки, историю и аналитику.
 
-Пароли хэшируются Argon2id. Постоянный пароль должен быть длиной 8-256 символов и состоять только из латинских букв и цифр. Temporary/reset passwords переводят пользователя в `must_change_password=true`.
+Пароли хэшируются Argon2id. Постоянный пароль должен быть длиной 8–256 символов и состоять только из латинских букв и цифр. Temporary/reset passwords переводят пользователя в `must_change_password=true`.
 
 ## Клиентский кабинет
 
@@ -190,10 +181,10 @@ Browser auth использует HttpOnly session cookie. Mutating-запрос
 - `/app/analytics` — персональная аналитика.
 - `/app/team` — список пользователей команды для `client_lead`.
 - `/app/team/{user_id}` — аналитика и история конкретного пользователя для `client_lead`.
-- `/app/team-analytics` — командная аналитика.
+- `/app/team-analytics` — командная аналитика и рейтинг менеджеров.
 - `/app/settings` — профиль и смена пароля.
 
-Клиентский UI не вызывает `/api/internal/*`. Для team-разделов используются client-facing endpoint-ы `/api/team/*`.
+Клиентский UI не вызывает `/api/internal/*`; для team-разделов используются client-facing endpoints `/api/team/*`.
 
 ## Внутренний админский кабинет
 
@@ -207,15 +198,14 @@ Browser auth использует HttpOnly session cookie. Mutating-запрос
 
 Основные возможности:
 
-- организации;
-- пользователи организаций;
+- управление организациями;
+- управление пользователями организаций;
 - reset/disable/enable пользователей;
-- training configs;
-- назначения training configs пользователям;
+- управление training configs;
 - история и usage summary по организациям;
 - audit log;
-- user analytics detail по permalink;
-- legacy/future LLM provider config API остаётся в backend, но primary MVP runtime его не использует.
+- permalink user analytics;
+- backend-groundwork для legacy/future LLM provider config API.
 
 Админка не показывает полные API keys, raw LLM payloads, raw LLM responses, hidden persona snapshots или временные пароли после отправки.
 
@@ -234,9 +224,7 @@ POST /api/sessions
 3. Создаёт Redis runtime-сессию.
 4. Создаёт ownership-запись.
 5. Пишет durable history row и usage event в PostgreSQL.
-6. Возвращает public-safe DTO без скрытой persona.
-
-Runtime-сессии живут по `SESSION_TTL_SECONDS` (по умолчанию 1800 секунд). Действия в тренажёре, которые продлевают Redis TTL, также обновляют durable `training_sessions.last_activity_at`; именно этот timestamp используется для закрытия зависших `active` записей как `expired` при следующем создании/просмотре истории или аналитики. Touch-метод не возвращает `finished`/`expired` сессии обратно в `active`.
+6. Возвращает public-safe DTO без hidden persona.
 
 Сообщение менеджера:
 
@@ -261,19 +249,19 @@ GET /api/sessions/{session_id}/report
 
 Judge payload строится после finish. Если judge падает, plain text report остаётся fallback-контрактом.
 
-## Скрытая persona и публичные DTO
+## Публичные факты и скрытая persona
 
 Во время активной тренировки клиентскому API и frontend нельзя раскрывать:
 
 - полный `PersonaProfile`;
 - hidden display name;
-- скрытую роль, если она не была обнаружена;
-- `authority_level`, если он не был обнаружен;
+- скрытую роль, если она не была раскрыта;
+- `authority_level`, если полномочия не были раскрыты;
 - latent pains и hidden constraints до discovery;
 - raw LLM payloads/responses;
 - provider/internal notes.
 
-Активные session DTO не содержат `persona_name`. UI использует `public_brief`, текущий stage/interest и обнаруженные факты.
+`revealed_facts` — единственный источник для UI-блока «Факты и боли». Dialogue LLM возвращает только новые факты текущего ответа клиента, backend фильтрует technical-looking значения, дедуплицирует и проставляет `turn_index`. Legacy `discovered_*` поля временно остаются для stage/report compatibility.
 
 ## Persistent history и аналитика
 
@@ -301,7 +289,7 @@ Client/team analytics:
 - `GET /api/team/users/{user_id}/history/sessions`
 - `GET /api/team/users/{user_id}/analytics`
 
-История и аналитика не возвращают hidden persona snapshots, raw LLM payloads, raw LLM responses или внутренние ownership/config identifiers в client-facing DTO.
+История и аналитика возвращают только public-safe DTO. Saved judge payloads используются для безопасных агрегатов: strongest/weakest skill, judged-session count, 7-day trends, average final interest, completion rate и manager ranking.
 
 ## LLM runtime
 
@@ -309,15 +297,21 @@ Runtime разделён на несколько контрактов:
 
 - Persona Generator LLM возвращает `PersonaGenerationOutput`.
 - Dialogue Simulator LLM возвращает `LLMTurnResponse`.
-- Judge LLM возвращает строгий post-finish judge payload.
+- Judge LLM возвращает post-finish judge payload.
 
-Все provider outputs считаются недоверенными и валидируются Pydantic-моделями. Fake/local fallback остаётся для разработки и демо, но staging/prod должны явно конфигурировать реальные credentials и fallback-политику.
+Все provider outputs считаются недоверенными и валидируются Pydantic-моделями. Fake/local fallback предназначен для разработки и демо. Staging/prod должны явно конфигурировать реальные credentials и fallback-политику.
 
-Для MVP основной runtime использует глобальные Yandex-compatible настройки из `.env`. Organization-scoped `llm_provider_configs` всё ещё существуют как legacy/future-enterprise groundwork, но обычный MVP flow от них не зависит.
+Durable history хранит internal metadata версий контрактов:
+
+- persona schema/prompt version;
+- dialogue schema/prompt version;
+- judge schema/prompt version.
+
+Обычные client-facing DTO не раскрывают raw prompts или provider payloads.
 
 ## STT / голосовой ввод
 
-STT — это pre-send UX layer:
+STT — pre-send UX layer:
 
 1. Browser записывает audio через `MediaRecorder`.
 2. Frontend отправляет multipart `POST /api/speech/transcribe`.
@@ -326,7 +320,7 @@ STT — это pre-send UX layer:
 5. STT backend возвращает текст.
 6. Нормализованный `text` вставляется в composer.
 
-STT endpoint не создаёт turn, не пишет training history и не отправляет текст в dialogue LLM автоматически. Нормальный browser response не содержит raw STT text.
+STT endpoint не создаёт turn, не пишет training history и не отправляет текст в dialogue LLM автоматически.
 
 ## CLI
 
@@ -347,7 +341,7 @@ python -m app.cli.main
 - `/help`
 - `/exit`
 
-CLI остаётся полезным для локальной проверки runtime loop. Authenticated SaaS/history flow живёт в API и frontend; CLI может оставаться runtime-only.
+CLI полезен для локальной проверки runtime loop. Authenticated SaaS/history flow живёт в API и frontend; CLI может оставаться runtime-only.
 
 ## Admin CLI
 
@@ -375,20 +369,12 @@ python -m app.admin.cli create-client --name "ООО Ромашка" --slug roma
 python -m app.admin.cli create-user --client romashka --email manager@example.com --password TempPass123
 ```
 
-Создать минимальный training config через CLI:
+Создать минимальный training config:
 
 ```bash
 python -m app.admin.cli create-config ^
   --client romashka ^
   --name "Базовая тренировка"
-```
-
-Подробный `persona_generation_context` сейчас удобнее заполнять через `/admin` или internal admin API.
-
-Назначить config пользователю:
-
-```bash
-python -m app.admin.cli assign-config --email manager@example.com --config "Базовая тренировка" --default
 ```
 
 Сбросить пароль:
@@ -421,7 +407,7 @@ pytest tests/integration/test_nginx_config.py
 pytest tests/integration/test_static_frontend.py
 ```
 
-Примечание: полноценный `pytest` на Windows может быть долгим из-за тяжёлых integration tests. При диагностике удобно запускать `tests/unit` и отдельные integration-файлы.
+Полный `pytest` на Windows может быть долгим из-за тяжёлых integration tests. Для диагностики удобно запускать `tests/unit` и отдельные integration-файлы.
 
 ## Ограничения MVP
 
@@ -442,9 +428,9 @@ pytest tests/integration/test_static_frontend.py
 6. Создать организацию.
 7. Создать training config с `persona_generation_context`.
 8. Создать `client_lead` или `client_manager`.
-9. Назначить config пользователю как default.
+9. Задать default config пользователю.
 10. Войти клиентским пользователем.
 11. Открыть `/app/trainer`.
-12. Начать тренировку, отправить несколько сообщений.
+12. Начать тренировку и отправить несколько сообщений.
 13. Завершить сессию.
-14. Посмотреть `/app/history`, отчёт и `/app/analytics`.
+14. Посмотреть `/app/history`, отчёт, `/app/analytics` и `/app/team-analytics`.
