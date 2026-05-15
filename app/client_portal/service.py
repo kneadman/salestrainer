@@ -200,7 +200,6 @@ class ClientPortalService:
             email=user.email,
             role=normalize_role(user.role).value,
             is_active=user.is_active,
-            must_change_password=user.must_change_password,
             total_sessions=analytics.total_sessions,
             finished_sessions=analytics.finished_sessions,
             avg_final_interest_score=analytics.avg_final_interest_score,

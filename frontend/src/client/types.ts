@@ -117,7 +117,6 @@ export type TeamUserDTO = {
   email: string;
   role: string;
   is_active: boolean;
-  must_change_password: boolean;
   total_sessions: number;
   finished_sessions: number;
   avg_final_interest_score: number | null;

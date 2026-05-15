@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { getHistorySessionDetail, getHistorySessions, getTrainingConfigs } from "./api";
 import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
@@ -50,34 +50,50 @@ function trainingConfigLabel(item: HistorySessionSummaryDTO): string {
 
 function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: string, replace?: boolean) => void }) {
   /** Render role-scoped persistent training history with simple filters. */
-  const initialFilters = historyFiltersFromPath(path);
+  const routeFilters = useMemo(() => historyFiltersFromPath(path), [path]);
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [trainingConfigs, setTrainingConfigs] = useState<TrainingConfigOptionDTO[]>([]);
-  const [status, setStatus] = useState(initialFilters.status);
-  const [trainingConfigId, setTrainingConfigId] = useState(initialFilters.trainingConfigId);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState(routeFilters.status);
+  const [trainingConfigId, setTrainingConfigId] = useState(routeFilters.trainingConfigId);
+  const [configsLoading, setConfigsLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    /** Load filter options and initial history on mount. */
-    const loadInitial = async () => {
-      setLoading(true);
-      setError(null);
+    /** Keep form controls aligned with browser navigation and shareable URLs. */
+    setStatus(routeFilters.status);
+    setTrainingConfigId(routeFilters.trainingConfigId);
+  }, [routeFilters]);
+
+  useEffect(() => {
+    /** Load filter options once without coupling them to route-driven history refetches. */
+    const loadTrainingConfigs = async () => {
       try {
-        const [configs, historyRows] = await Promise.all([
-          getTrainingConfigs(),
-          getHistorySessions({ status, training_config_id: trainingConfigId, limit: 100, offset: 0 }),
-        ]);
-        setTrainingConfigs(configs);
-        setHistory(historyRows);
+        setTrainingConfigs(await getTrainingConfigs());
       } catch (loadError) {
         setError(getClientErrorMessage(loadError));
       } finally {
-        setLoading(false);
+        setConfigsLoading(false);
       }
     };
-    void loadInitial();
+    void loadTrainingConfigs();
   }, []);
+
+  useEffect(() => {
+    /** Reload history whenever the route-derived filters change. */
+    const loadHistory = async () => {
+      setHistoryLoading(true);
+      setError(null);
+      try {
+        setHistory(await getHistorySessions({ status, training_config_id: trainingConfigId, limit: 100, offset: 0 }));
+      } catch (loadError) {
+        setError(getClientErrorMessage(loadError));
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+    void loadHistory();
+  }, [status, trainingConfigId]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     /** Apply filters and keep the URL query string shareable. */
@@ -85,7 +101,7 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
     onNavigate(historyFiltersPath(status, trainingConfigId), true);
   };
 
-  if (loading) {
+  if (configsLoading || historyLoading) {
     return <ClientState title="Загрузка истории" />;
   }
   if (error) {

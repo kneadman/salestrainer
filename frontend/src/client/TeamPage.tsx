@@ -130,7 +130,6 @@ function TeamUsersTableRow({ user, onNavigate }: { user: TeamUserDTO; onNavigate
       <td>{roleLabel(user.role)}</td>
       <td>
         <ClientBadge tone={user.is_active ? "good" : "danger"}>{user.is_active ? "Активен" : "Отключён"}</ClientBadge>
-        {user.must_change_password ? <ClientBadge tone="warning">смена пароля</ClientBadge> : null}
       </td>
       <td>{user.finished_sessions}/{user.total_sessions}</td>
       <td>{user.avg_final_interest_score?.toFixed(1) ?? "—"}</td>

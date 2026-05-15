@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.access.repository import AccessRepository
+from app.api.dependencies import get_report_service
 from app.api.main import create_app
 from app.application.report_service import ReportService
 from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, ReportRecommendation, SkillScore
@@ -233,6 +234,42 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert report_response.json()["report"] == report.report_text
     assert "report_payload" in report_response.json()
     assert report_response.json()["report_payload"] == report.report_payload
+    db_session.close()
+
+
+def test_get_report_does_not_regenerate_or_persist_missing_payload() -> None:
+    """Read-only report fetch must not invoke judge again or backfill a missing payload."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-report-read",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    session_id = _start_turn_finish(client)
+    report_record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+    assert report_record is not None
+    report_record.report_payload = None
+    db_session.commit()
+
+    counting_judgement_service = CountingJudgementService()
+    client.app.dependency_overrides[get_report_service] = lambda: ReportService(
+        repository,
+        judgement_service=counting_judgement_service,
+    )
+
+    first_response = client.get(f"/api/sessions/{session_id}/report")
+    second_response = client.get(f"/api/sessions/{session_id}/report")
+    db_session.refresh(report_record)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json()["report_payload"] is None
+    assert second_response.json()["report_payload"] is None
+    assert counting_judgement_service.calls == 0
+    assert report_record.report_payload is None
     db_session.close()
 
 

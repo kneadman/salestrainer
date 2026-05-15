@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HistoryPage } from "./HistoryPage";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
@@ -146,22 +145,24 @@ describe("HistoryPage list filters", () => {
     });
   });
 
-  it("navigates on filter submit without reloading history immediately", async () => {
-    const user = userEvent.setup();
-    const onNavigate = vi.fn();
-    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+  it("refetches history when the route query filters change", async () => {
+    apiMocks.getHistorySessions
+      .mockResolvedValueOnce([makeSummary()])
+      .mockResolvedValueOnce([makeSummary({ session_id: "session-2", user_email: "filtered@example.com" })]);
 
-    render(<HistoryPage path="/app/history" onNavigate={onNavigate} />);
+    const { rerender } = render(<HistoryPage path="/app/history" onNavigate={vi.fn()} />);
 
     expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
-    const initialHistoryCalls = apiMocks.getHistorySessions.mock.calls.length;
-    const [statusSelect, trainingConfigSelect] = screen.getAllByRole("combobox");
-    await user.selectOptions(statusSelect, "finished");
-    await user.selectOptions(trainingConfigSelect, "config-2");
-    await user.click(screen.getByRole("button", { name: "Применить" }));
 
-    expect(onNavigate).toHaveBeenCalledWith("/app/history?status=finished&training_config_id=config-2", true);
-    expect(apiMocks.getHistorySessions).toHaveBeenCalledTimes(initialHistoryCalls);
+    rerender(<HistoryPage path="/app/history?status=finished&training_config_id=config-2" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("filtered@example.com")).toBeInTheDocument();
+    expect(apiMocks.getHistorySessions).toHaveBeenNthCalledWith(2, {
+      status: "finished",
+      training_config_id: "config-2",
+      limit: 100,
+      offset: 0,
+    });
   });
 });
 
