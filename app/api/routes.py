@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 
 from app.access.models import LandingLead
 from app.api.client_ip import client_ip_from_request
-from app.api.dependencies import get_app_settings, get_persona_generation_service, get_report_service, get_session_service, get_turn_service
+from app.api.dependencies import (
+    get_app_settings,
+    get_persona_generation_service,
+    get_report_service,
+    get_runtime_activity_service,
+    get_session_service,
+    get_turn_service,
+)
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
 from app.api.rate_limit import LeadRateLimitExceeded
@@ -29,6 +36,7 @@ from app.api.schemas import (
 from app.application.projections import build_session_public_dto, build_turn_public_dto
 from app.application.persona_generation_service import PersonaGenerationService
 from app.application.report_service import ReportService
+from app.application.runtime_activity_service import RuntimeActivityService
 from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
 from app.domain.errors import (
@@ -131,16 +139,13 @@ def _record_runtime_expiry(session_id: str, history_service: HistoryService) -> 
 def _touch_runtime_session(
     *,
     session_id: str,
-    session_service: TrainingSessionService,
-    history_service: HistoryService,
+    runtime_activity_service: RuntimeActivityService,
 ) -> None:
     """Refresh both runtime TTL and durable last activity for one active session."""
-    session_service.touch_session(session_id)
     try:
-        durable_session_id = UUID(session_id)
-    except ValueError as error:
-        raise not_found("Session not found.") from error
-    history_service.touch_runtime_session_activity(durable_session_id)
+        runtime_activity_service.touch_active_session(session_id)
+    except SalesTrainerError as error:
+        raise_api_error(error)
 
 
 @router.get("/health")
@@ -345,6 +350,7 @@ def create_session(
 def get_session(
     session_id: str,
     session_service: TrainingSessionService = Depends(get_session_service),
+    runtime_activity_service: RuntimeActivityService = Depends(get_runtime_activity_service),
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
@@ -360,8 +366,7 @@ def get_session(
         raise not_found("Session not found.")
     _touch_runtime_session(
         session_id=session_id,
-        session_service=session_service,
-        history_service=history_service,
+        runtime_activity_service=runtime_activity_service,
     )
     history_service.record_usage_event(
         event_type=UsageEventType.SESSION_VIEWED.value,
@@ -380,6 +385,7 @@ def get_session(
 def resume_session(
     session_id: str,
     session_service: TrainingSessionService = Depends(get_session_service),
+    runtime_activity_service: RuntimeActivityService = Depends(get_runtime_activity_service),
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
@@ -397,8 +403,7 @@ def resume_session(
         session = session_service.resume_session(session_id)
         _touch_runtime_session(
             session_id=session_id,
-            session_service=session_service,
-            history_service=history_service,
+            runtime_activity_service=runtime_activity_service,
         )
         history_service.record_usage_event(
             event_type=UsageEventType.SESSION_RESUMED.value,
@@ -420,6 +425,7 @@ def post_manager_message(
     request: TurnRequest,
     turn_service: TurnService = Depends(get_turn_service),
     session_service: TrainingSessionService = Depends(get_session_service),
+    runtime_activity_service: RuntimeActivityService = Depends(get_runtime_activity_service),
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
@@ -442,8 +448,7 @@ def post_manager_message(
                     )
                 _touch_runtime_session(
                     session_id=session_id,
-                    session_service=session_service,
-                    history_service=history_service,
+                    runtime_activity_service=runtime_activity_service,
                 )
                 return TurnResponse.model_validate(existing_submission.response_payload)
         ownership = access_service.get_session_ownership(session_id)
