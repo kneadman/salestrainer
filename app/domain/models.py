@@ -36,6 +36,31 @@ Role = Literal[
     "sales_director",
     "purchase_manager",
 ]
+RevealedFactCategory = Literal[
+    "role",
+    "authority",
+    "pain",
+    "decision_criterion",
+    "constraint",
+    "current_process",
+    "buying_signal",
+    "objection",
+]
+
+
+class RevealedFactPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: RevealedFactCategory
+    text: str = Field(min_length=1, max_length=300)
+
+
+class RevealedFact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: RevealedFactCategory
+    text: str = Field(min_length=1, max_length=300)
+    turn_index: int = Field(ge=1)
 
 
 class PersonaProfile(BaseModel):
@@ -144,6 +169,7 @@ class ClientState(BaseModel):
     discovered_decision_criteria: list[str] = Field(default_factory=list)
     discovered_constraints: list[str] = Field(default_factory=list)
     discovered_current_process: list[str] = Field(default_factory=list)
+    revealed_facts: list[RevealedFact] = Field(default_factory=list)
 
 
 class Turn(BaseModel):
@@ -184,6 +210,10 @@ class LLMTurnResponse(BaseModel):
     answer: str = Field(min_length=1, max_length=1000)
     interest_delta: int = Field(ge=-15, le=15)
     state_patch: StatePatch
+    revealed_facts: list[RevealedFactPatch] = Field(
+        default_factory=list,
+        json_schema_extra={"default": []},
+    )
     stage: str = Field(min_length=1)
     internal_notes: str = Field(default="", max_length=1000)
 

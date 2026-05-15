@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 
@@ -7,7 +8,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.errors import LLMProviderConfigurationError
-from app.domain.models import LLMTurnInput
+from app.domain.models import LLMTurnInput, LLMTurnResponse
 from app.domain.personas import get_persona
 from app.domain.scenarios import get_scenario
 from app.infrastructure.llm_client import (
@@ -55,7 +56,9 @@ def sample_payload() -> LLMTurnInput:
                 "discovered_decision_criteria": [],
                 "discovered_constraints": [],
                 "discovered_current_process": [],
+                "revealed_facts": [],
             },
+            "revealed_facts": [],
         },
         discovered_facts={},
         conversation_summary="Training started.",
@@ -87,6 +90,7 @@ def test_parse_llm_turn_response_from_yandex_prompt_response_payload() -> None:
                                     "add_buying_signals": [],
                                     "add_red_flags": [],
                                 },
+                                "revealed_facts": [{"category": "pain", "text": "manual reports take too long"}],
                                 "stage": "value_clarification",
                                 "internal_notes": "Valid JSON in nested payload.",
                             }
@@ -95,11 +99,31 @@ def test_parse_llm_turn_response_from_yandex_prompt_response_payload() -> None:
                 ],
             }
         ],
-        "output_text": "{\"answer\":\"What exactly do you review?\",\"interest_delta\":3,\"state_patch\":{\"tone\":\"skeptical\",\"trust_delta\":1,\"irritation_delta\":0,\"urgency_delta\":0,\"add_open_objections\":[],\"remove_open_objections\":[],\"add_known_pains\":[],\"add_buying_signals\":[],\"add_red_flags\":[]},\"stage\":\"value_clarification\",\"internal_notes\":\"Valid JSON in nested payload.\"}",
+        "output_text": json.dumps(
+            {
+                "answer": "What exactly do you review?",
+                "interest_delta": 3,
+                "state_patch": {
+                    "tone": "skeptical",
+                    "trust_delta": 1,
+                    "irritation_delta": 0,
+                    "urgency_delta": 0,
+                    "add_open_objections": [],
+                    "remove_open_objections": [],
+                    "add_known_pains": [],
+                    "add_buying_signals": [],
+                    "add_red_flags": [],
+                },
+                "revealed_facts": [{"category": "pain", "text": "manual reports take too long"}],
+                "stage": "value_clarification",
+                "internal_notes": "Valid JSON in nested payload.",
+            }
+        ),
     }
     parsed = parse_llm_turn_response(raw)
     assert parsed.answer == "What exactly do you review?"
     assert parsed.stage == "value_clarification"
+    assert parsed.revealed_facts[0].category == "pain"
 
 
 def test_yandex_compatible_client_builds_expected_request_and_retries_then_succeeds() -> None:
@@ -161,6 +185,7 @@ def test_yandex_compatible_client_builds_expected_request_and_retries_then_succe
     assert input_payload["hidden_profile"]["id"] == "owner"
     assert "latent_pains" in input_payload["hidden_profile"]
     assert input_payload["current_state"]["stage"] == "first_contact"
+    assert input_payload["current_state"]["revealed_facts"] == []
     assert input_payload["discovered_facts"] == {}
     assert input_payload["recent_turns"] == []
     retry_input_payload = json.loads(calls[1]["input"])
@@ -195,11 +220,73 @@ def test_fake_llm_client_discovers_current_process_from_russian_accounting_quest
     response = FakeLLMClient().generate_client_turn(payload)
 
     discovered_process = response.state_patch.add_discovered_current_process
+    assert response.revealed_facts
     assert discovered_process
     assert any(
         "Owner wants more control" in item or "Текущее решение" in item
         for item in discovered_process
     )
+
+
+def test_fake_llm_client_reveals_decision_criterion_only_when_answer_says_it() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Что важно, когда выбираете подрядчика?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    criteria = [fact for fact in response.revealed_facts if fact.category == "decision_criterion"]
+    assert criteria == [response.revealed_facts[-1]]
+    assert len(criteria) == 1
+    assert criteria[0].text in response.answer
+
+
+def test_fake_llm_client_reveals_constraint_only_when_answer_says_it() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Какие ограничения или риски сейчас мешают?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    constraints = [fact for fact in response.revealed_facts if fact.category == "constraint"]
+    pains = [fact for fact in response.revealed_facts if fact.category == "pain"]
+    assert constraints
+    assert constraints[0].text in response.answer
+    assert pains == []
+
+
+def test_fake_llm_client_revealed_facts_do_not_contain_technical_values() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Кто вы, кто принимает решение и что важно?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+    combined = " ".join(fact.text for fact in response.revealed_facts)
+
+    assert "cfo" not in combined
+    assert "final_decider" not in combined
+    assert "snake_case" not in combined
+    assert "_" not in combined
+
+
+def test_fake_llm_client_revealed_facts_follow_answer_branch_priority() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Кто вы, кто принимает решение и что для вас важно?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    assert [fact.category for fact in response.revealed_facts] == ["role"]
+    assert response.revealed_facts[0].text in response.answer
+
+
+def test_fake_llm_client_revealed_fact_logic_has_no_mojibake_tokens() -> None:
+    source = inspect.getsource(ActiveFakeLLMClient._build_revealed_facts)
+
+    assert "Р " not in source
+    assert "РЎ" not in source
+    assert "Ð" not in source
+    assert "Ñ" not in source
 
 
 def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None:
@@ -352,6 +439,38 @@ def test_llm_turn_response_schema_contains_key_fields() -> None:
     assert "state_patch" in properties
     assert "stage" in properties
     assert "internal_notes" in properties
+    assert "revealed_facts" in properties
+    assert properties["revealed_facts"]["default"] == []
+
+
+def test_llm_turn_response_schema_constrains_revealed_fact_items() -> None:
+    schema = llm_turn_response_schema()
+    revealed_schema = schema["$defs"]["RevealedFactPatch"]
+
+    assert revealed_schema["additionalProperties"] is False
+    assert set(revealed_schema["properties"]["category"]["enum"]) == {
+        "role",
+        "authority",
+        "pain",
+        "decision_criterion",
+        "constraint",
+        "current_process",
+        "buying_signal",
+        "objection",
+    }
+    assert revealed_schema["properties"]["text"]["minLength"] == 1
+    assert revealed_schema["properties"]["text"]["maxLength"] == 300
+
+
+def test_llm_turn_response_defaults_revealed_facts_to_empty_list() -> None:
+    response = LLMTurnResponse(
+        answer="ok",
+        interest_delta=0,
+        state_patch={},
+        stage="first_contact",
+    )
+
+    assert response.revealed_facts == []
 
 
 def test_llm_turn_response_schema_forbids_additional_properties_at_top_level() -> None:

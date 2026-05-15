@@ -2,6 +2,41 @@ from __future__ import annotations
 
 from app.history.models import TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord
 from app.history.schemas import ClientHistorySessionSummaryDTO, HistoryReportDTO, HistorySessionSummaryDTO, HistoryTurnDTO
+from app.domain.models import RevealedFact
+from app.domain.public_facts import is_probably_technical_value, normalize_public_fact_text, sanitize_revealed_fact_dicts
+
+
+def _legacy_revealed_facts_from_snapshot(client_state: dict[str, object]) -> list[dict[str, object]]:
+    if "revealed_facts" in client_state:
+        return sanitize_revealed_fact_dicts(client_state.get("revealed_facts"))
+
+    candidates: list[tuple[str, object]] = [
+        ("role", client_state.get("discovered_role")),
+        ("authority", client_state.get("discovered_authority_level")),
+        ("current_process", client_state.get("discovered_current_process", [])),
+        ("decision_criterion", client_state.get("discovered_decision_criteria", [])),
+        ("constraint", client_state.get("discovered_constraints", [])),
+        ("buying_signal", client_state.get("buying_signals", [])),
+        ("pain", client_state.get("discovered_pains", [])),
+    ]
+    result: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for category, raw_values in candidates:
+        values = raw_values if isinstance(raw_values, list) else [raw_values]
+        for raw_value in values:
+            if not isinstance(raw_value, str):
+                continue
+            text = normalize_public_fact_text(raw_value)
+            if is_probably_technical_value(text):
+                continue
+            dedupe_key = (category, text.casefold())
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            result.append(
+                RevealedFact(category=category, text=text, turn_index=1).model_dump(mode="json")
+            )
+    return result
 
 
 def session_summary_dto(
@@ -56,6 +91,7 @@ def client_session_summary_dto(
 def turn_dto(record: TrainingTurnRecord) -> HistoryTurnDTO:
     """Project a turn record without exposing raw LLM payloads or hidden persona fields."""
     client_state = record.client_state_snapshot or {}
+    revealed_facts = _legacy_revealed_facts_from_snapshot(client_state)
     return HistoryTurnDTO(
         turn_index=record.turn_index,
         manager_message=record.manager_message,
@@ -71,6 +107,7 @@ def turn_dto(record: TrainingTurnRecord) -> HistoryTurnDTO:
             "visible_objections": client_state.get("open_objections", []),
             "known_pains": client_state.get("discovered_pains", []),
             "buying_signals": client_state.get("buying_signals", []),
+            "revealed_facts": revealed_facts,
             "discovered_role": client_state.get("discovered_role"),
             "discovered_authority_level": client_state.get("discovered_authority_level"),
             "discovered_decision_criteria": client_state.get("discovered_decision_criteria", []),

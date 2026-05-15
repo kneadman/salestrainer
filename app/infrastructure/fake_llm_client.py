@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.interest import interest_band
-from app.domain.models import LLMTurnInput, LLMTurnResponse, StatePatch
+from app.domain.models import LLMTurnInput, LLMTurnResponse, RevealedFactPatch, StatePatch
 
 
 class FakeLLMClient:
@@ -11,6 +11,8 @@ class FakeLLMClient:
     AUTHORITY_TOKENS = ["кто принимает решение", "кто согласует", "есть ли полномочия"]
     PAIN_TOKENS = ["какая проблема", "что болит", "болит", "где потери", "что мешает", "проблем"]
     ACCOUNTING_TOKENS = ["бухгалтер", "бухгалтерия", "учет", "учёт"]
+    DECISION_CRITERIA_TOKENS = ["по каким критериям", "что важно", "как выбираете"]
+    CONSTRAINT_TOKENS = ["что мешает", "какие ограничения", "риски"]
     PROCESS_TOKENS = [
         "как сейчас устроено",
         "как сейчас устроена",
@@ -28,6 +30,8 @@ class FakeLLMClient:
         *ROLE_TOKENS,
         *PROCESS_TOKENS,
         *PAIN_TOKENS,
+        *DECISION_CRITERIA_TOKENS,
+        *CONSTRAINT_TOKENS,
         "продажи",
         "бухгалтерия",
         "финансы",
@@ -63,11 +67,13 @@ class FakeLLMClient:
         )
         answer = self._build_answer(band, payload)
         patch = self._build_patch(message_lower, band, profile)
+        revealed_facts = self._build_revealed_facts(message_lower, profile)
         notes = self._build_notes(delta, band, message)
         return LLMTurnResponse(
             answer=answer,
             interest_delta=delta,
             state_patch=patch,
+            revealed_facts=revealed_facts,
             stage=stage,
             internal_notes=notes,
         )
@@ -80,9 +86,15 @@ class FakeLLMClient:
             score += 4
         if self._contains_any(message_lower, self.DIAGNOSTIC_TOKENS):
             score += 3
-        if self._contains_any(message_lower, ["you must", "buy", "urgent offer", "only today", "купите", "срочно", "только сегодня"]):
+        if self._contains_any(
+            message_lower,
+            ["you must", "buy", "urgent offer", "only today", "купите", "срочно", "только сегодня"],
+        ):
             score -= 6
-        if self._contains_any(message_lower, ["price", "cost", "roi", "result", "стоимость", "цена", "окупаемость", "результат"]):
+        if self._contains_any(
+            message_lower,
+            ["price", "cost", "roi", "result", "стоимость", "цена", "окупаемость", "результат"],
+        ):
             score += 2
         if any(token in message_lower for token in profile.industry.lower().split("_")):
             score += 1
@@ -95,7 +107,10 @@ class FakeLLMClient:
             return "next_step_negotiation"
         if self._contains_any(message_lower, ["why", "how", "problem", "loss", "как", "почему", *self.PAIN_TOKENS]):
             return "need_discovery"
-        if self._contains_any(message_lower, ["example", "result", "roi", "diagnostic", "результат", "окупаемость", "эффект"]):
+        if self._contains_any(
+            message_lower,
+            ["example", "result", "roi", "diagnostic", "результат", "окупаемость", "эффект"],
+        ):
             return "value_clarification"
         return current_stage
 
@@ -106,6 +121,10 @@ class FakeLLMClient:
 
         if self._contains_any(message_lower, self.ROLE_TOKENS):
             return self._role_answer(profile, discovered)
+        if self._contains_any(message_lower, self.DECISION_CRITERIA_TOKENS):
+            return f"Мне важно понять: {profile.decision_criteria[0]}."
+        if self._contains_any(message_lower, self.CONSTRAINT_TOKENS):
+            return profile.hidden_constraints[0]
         if self._contains_any(message_lower, self.PROCESS_TOKENS):
             return self._process_answer(profile)
         if self._contains_any(message_lower, self.PAIN_TOKENS):
@@ -131,7 +150,7 @@ class FakeLLMClient:
         return " ".join(part.strip() for part in parts if part.strip())[:280]
 
     def _role_answer(self, profile: Any, discovered: dict[str, Any]) -> str:
-        if discovered.get("role") == profile.role:
+        if discovered.get("role") in {profile.role, self._public_role_label(profile.role)}:
             return "Я уже сказал, что отвечаю за этот блок."
         answers = {
             "owner": "Я собственник, отвечаю за ключевые решения и финансовый результат.",
@@ -156,6 +175,40 @@ class FakeLLMClient:
             "evaluator": "Я оцениваю экономику и риски, финальное решение не только за мной.",
         }[profile.authority_level]
 
+    def _build_revealed_facts(self, message_lower: str, profile: Any) -> list[RevealedFactPatch]:
+        if self._contains_any(message_lower, self.ROLE_TOKENS):
+            return [RevealedFactPatch(category="role", text=self._public_role_label(profile.role))]
+        if self._contains_any(message_lower, self.DECISION_CRITERIA_TOKENS):
+            return [RevealedFactPatch(category="decision_criterion", text=profile.decision_criteria[0])]
+        if self._contains_any(message_lower, self.CONSTRAINT_TOKENS):
+            return [RevealedFactPatch(category="constraint", text=profile.hidden_constraints[0])]
+        if self._contains_any(message_lower, self.PROCESS_TOKENS):
+            return [
+                RevealedFactPatch(category="current_process", text=profile.current_business_context),
+                RevealedFactPatch(category="current_process", text=f"Текущее решение: {profile.current_solution}."),
+            ]
+        if self._contains_any(message_lower, self.PAIN_TOKENS):
+            return [RevealedFactPatch(category="pain", text=profile.latent_pains[0])]
+        if self._contains_any(message_lower, self.AUTHORITY_TOKENS):
+            return [RevealedFactPatch(category="authority", text="может принять финальное решение сам")]
+        return []
+
+    def _public_role_label(self, role: str) -> str:
+        labels = {
+            "owner": "собственник",
+            "founder": "основатель компании",
+            "ceo": "генеральный директор",
+            "general_director": "генеральный директор",
+            "managing_partner": "управляющий партнёр",
+            "commercial_director": "коммерческий директор",
+            "cfo": "финансовый директор",
+            "chief_accountant": "главный бухгалтер",
+            "operations_director": "операционный директор",
+            "sales_director": "руководитель отдела продаж",
+            "purchase_manager": "менеджер по закупкам",
+        }
+        return labels.get(role, "руководитель")
+
     def _build_patch(self, message_lower: str, band: str, profile: Any) -> StatePatch:
         add_open_objections: list[str] = []
         remove_open_objections: list[str] = []
@@ -177,7 +230,10 @@ class FakeLLMClient:
             trust_delta += 3
             irritation_delta -= 1
             known_pains.append("Manager asked a diagnostic question instead of generic pitching.")
-        if self._contains_any(message_lower, ["conversion", "loss", "funnel", "diagnostic", "воронка", "потери", "как сейчас устроено", "как сейчас устроена"]):
+        if self._contains_any(
+            message_lower,
+            ["conversion", "loss", "funnel", "diagnostic", "воронка", "потери", "как сейчас устроено", "как сейчас устроена"],
+        ):
             trust_delta += 2
             urgency_delta += 1
             remove_open_objections.append("I do not see why this is necessary.")
@@ -199,10 +255,10 @@ class FakeLLMClient:
             current_process.append(f"Текущее решение: {profile.current_solution}.")
             current_process.extend(profile.business_facts[:2])
             if self._contains_any(message_lower, self.ACCOUNTING_TOKENS):
-                current_process.append("Бухгалтерия и учет обсуждаются как часть текущего процесса.")
-        if self._contains_any(message_lower, ["по каким критериям", "что важно", "как выбираете"]):
+                current_process.append("Бухгалтерия и учёт обсуждаются как часть текущего процесса.")
+        if self._contains_any(message_lower, self.DECISION_CRITERIA_TOKENS):
             decision_criteria.extend(profile.decision_criteria[:2])
-        if self._contains_any(message_lower, ["что мешает", "какие ограничения", "риски"]):
+        if self._contains_any(message_lower, self.CONSTRAINT_TOKENS):
             constraints.extend(profile.hidden_constraints[:1])
 
         if band in {"neutral", "warm", "hot"}:

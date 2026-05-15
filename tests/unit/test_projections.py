@@ -21,6 +21,11 @@ def test_public_projection_hides_internal_persona_structure_and_exposes_public_s
     assert public_session.public_brief
     assert public_session.client_state_public["trust"] == updated.client_state.trust
     assert "visible_objections" in public_session.client_state_public
+    assert "revealed_facts" in public_session.client_state_public
+    assert public_session.client_state_public["revealed_facts"] == [
+        fact.model_dump(mode="json")
+        for fact in updated.client_state.revealed_facts
+    ]
     assert updated.persona.role not in public_session.model_dump_json()
     assert updated.persona.authority_level not in public_session.model_dump_json()
     for hidden_value in updated.persona.latent_pains + updated.persona.hidden_constraints:

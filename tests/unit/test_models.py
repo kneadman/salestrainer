@@ -28,6 +28,31 @@ def test_llm_turn_response_rejects_invalid_interest_delta() -> None:
         )
 
 
+def test_llm_turn_response_accepts_revealed_facts_and_rejects_extra_fact_fields() -> None:
+    parsed = LLMTurnResponse.model_validate(
+        {
+            "answer": "I am the financial director.",
+            "interest_delta": 2,
+            "state_patch": {},
+            "revealed_facts": [{"category": "role", "text": "financial director"}],
+            "stage": "role_discovery",
+        }
+    )
+
+    assert parsed.revealed_facts[0].category == "role"
+
+    with pytest.raises(ValidationError):
+        LLMTurnResponse.model_validate(
+            {
+                "answer": "I am the financial director.",
+                "interest_delta": 2,
+                "state_patch": {},
+                "revealed_facts": [{"category": "role", "text": "financial director", "raw": "cfo"}],
+                "stage": "role_discovery",
+            }
+        )
+
+
 def test_training_session_state_contains_required_fields() -> None:
     session = TrainingSessionState(
         session_id=uuid4(),
@@ -87,6 +112,7 @@ def test_training_session_state_contains_required_fields() -> None:
     )
     assert session.turn_count == 0
     assert session.turns == []
+    assert session.client_state.revealed_facts == []
 
 
 def test_training_session_state_normalizes_legacy_persona_payload() -> None:
