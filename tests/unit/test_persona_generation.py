@@ -5,7 +5,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.domain.models import PersonaProfile, PersonaGenerationOutput
+from app.domain.models import LEGACY_PERSONA_FIELD_NAMES, PersonaProfile, PersonaGenerationOutput
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.scenarios import get_scenario
 
@@ -100,12 +100,13 @@ def test_universal_fake_persona_generator_respects_allowed_roles_and_target_acti
 def test_fake_persona_generator_returns_v31_persona() -> None:
     generator = UniversalFakePersonaGenerator(seed=1)
     persona = generator.generate(scenario=get_scenario("first_contact_discovery"))
+    persona_dump = persona.model_dump()
 
     assert persona.authority_level == "final_decider"
     assert persona.current_solution
     assert len(persona.alternative_solutions) >= 2
     assert len(persona.information_gaps) >= 2
-    assert "current_accounting_model" not in persona.model_dump()
+    assert all(key not in persona_dump for key in LEGACY_PERSONA_FIELD_NAMES)
 
 
 def test_persona_profile_accepts_v31_schema() -> None:

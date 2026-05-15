@@ -4,7 +4,14 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.domain.models import ClientState, LLMTurnResponse, PersonaProfile, StatePatch, TrainingSessionState
+from app.domain.models import (
+    LEGACY_PERSONA_FIELD_NAMES,
+    ClientState,
+    LLMTurnResponse,
+    PersonaProfile,
+    StatePatch,
+    TrainingSessionState,
+)
 
 
 def test_client_state_rejects_invalid_score_ranges() -> None:
@@ -181,12 +188,7 @@ def test_training_session_state_normalizes_legacy_persona_payload() -> None:
     assert session.persona.information_gaps
 
     persona_dump = session.persona.model_dump()
-    assert "current_accounting_model" not in persona_dump
-    assert "legal_form" not in persona_dump
-    assert "tax_system" not in persona_dump
-    assert "accounting_software" not in persona_dump
-    assert "accounting_software_mode" not in persona_dump
-    assert "primary_docs_owner" not in persona_dump
+    assert all(key not in persona_dump for key in LEGACY_PERSONA_FIELD_NAMES)
 
 
 def test_training_session_state_normalizes_legacy_non_decider_authority() -> None:

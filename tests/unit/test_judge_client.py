@@ -194,9 +194,24 @@ def test_fake_judge_client_uses_russian_user_facing_text() -> None:
     """Fake judge text should stay Russian for the default Russian runtime contract."""
     result = FakeJudgeClient().judge_session(_build_payload())
 
+    combined_text = " ".join(
+        [
+            result.outcome,
+            result.executive_summary,
+            result.final_verdict,
+            *[block.title for block in result.bento_blocks],
+            *[block.short_text for block in result.bento_blocks],
+            *[block.detail for block in result.bento_blocks],
+        ]
+    ).lower()
+
     assert result.bento_blocks[0].title == "Итог сессии"
     assert "Сессия завершилась" in result.outcome
-    assert "Детерминированный итог fake judge" in result.final_verdict
+    assert "Итоговая оценка" in result.final_verdict
+    assert "fake judge" not in combined_text
+    assert "fake" not in combined_text
+    assert "заглуш" not in combined_text
+    assert "детерминирован" not in combined_text
 
 
 def test_parse_judge_session_output_accepts_direct_output_dict() -> None:
