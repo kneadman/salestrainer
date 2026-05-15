@@ -102,7 +102,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
   const isSending = busyAction === "send";
   const canSend = session?.status === "active" && !loading;
   const voiceDisabled = !session || session.status !== "active" || loading;
-  const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
+  const factsPanel = useMemo(() => session?.facts_panel ?? { items: [] }, [session]);
   const canShowReportButton = session?.status === "finished" && (report !== null || reportPayload !== null);
   const activeConfigName = useMemo(() => {
     if (!session?.training_config_id) return undefined;
@@ -250,7 +250,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
     <>
       <main className="client-trainer-layout">
         <aside className="trainer-side-panels trainer-side-panels--desktop" aria-label="Метрики и факты тренировки">
-          <TrainerContextPanel session={session} factsState={factsState} mode="desktop" trainingConfigName={activeConfigName} />
+          <TrainerContextPanel session={session} factsPanel={factsPanel} mode="desktop" trainingConfigName={activeConfigName} />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
           <section className="trainer-chat-panel">
@@ -263,7 +263,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
               onFinish={handleFinish}
             />
             <div className="trainer-context-slot trainer-context-slot--mobile">
-              <TrainerContextPanel session={session} factsState={factsState} mode="mobile" trainingConfigName={activeConfigName} />
+              <TrainerContextPanel session={session} factsPanel={factsPanel} mode="mobile" trainingConfigName={activeConfigName} />
             </div>
             <div className="trainer-chat-body">
               {error ? <div className="error-banner error-banner--inline">{error}</div> : null}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -22,6 +23,26 @@ class TurnPublicDTO(BaseModel):
     created_at: datetime
 
 
+class FactsPanelItemDTO(BaseModel):
+    category: Literal[
+        "role",
+        "authority",
+        "current_process",
+        "decision_criterion",
+        "constraint",
+        "buying_signal",
+        "pain",
+        "objection",
+    ]
+    label: str
+    text: str
+    turn_index: int
+
+
+class FactsPanelDTO(BaseModel):
+    items: list[FactsPanelItemDTO]
+
+
 class SessionPublicDTO(BaseModel):
     session_id: str
     scenario_id: str
@@ -30,6 +51,7 @@ class SessionPublicDTO(BaseModel):
     stage: str
     interest: InterestDTO
     client_state_public: dict[str, object]
+    facts_panel: FactsPanelDTO
     turn_count: int
     summary: str
     state_version: int

@@ -1,8 +1,34 @@
 from __future__ import annotations
 
-from app.api.schemas import InterestDTO, SessionPublicDTO, TurnPublicDTO
+from app.api.schemas import FactsPanelDTO, FactsPanelItemDTO, InterestDTO, SessionPublicDTO, TurnPublicDTO
 from app.domain.interest import interest_band
-from app.domain.models import TrainingSessionState, Turn
+from app.domain.models import RevealedFact, TrainingSessionState, Turn
+
+_FACTS_PANEL_LABELS = {
+    "role": "Роль",
+    "authority": "Полномочия",
+    "current_process": "Текущий процесс",
+    "decision_criterion": "Критерии решения",
+    "constraint": "Ограничения",
+    "buying_signal": "Сигналы интереса",
+    "pain": "Выявленные боли",
+    "objection": "Возражения",
+}
+
+
+def build_facts_panel_dto(revealed_facts: list[RevealedFact]) -> FactsPanelDTO:
+    """Build a display-ready facts panel from already-sanitized revealed facts only."""
+    return FactsPanelDTO(
+        items=[
+            FactsPanelItemDTO(
+                category=fact.category,
+                label=_FACTS_PANEL_LABELS[fact.category],
+                text=fact.text,
+                turn_index=fact.turn_index,
+            )
+            for fact in revealed_facts
+        ]
+    )
 
 
 def build_session_public_dto(session: TrainingSessionState) -> SessionPublicDTO:
@@ -20,18 +46,13 @@ def build_session_public_dto(session: TrainingSessionState) -> SessionPublicDTO:
             "tone": session.client_state.tone,
             "trust": session.client_state.trust,
             "visible_objections": session.client_state.open_objections,
-            "known_pains": session.client_state.discovered_pains,
             "buying_signals": session.client_state.buying_signals,
             "revealed_facts": [
                 fact.model_dump(mode="json")
                 for fact in session.client_state.revealed_facts
             ],
-            "discovered_role": session.client_state.discovered_role,
-            "discovered_authority_level": session.client_state.discovered_authority_level,
-            "discovered_decision_criteria": session.client_state.discovered_decision_criteria,
-            "discovered_constraints": session.client_state.discovered_constraints,
-            "discovered_current_process": session.client_state.discovered_current_process,
         },
+        facts_panel=build_facts_panel_dto(session.client_state.revealed_facts),
         turn_count=session.turn_count,
         summary=session.summary,
         state_version=session.state_version,

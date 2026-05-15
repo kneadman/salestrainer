@@ -4,6 +4,17 @@ from app.application.turn_service import TurnService
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
 
+FACT_LABELS = {
+    "role": "Роль",
+    "authority": "Полномочия",
+    "current_process": "Текущий процесс",
+    "decision_criterion": "Критерии решения",
+    "constraint": "Ограничения",
+    "buying_signal": "Сигналы интереса",
+    "pain": "Выявленные боли",
+    "objection": "Возражения",
+}
+
 
 def test_public_projection_hides_internal_persona_structure_and_exposes_public_state() -> None:
     repository = InMemorySessionRepository()
@@ -22,8 +33,23 @@ def test_public_projection_hides_internal_persona_structure_and_exposes_public_s
     assert public_session.client_state_public["trust"] == updated.client_state.trust
     assert "visible_objections" in public_session.client_state_public
     assert "revealed_facts" in public_session.client_state_public
+    assert "known_pains" not in public_session.client_state_public
+    assert "discovered_role" not in public_session.client_state_public
+    assert "discovered_authority_level" not in public_session.client_state_public
+    assert "discovered_decision_criteria" not in public_session.client_state_public
+    assert "discovered_constraints" not in public_session.client_state_public
+    assert "discovered_current_process" not in public_session.client_state_public
     assert public_session.client_state_public["revealed_facts"] == [
         fact.model_dump(mode="json")
+        for fact in updated.client_state.revealed_facts
+    ]
+    assert public_session.facts_panel.items == [
+        {
+            "category": fact.category,
+            "label": FACT_LABELS[fact.category],
+            "text": fact.text,
+            "turn_index": fact.turn_index,
+        }
         for fact in updated.client_state.revealed_facts
     ]
     assert updated.persona.role not in public_session.model_dump_json()

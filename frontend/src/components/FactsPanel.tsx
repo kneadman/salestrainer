@@ -1,7 +1,7 @@
-import type { ClientStatePublic, RevealedFactCategory } from "../types";
+import type { FactsPanelDTO, RevealedFactCategory } from "../types";
 
 type FactsPanelProps = {
-  state: ClientStatePublic;
+  factsPanel: FactsPanelDTO;
 };
 
 type FactSection = {
@@ -40,9 +40,9 @@ function isTechnicalValue(value: string): boolean {
   return normalized.length === 0 || normalized.includes("_") || /^[a-z][a-z0-9_]*$/.test(normalized);
 }
 
-export function FactsPanel({ state }: FactsPanelProps) {
+export function FactsPanel({ factsPanel }: FactsPanelProps) {
   const grouped = new Map<RevealedFactCategory, string[]>();
-  for (const fact of state.revealed_facts ?? []) {
+  for (const fact of factsPanel.items) {
     const text = normalizeFactText(fact.text);
     if (isTechnicalValue(text)) {
       continue;
