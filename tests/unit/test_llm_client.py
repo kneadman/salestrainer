@@ -236,7 +236,8 @@ def test_fake_llm_client_reveals_decision_criterion_only_when_answer_says_it() -
     response = FakeLLMClient().generate_client_turn(payload)
 
     criteria = [fact for fact in response.revealed_facts if fact.category == "decision_criterion"]
-    assert criteria
+    assert criteria == [response.revealed_facts[-1]]
+    assert len(criteria) == 1
     assert criteria[0].text in response.answer
 
 
@@ -248,8 +249,10 @@ def test_fake_llm_client_reveals_constraint_only_when_answer_says_it() -> None:
     response = FakeLLMClient().generate_client_turn(payload)
 
     constraints = [fact for fact in response.revealed_facts if fact.category == "constraint"]
+    pains = [fact for fact in response.revealed_facts if fact.category == "pain"]
     assert constraints
     assert constraints[0].text in response.answer
+    assert pains == []
 
 
 def test_fake_llm_client_revealed_facts_do_not_contain_technical_values() -> None:

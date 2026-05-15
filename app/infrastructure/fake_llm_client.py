@@ -181,18 +181,15 @@ class FakeLLMClient:
             facts.append(RevealedFactPatch(category="role", text=self._public_role_label(profile.role)))
         if self._contains_any(message_lower, self.AUTHORITY_TOKENS):
             facts.append(RevealedFactPatch(category="authority", text="может принять финальное решение сам"))
-        if self._contains_any(message_lower, self.PAIN_TOKENS):
-            facts.append(RevealedFactPatch(category="pain", text=profile.latent_pains[0]))
         if self._contains_any(message_lower, self.PROCESS_TOKENS):
             facts.append(RevealedFactPatch(category="current_process", text=profile.current_business_context))
             facts.append(RevealedFactPatch(category="current_process", text=f"Текущее решение: {profile.current_solution}."))
         if self._contains_any(message_lower, self.DECISION_CRITERIA_TOKENS):
-            facts.extend(
-                RevealedFactPatch(category="decision_criterion", text=value)
-                for value in profile.decision_criteria[:2]
-            )
+            facts.append(RevealedFactPatch(category="decision_criterion", text=profile.decision_criteria[0]))
         if self._contains_any(message_lower, self.CONSTRAINT_TOKENS):
             facts.append(RevealedFactPatch(category="constraint", text=profile.hidden_constraints[0]))
+        elif self._contains_any(message_lower, self.PAIN_TOKENS):
+            facts.append(RevealedFactPatch(category="pain", text=profile.latent_pains[0]))
         return facts
 
     def _public_role_label(self, role: str) -> str:
