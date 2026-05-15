@@ -168,7 +168,7 @@ def test_turn_service_compresses_overflow_turns_into_summary() -> None:
 
     updated_session = repository.get(str(session.session_id))
     assert updated_session is not None
-    assert len(updated_session.turns) == 3
+    assert len(updated_session.turns) == 2
     assert len(updated_session.recent_turns) == 2
     assert "T1:" in updated_session.summary
 

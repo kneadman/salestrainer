@@ -128,7 +128,7 @@ class TurnService:
             stage_after=resolved_stage,
             created_at=now,
         )
-        full_turns = [*session.turns, turn]
+        runtime_turns = [*session.turns, turn][-self._recent_turn_limit :]
         recent_turns = [*session.recent_turns, turn][-self._recent_turn_limit :]
         overflow_turns = [*session.recent_turns, turn][:-self._recent_turn_limit]
         evaluation = evaluate_turn(
@@ -140,8 +140,8 @@ class TurnService:
         session.interest_score = interest_after
         session.stage = resolved_stage
         session.client_state = updated_client_state
-        session.turns = full_turns
-        session.turn_evaluations = [*session.turn_evaluations, evaluation]
+        session.turns = runtime_turns
+        session.turn_evaluations = [*session.turn_evaluations, evaluation][-self._recent_turn_limit :]
         session.recent_turns = recent_turns
         session.turn_count += 1
         session.state_version = expected_version + 1

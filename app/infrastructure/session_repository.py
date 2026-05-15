@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from threading import RLock
 from typing import Protocol
 
@@ -8,6 +9,8 @@ from redis.exceptions import WatchError
 
 from app.domain.errors import SessionNotFoundError, StateVersionConflictError
 from app.domain.models import TrainingSessionState
+
+logger = logging.getLogger(__name__)
 
 
 class SessionRepository(Protocol):
@@ -34,7 +37,13 @@ class InMemorySessionRepository:
 
     def create(self, session: TrainingSessionState) -> None:
         with self._lock:
-            self._store[str(session.session_id)] = session.model_dump_json()
+            payload = session.model_dump_json()
+            logger.debug(
+                "runtime_session_payload_size session_id=%s bytes=%s action=create",
+                session.session_id,
+                len(payload.encode("utf-8")),
+            )
+            self._store[str(session.session_id)] = payload
 
     def get(self, session_id: str) -> TrainingSessionState | None:
         with self._lock:
@@ -54,7 +63,15 @@ class InMemorySessionRepository:
                 raise StateVersionConflictError(
                     f"Session '{session_id}' was updated concurrently."
                 )
-            self._store[session_id] = session.model_dump_json()
+            payload = session.model_dump_json()
+            logger.debug(
+                "runtime_session_payload_size session_id=%s bytes=%s action=save turn_count=%s state_version=%s",
+                session.session_id,
+                len(payload.encode("utf-8")),
+                session.turn_count,
+                session.state_version,
+            )
+            self._store[session_id] = payload
 
     def touch(self, session_id: str) -> None:
         with self._lock:
@@ -75,9 +92,15 @@ class RedisSessionRepository:
         return f"sales_trainer:session:{session_id}"
 
     def create(self, session: TrainingSessionState) -> None:
+        payload = session.model_dump_json()
+        logger.debug(
+            "runtime_session_payload_size session_id=%s bytes=%s action=create",
+            session.session_id,
+            len(payload.encode("utf-8")),
+        )
         created = self._client.set(
             self._session_key(str(session.session_id)),
-            session.model_dump_json(),
+            payload,
             ex=self._ttl_seconds,
             nx=True,
         )
@@ -101,6 +124,13 @@ class RedisSessionRepository:
         session_id = str(session.session_id)
         key = self._session_key(session_id)
         payload = session.model_dump_json()
+        logger.debug(
+            "runtime_session_payload_size session_id=%s bytes=%s action=save turn_count=%s state_version=%s",
+            session.session_id,
+            len(payload.encode("utf-8")),
+            session.turn_count,
+            session.state_version,
+        )
 
         with self._client.pipeline() as pipeline:
             try:
