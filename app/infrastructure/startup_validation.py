@@ -41,12 +41,14 @@ def _validate_llm_runtime(settings: Settings) -> None:
     backend = settings.llm_backend.lower().strip()
     if backend not in _ALLOWED_LLM_BACKENDS:
         raise LLMProviderConfigurationError(f"Unknown llm_backend '{settings.llm_backend}'.")
-    if is_fake_fallback_allowed(settings):
+    if settings.allow_fake_llm_fallback:
         raise LLMProviderConfigurationError(
             "ALLOW_FAKE_LLM_FALLBACK is not permitted outside local/dev/test/demo environments."
         )
     if backend == "fake":
-        return
+        raise LLMProviderConfigurationError(
+            "LLM_BACKEND=fake is not permitted outside local/dev/test/demo environments."
+        )
 
     missing_fields: list[str] = []
     if not settings.yandex_api_key:

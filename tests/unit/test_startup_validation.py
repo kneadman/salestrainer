@@ -59,6 +59,24 @@ def test_validate_runtime_settings_rejects_fake_fallback_flag_in_production() ->
                 yandex_api_key="token",
                 yandex_folder_id="folder",
                 yandex_agent_id="agent",
+                yandex_dialogue_folder_id="dialogue-folder",
+                yandex_dialogue_agent_id="dialogue-agent",
+                yandex_judge_folder_id="judge-folder",
+                yandex_judge_agent_id="judge-agent",
+                yandex_persona_folder_id="persona-folder",
+                yandex_persona_agent_id="persona-agent",
+            )
+        )
+
+
+def test_validate_runtime_settings_rejects_fake_backend_in_production() -> None:
+    with pytest.raises(LLMProviderConfigurationError, match="LLM_BACKEND=fake"):
+        validate_runtime_settings(
+            Settings(
+                app_env="production",
+                llm_backend="fake",
+                database_url="postgresql+psycopg://user:pass@db:5432/sales_trainer",
+                secret_encryption_key="prod-secret",
             )
         )
 
@@ -74,6 +92,12 @@ def test_validate_runtime_settings_rejects_incomplete_yandex_config_in_productio
                 yandex_api_key="token",
                 yandex_dialogue_folder_id="dialogue-folder",
                 yandex_dialogue_agent_id="dialogue-agent",
+                yandex_folder_id="",
+                yandex_agent_id="",
+                yandex_judge_folder_id="",
+                yandex_judge_agent_id="",
+                yandex_persona_folder_id="",
+                yandex_persona_agent_id="",
             )
         )
 

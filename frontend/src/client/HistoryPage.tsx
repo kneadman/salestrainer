@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getHistorySessionDetail, getHistorySessions, getTrainingConfigs } from "./api";
 import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
@@ -63,7 +63,7 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
     /** Keep form controls aligned with browser navigation and shareable URLs. */
     setStatus(routeFilters.status);
     setTrainingConfigId(routeFilters.trainingConfigId);
-  }, [routeFilters]);
+  }, [routeFilters.status, routeFilters.trainingConfigId]);
 
   useEffect(() => {
     /** Load filter options once without coupling them to route-driven history refetches. */
@@ -93,12 +93,18 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
       }
     };
     void loadHistory();
-  }, [status, trainingConfigId]);
+  }, [routeFilters.status, routeFilters.trainingConfigId]);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    /** Apply filters and keep the URL query string shareable. */
-    event.preventDefault();
-    onNavigate(historyFiltersPath(status, trainingConfigId), true);
+  const applyFilters = (nextStatus: string, nextTrainingConfigId: string) => {
+    /** Keep URL query as the single source of truth for history filters. */
+    setStatus(nextStatus);
+    setTrainingConfigId(nextTrainingConfigId);
+    onNavigate(historyFiltersPath(nextStatus, nextTrainingConfigId), true);
+  };
+
+  const resetFilters = () => {
+    /** Clear all active filters and return to the canonical history route. */
+    applyFilters("", "");
   };
 
   if (configsLoading || historyLoading) {
@@ -119,9 +125,9 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
         status={status}
         trainingConfigId={trainingConfigId}
         trainingConfigs={trainingConfigs}
-        setStatus={setStatus}
-        setTrainingConfigId={setTrainingConfigId}
-        onSubmit={submit}
+        onStatusChange={(value) => applyFilters(value, trainingConfigId)}
+        onTrainingConfigChange={(value) => applyFilters(status, value)}
+        onReset={resetFilters}
       />
       <section className="client-panel">
         {history.length === 0 ? <ClientState title="История появится после первых тренировок." /> : <HistoryTable history={history} onNavigate={onNavigate} />}
@@ -190,17 +196,19 @@ function HistoryFilters(props: {
   status: string;
   trainingConfigId: string;
   trainingConfigs: TrainingConfigOptionDTO[];
-  setStatus: (value: string) => void;
-  setTrainingConfigId: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onStatusChange: (value: string) => void;
+  onTrainingConfigChange: (value: string) => void;
+  onReset: () => void;
 }) {
   /** Render client-safe history filters without exposing backend enum names as input hints. */
+  const hasFilters = Boolean(props.status || props.trainingConfigId);
+
   return (
     <section className="client-panel">
-      <form className="client-form client-form--inline" onSubmit={props.onSubmit}>
+      <div className="client-form client-form--inline">
         <label>
           <span>Статус</span>
-          <select value={props.status} onChange={(event) => props.setStatus(event.target.value)}>
+          <select value={props.status} onChange={(event) => props.onStatusChange(event.target.value)}>
             <option value="">Все статусы</option>
             <option value="active">Активные</option>
             <option value="finished">Завершённые</option>
@@ -209,7 +217,7 @@ function HistoryFilters(props: {
         </label>
         <label>
           <span>Настройка тренировки</span>
-          <select value={props.trainingConfigId} onChange={(event) => props.setTrainingConfigId(event.target.value)}>
+          <select value={props.trainingConfigId} onChange={(event) => props.onTrainingConfigChange(event.target.value)}>
             <option value="">Все настройки</option>
             {props.trainingConfigs.map((config) => (
               <option key={config.id} value={config.id}>
@@ -218,10 +226,10 @@ function HistoryFilters(props: {
             ))}
           </select>
         </label>
-        <button type="submit" className="client-button client-button--primary">
-          Применить
+        <button type="button" className="client-button" onClick={props.onReset} disabled={!hasFilters}>
+          Сбросить фильтры
         </button>
-      </form>
+      </div>
     </section>
   );
 }
