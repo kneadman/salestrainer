@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.access.repository import AccessRepository
 from app.api.main import create_app
+from app.client_portal.service import ClientPortalService
 from app.history.models import TrainingReportRecord, TrainingSessionRecord
 from app.identity.dependencies import get_db_session
 from app.identity.models import User
@@ -34,6 +36,28 @@ def _create_db_session() -> Session:
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, class_=Session)
     return session_factory()
+
+
+class _SqlCounter:
+    def __init__(self) -> None:
+        """Track executed SQL statements for query-count regression tests."""
+        self.count = 0
+
+
+@contextmanager
+def _count_sql_statements(db_session: Session) -> Generator[_SqlCounter, None, None]:
+    """Count DB cursor executions on the current test engine."""
+    counter = _SqlCounter()
+    bind = db_session.get_bind()
+
+    def before_cursor_execute(*_args: object) -> None:
+        counter.count += 1
+
+    event.listen(bind, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield counter
+    finally:
+        event.remove(bind, "before_cursor_execute", before_cursor_execute)
 
 
 def _create_client(db_session: Session) -> TestClient:
@@ -474,6 +498,69 @@ def test_team_usage_summary_aggregates_saved_judgement_payloads() -> None:
     assert payload["strongest_skill_id"] == "discovery_quality"
     assert payload["manager_ranking"][0]["user_email"] == "manager@example.com"
     assert payload["manager_ranking"][0]["sessions_with_judgement"] == 1
+    db_session.close()
+
+
+def test_team_analytics_uses_bulk_queries_for_larger_team() -> None:
+    """Team analytics should keep stable output and bounded queries for larger teams."""
+    db_session = _create_db_session()
+    manager_emails = [f"manager-{index:02d}@example.com" for index in range(12)]
+    account, config, users = _seed_account(
+        db_session,
+        slug="bulk-team-analytics",
+        users=[("lead@example.com", "client_lead"), *[(email, "client_manager") for email in manager_emails]],
+    )
+    now = datetime.now(UTC).replace(microsecond=0)
+    for index, email in enumerate(manager_emails):
+        finished_session = _add_history(
+            db_session,
+            user=users[email],
+            client_account_id=account.id,
+            training_config_id=config.id,
+            status="finished",
+            final_interest_score=50 + index,
+            turn_count=2 + index,
+            started_at=now - timedelta(minutes=index),
+        )
+        _add_history(
+            db_session,
+            user=users[email],
+            client_account_id=account.id,
+            training_config_id=config.id,
+            status="active",
+            final_interest_score=None,
+            turn_count=1,
+            started_at=now - timedelta(minutes=30 + index),
+        )
+        _add_report_payload(
+            db_session,
+            session_id=finished_session.id,
+            payload=_valid_judge_payload(overall_score=60 + index, skill_score=45 + index),
+        )
+    service = ClientPortalService(db_session, inactive_ttl_seconds=86400)
+    lead = users["lead@example.com"]
+
+    with _count_sql_statements(db_session) as users_counter:
+        team_users = service.list_team_users(requester=lead)
+    with _count_sql_statements(db_session) as summary_counter:
+        summary = service.get_team_usage_summary(requester=lead)
+
+    manager_11 = next(user for user in team_users if user.email == "manager-11@example.com")
+    assert len(team_users) == 13
+    assert manager_11.total_sessions == 2
+    assert manager_11.finished_sessions == 1
+    assert manager_11.avg_final_interest_score == 61.0
+    assert summary.total_sessions == 24
+    assert summary.finished_sessions == 12
+    assert summary.sessions_with_judgement == 12
+    assert summary.avg_judgement_score == 65.5
+    assert len(summary.users) == 13
+    assert [item.user_email for item in summary.manager_ranking[:2]] == [
+        "manager-11@example.com",
+        "manager-10@example.com",
+    ]
+    assert users_counter.count <= 6
+    assert summary_counter.count <= 18
     db_session.close()
 
 
