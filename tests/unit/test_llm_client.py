@@ -269,6 +269,17 @@ def test_fake_llm_client_revealed_facts_do_not_contain_technical_values() -> Non
     assert "_" not in combined
 
 
+def test_fake_llm_client_revealed_facts_follow_answer_branch_priority() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Кто вы, кто принимает решение и что для вас важно?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    assert [fact.category for fact in response.revealed_facts] == ["role"]
+    assert response.revealed_facts[0].text in response.answer
+
+
 def test_fake_llm_client_revealed_fact_logic_has_no_mojibake_tokens() -> None:
     source = inspect.getsource(ActiveFakeLLMClient._build_revealed_facts)
 

@@ -176,21 +176,22 @@ class FakeLLMClient:
         }[profile.authority_level]
 
     def _build_revealed_facts(self, message_lower: str, profile: Any) -> list[RevealedFactPatch]:
-        facts: list[RevealedFactPatch] = []
         if self._contains_any(message_lower, self.ROLE_TOKENS):
-            facts.append(RevealedFactPatch(category="role", text=self._public_role_label(profile.role)))
-        if self._contains_any(message_lower, self.AUTHORITY_TOKENS):
-            facts.append(RevealedFactPatch(category="authority", text="может принять финальное решение сам"))
-        if self._contains_any(message_lower, self.PROCESS_TOKENS):
-            facts.append(RevealedFactPatch(category="current_process", text=profile.current_business_context))
-            facts.append(RevealedFactPatch(category="current_process", text=f"Текущее решение: {profile.current_solution}."))
+            return [RevealedFactPatch(category="role", text=self._public_role_label(profile.role))]
         if self._contains_any(message_lower, self.DECISION_CRITERIA_TOKENS):
-            facts.append(RevealedFactPatch(category="decision_criterion", text=profile.decision_criteria[0]))
+            return [RevealedFactPatch(category="decision_criterion", text=profile.decision_criteria[0])]
         if self._contains_any(message_lower, self.CONSTRAINT_TOKENS):
-            facts.append(RevealedFactPatch(category="constraint", text=profile.hidden_constraints[0]))
-        elif self._contains_any(message_lower, self.PAIN_TOKENS):
-            facts.append(RevealedFactPatch(category="pain", text=profile.latent_pains[0]))
-        return facts
+            return [RevealedFactPatch(category="constraint", text=profile.hidden_constraints[0])]
+        if self._contains_any(message_lower, self.PROCESS_TOKENS):
+            return [
+                RevealedFactPatch(category="current_process", text=profile.current_business_context),
+                RevealedFactPatch(category="current_process", text=f"Текущее решение: {profile.current_solution}."),
+            ]
+        if self._contains_any(message_lower, self.PAIN_TOKENS):
+            return [RevealedFactPatch(category="pain", text=profile.latent_pains[0])]
+        if self._contains_any(message_lower, self.AUTHORITY_TOKENS):
+            return [RevealedFactPatch(category="authority", text="может принять финальное решение сам")]
+        return []
 
     def _public_role_label(self, role: str) -> str:
         labels = {
