@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { auditActionLabel, auditEntityLabel } from "../labels";
+import { buildAuditLogViewModel } from "../viewModels";
 import { listAuditLog, listOrganizations } from "./api";
 import { EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO } from "./types";
-import { auditPayloadSummary, formatDate, getErrorMessage } from "./utils";
+import { getErrorMessage } from "./utils";
 
 type AuditFilters = {
   organization_id: string;
@@ -94,6 +95,8 @@ export function AuditLogPage() {
     return <ErrorState title="Журнал аудита недоступен" detail={error} />;
   }
 
+  const eventVms = events.map(buildAuditLogViewModel);
+
   return (
     <div className="admin-page">
       <div className="admin-page__header"><div><span className="admin-kicker">Внутренний след</span><h1>Журнал аудита</h1></div></div>
@@ -112,13 +115,13 @@ export function AuditLogPage() {
             <table className="admin-table">
               <thead><tr><th>Создано</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Детали</th></tr></thead>
               <tbody>
-                {events.map((event) => (
-                  <tr key={event.id}>
-                    <td>{formatDate(event.created_at)}</td>
-                    <td>{auditActionLabel(event.action)}</td>
-                    <td>{auditEntityLabel(event.entity_type)}</td>
-                    <td>{event.actor_user_id ? "Администратор" : "Система"}</td>
-                    <td>{auditPayloadSummary(event.payload)}</td>
+                {eventVms.map((vm) => (
+                  <tr key={vm.id}>
+                    <td>{vm.createdAtLabel}</td>
+                    <td>{vm.actionLabel}</td>
+                    <td>{vm.entityLabel}</td>
+                    <td>{vm.actorLabel}</td>
+                    <td>{vm.payloadSummary}</td>
                   </tr>
                 ))}
               </tbody>
