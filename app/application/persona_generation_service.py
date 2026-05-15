@@ -115,7 +115,9 @@ class PersonaGenerationService:
 
     def _allow_local_fallback(self) -> bool:
         """Allow local persona fallback only in local/debug-compatible environments."""
-        return is_fake_fallback_allowed(self._settings)
+        env = self._settings.app_env.lower().strip()
+        local_like_env = env in {"local", "dev", "development", "test", "demo"}
+        return local_like_env or is_fake_fallback_allowed(self._settings)
 
 class PersonaGeneratorClientFactory:
     def __init__(self, *, settings: Settings) -> None:

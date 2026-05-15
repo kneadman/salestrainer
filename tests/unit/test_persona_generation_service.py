@@ -106,6 +106,18 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
     assert persona.authority_level == "final_decider"
 
 
+def test_persona_generation_service_falls_back_to_local_without_prompt_for_explicit_fake_backend() -> None:
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(app_env="local", llm_backend="fake", allow_fake_llm_fallback=False),
+        fallback_generator=UniversalFakePersonaGenerator(seed=3),
+    )
+
+    persona = service.generate_for_training_config(training_config=_training_config(prompt=""))
+
+    assert persona.id.startswith("generated_first_contact_discovery_")
+
+
 def test_persona_generation_service_rejects_empty_prompt_without_fallback() -> None:
     service = PersonaGenerationService(
         db_session=None,  # type: ignore[arg-type]
