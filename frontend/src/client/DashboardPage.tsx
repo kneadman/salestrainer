@@ -3,8 +3,8 @@ import type { AuthUser } from "../types";
 import { getHistorySessions, getMyAnalytics, getTeamUsageSummary } from "./api";
 import { ClientState, ClientStat } from "./components/ClientPrimitives";
 import type { ClientUserAnalyticsDTO, HistorySessionSummaryDTO, TeamUsageSummaryDTO } from "./types";
-import { scenarioLabel, statusLabel } from "../labels";
-import { formatClientDate, getClientErrorMessage } from "./utils";
+import { buildClientAnalyticsViewModel, buildClientHistorySessionViewModel } from "../viewModels";
+import { getClientErrorMessage } from "./utils";
 
 type DashboardPageProps = {
   user: AuthUser;
@@ -51,6 +51,9 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
     return <ClientState title="Не удалось загрузить обзор" detail={error} tone="error" />;
   }
 
+  const analyticsVm = analytics ? buildClientAnalyticsViewModel(analytics) : null;
+  const historyVms = history.map(buildClientHistorySessionViewModel);
+
   return (
     <div className="client-page">
       <div className="client-page__header">
@@ -64,11 +67,11 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
         </button>
       </div>
       <section className="client-stats-grid">
-        <ClientStat label="Всего тренировок" value={analytics?.total_sessions ?? 0} />
-        <ClientStat label="Завершено" value={analytics?.finished_sessions ?? 0} />
-        <ClientStat label="Средний интерес" value={analytics?.avg_final_interest_score?.toFixed(1) ?? "—"} />
-        <ClientStat label="Среднее число ходов" value={analytics?.avg_turn_count?.toFixed(1) ?? "—"} />
-        <ClientStat label="Последняя активность" value={formatClientDate(analytics?.last_activity_at)} />
+        <ClientStat label="Всего тренировок" value={analyticsVm?.totalSessions ?? 0} />
+        <ClientStat label="Завершено" value={analyticsVm?.finishedSessions ?? 0} />
+        <ClientStat label="Средний интерес" value={analyticsVm?.avgFinalInterestScore ?? "—"} />
+        <ClientStat label="Среднее число ходов" value={analyticsVm?.avgTurnCount ?? "—"} />
+        <ClientStat label="Последняя активность" value={analyticsVm?.lastActivityAtLabel ?? "—"} />
       </section>
       {user.role === "client_lead" ? (
         <section className="client-stats-grid">
@@ -89,7 +92,7 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
           <div className="client-table-wrap">
             <table className="client-table">
               <thead><tr><th>Дата</th><th>Статус</th><th>Сценарий</th><th>Ходы</th><th>Интерес</th></tr></thead>
-              <tbody>{history.map((item) => <tr key={item.session_id}><td>{formatClientDate(item.started_at)}</td><td>{statusLabel(item.status)}</td><td>{scenarioLabel(item.scenario_id)}</td><td>{item.turn_count}</td><td>{item.final_interest_score ?? "—"}</td></tr>)}</tbody>
+              <tbody>{historyVms.map((vm) => <tr key={vm.sessionId}><td>{vm.startedAtLabel}</td><td>{vm.statusLabel}</td><td>{vm.scenarioLabel}</td><td>{vm.turnCount}</td><td>{vm.finalInterestScore}</td></tr>)}</tbody>
             </table>
           </div>
         )}
