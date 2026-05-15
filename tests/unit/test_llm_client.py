@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 
@@ -225,6 +226,53 @@ def test_fake_llm_client_discovers_current_process_from_russian_accounting_quest
         "Owner wants more control" in item or "Текущее решение" in item
         for item in discovered_process
     )
+
+
+def test_fake_llm_client_reveals_decision_criterion_only_when_answer_says_it() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Что важно, когда выбираете подрядчика?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    criteria = [fact for fact in response.revealed_facts if fact.category == "decision_criterion"]
+    assert criteria
+    assert criteria[0].text in response.answer
+
+
+def test_fake_llm_client_reveals_constraint_only_when_answer_says_it() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Какие ограничения или риски сейчас мешают?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    constraints = [fact for fact in response.revealed_facts if fact.category == "constraint"]
+    assert constraints
+    assert constraints[0].text in response.answer
+
+
+def test_fake_llm_client_revealed_facts_do_not_contain_technical_values() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Кто вы, кто принимает решение и что важно?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+    combined = " ".join(fact.text for fact in response.revealed_facts)
+
+    assert "cfo" not in combined
+    assert "final_decider" not in combined
+    assert "snake_case" not in combined
+    assert "_" not in combined
+
+
+def test_fake_llm_client_revealed_fact_logic_has_no_mojibake_tokens() -> None:
+    source = inspect.getsource(ActiveFakeLLMClient._build_revealed_facts)
+
+    assert "Р " not in source
+    assert "РЎ" not in source
+    assert "Ð" not in source
+    assert "Ñ" not in source
 
 
 def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None:
