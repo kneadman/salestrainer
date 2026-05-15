@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HistoryPage } from "./HistoryPage";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
