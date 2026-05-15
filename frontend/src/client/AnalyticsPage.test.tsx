@@ -28,6 +28,9 @@ const analyticsFixture: ClientUserAnalyticsDTO = {
   weakest_skill_id: "discovery_quality",
   weakest_skill_title: "Качество диагностики",
   weakest_skill_avg_score: 49.5,
+  strongest_skill_id: "objection_handling",
+  strongest_skill_title: "Работа с возражениями",
+  strongest_skill_avg_score: 86.5,
   last_activity_at: "2026-05-08T19:23:00Z",
   sessions_by_status: {
     finished: 10,
@@ -67,6 +70,10 @@ describe("AnalyticsPage", () => {
     expect(screen.getByText("Среднее число ходов")).toBeInTheDocument();
     expect(screen.getByText("Средняя оценка тренировки")).toBeInTheDocument();
     expect(screen.getByText("С оценкой тренировки")).toBeInTheDocument();
+    expect(screen.getByText("Сильнейший навык")).toBeInTheDocument();
+    expect(screen.getAllByText("Работа с возражениями").length).toBeGreaterThan(0);
+    expect(screen.getByText("Зона роста")).toBeInTheDocument();
+    expect(screen.getByText("Качество диагностики")).toBeInTheDocument();
     expect(screen.getByText("Последняя активность")).toBeInTheDocument();
     expect(screen.getAllByText(/за 7 дней:/i).length).toBeGreaterThan(1);
     expect(screen.getAllByText(/Δ \+2 к прошлым 7 дням/i).length).toBeGreaterThan(0);
@@ -74,9 +81,7 @@ describe("AnalyticsPage", () => {
     expect(screen.getByRole("heading", { name: "По сценариям" })).toBeInTheDocument();
     expect(screen.getAllByText("Завершена").length).toBeGreaterThan(0);
     expect(screen.getByText("Первичный контакт и разведка")).toBeInTheDocument();
-    expect(screen.queryByText("Слабейший навык")).not.toBeInTheDocument();
     expect(screen.queryByText("Оценки навыков")).not.toBeInTheDocument();
-    expect(screen.queryByText("Качество диагностики")).not.toBeInTheDocument();
     expect(screen.queryByText("finished")).not.toBeInTheDocument();
     expect(screen.queryByText("generic_b2b_first_contact")).not.toBeInTheDocument();
   });

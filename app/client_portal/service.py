@@ -21,6 +21,7 @@ from app.client_portal.schemas import (
     ClientAnalyticsTrendsDTO,
     ClientTrainingConfigOptionDTO,
     ClientUserAnalyticsDTO,
+    ManagerRankingItemDTO,
     MetricTrendDTO,
     TeamUsageSummaryDTO,
     TeamUserDTO,
@@ -99,6 +100,13 @@ class ClientPortalService:
             **summary.model_dump(),
             avg_judgement_score=judgement_analytics["avg_judgement_score"],
             sessions_with_judgement=judgement_analytics["sessions_with_judgement"],
+            weakest_skill_id=judgement_analytics["weakest_skill_id"],
+            weakest_skill_title=judgement_analytics["weakest_skill_title"],
+            weakest_skill_avg_score=judgement_analytics["weakest_skill_avg_score"],
+            strongest_skill_id=judgement_analytics["strongest_skill_id"],
+            strongest_skill_title=judgement_analytics["strongest_skill_title"],
+            strongest_skill_avg_score=judgement_analytics["strongest_skill_avg_score"],
+            manager_ranking=self._manager_ranking(requester.client_account_id),
             users=self.list_team_users(requester=requester),
         )
 
@@ -233,6 +241,9 @@ class ClientPortalService:
             weakest_skill_id=judgement_analytics["weakest_skill_id"],
             weakest_skill_title=judgement_analytics["weakest_skill_title"],
             weakest_skill_avg_score=judgement_analytics["weakest_skill_avg_score"],
+            strongest_skill_id=judgement_analytics["strongest_skill_id"],
+            strongest_skill_title=judgement_analytics["strongest_skill_title"],
+            strongest_skill_avg_score=judgement_analytics["strongest_skill_avg_score"],
             last_activity_at=last_activity,
             sessions_by_status=self._group_counts(TrainingSessionRecord.status, user_filter),
             sessions_by_scenario=self._group_counts(TrainingSessionRecord.scenario_id, user_filter),
@@ -328,6 +339,9 @@ class ClientPortalService:
                 "weakest_skill_id": None,
                 "weakest_skill_title": None,
                 "weakest_skill_avg_score": None,
+                "strongest_skill_id": None,
+                "strongest_skill_title": None,
+                "strongest_skill_avg_score": None,
             }
         skill_totals: dict[str, dict[str, float | int | str]] = {}
         for payload in parsed_payloads:
@@ -341,6 +355,9 @@ class ClientPortalService:
         weakest_skill_id = None
         weakest_skill_title = None
         weakest_skill_avg_score = None
+        strongest_skill_id = None
+        strongest_skill_title = None
+        strongest_skill_avg_score = None
         if skill_totals:
             weakest_skill_id, weakest_skill_data = min(
                 skill_totals.items(),
@@ -348,13 +365,73 @@ class ClientPortalService:
             )
             weakest_skill_title = str(weakest_skill_data["title"])
             weakest_skill_avg_score = float(weakest_skill_data["score_sum"]) / int(weakest_skill_data["count"])
+            strongest_skill_id, strongest_skill_data = max(
+                skill_totals.items(),
+                key=lambda item: (float(item[1]["score_sum"]) / int(item[1]["count"]), item[0]),
+            )
+            strongest_skill_title = str(strongest_skill_data["title"])
+            strongest_skill_avg_score = float(strongest_skill_data["score_sum"]) / int(strongest_skill_data["count"])
         return {
             "avg_judgement_score": sum(payload.overall_score for payload in parsed_payloads) / len(parsed_payloads),
             "sessions_with_judgement": len(parsed_payloads),
             "weakest_skill_id": weakest_skill_id,
             "weakest_skill_title": weakest_skill_title,
             "weakest_skill_avg_score": weakest_skill_avg_score,
+            "strongest_skill_id": strongest_skill_id,
+            "strongest_skill_title": strongest_skill_title,
+            "strongest_skill_avg_score": strongest_skill_avg_score,
         }
+
+    def _manager_ranking(self, client_account_id: UUID) -> list[ManagerRankingItemDTO]:
+        """Rank same-organization managers by safe aggregate outcomes only."""
+        users = [
+            user
+            for user in self._list_users_for_account(client_account_id)
+            if normalize_role(user.role) == UserRole.CLIENT_MANAGER
+        ]
+        ranking: list[tuple[float, str, User, ClientUserAnalyticsDTO]] = []
+        for user in users:
+            analytics = self._user_analytics(user)
+            score = self._manager_ranking_score(analytics)
+            ranking.append((score, user.email, user, analytics))
+        ranking.sort(key=lambda item: (-item[0], item[1]))
+        return [
+            ManagerRankingItemDTO(
+                user_id=user.id,
+                user_email=user.email,
+                rank=index + 1,
+                score=score,
+                total_sessions=analytics.total_sessions,
+                finished_sessions=analytics.finished_sessions,
+                completion_rate=analytics.completion_rate,
+                avg_final_interest_score=analytics.avg_final_interest_score,
+                avg_judgement_score=analytics.avg_judgement_score,
+                sessions_with_judgement=analytics.sessions_with_judgement,
+            )
+            for index, (score, _email, user, analytics) in enumerate(ranking)
+        ]
+
+    def _manager_ranking_score(self, analytics: ClientUserAnalyticsDTO) -> float:
+        """Compute a bounded team ranking score from public-safe analytics."""
+        if analytics.total_sessions == 0:
+            return 0.0
+        judgement_score = analytics.avg_judgement_score if analytics.avg_judgement_score is not None else 0.0
+        interest_score = analytics.avg_final_interest_score if analytics.avg_final_interest_score is not None else 0.0
+        completion_score = analytics.completion_rate * 100
+        judged_coverage = (
+            analytics.sessions_with_judgement / analytics.finished_sessions
+            if analytics.finished_sessions
+            else 0.0
+        )
+        activity_bonus = min(analytics.finished_sessions, 10) * 1.5
+        return round(
+            judgement_score * 0.45
+            + interest_score * 0.25
+            + completion_score * 0.20
+            + judged_coverage * 10
+            + activity_bonus,
+            2,
+        )
 
     def _parse_judge_payload(self, payload: object) -> JudgeSessionOutput | None:
         """Validate one saved report payload and ignore unknown or incompatible shapes."""
