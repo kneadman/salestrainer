@@ -4,6 +4,14 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.application.turn_service import TurnResult
+from app.domain.contract_versions import (
+    DIALOGUE_PROMPT_VERSION,
+    DIALOGUE_SCHEMA_VERSION,
+    JUDGE_PROMPT_VERSION,
+    JUDGE_SCHEMA_VERSION,
+    PERSONA_PROMPT_VERSION,
+    PERSONA_SCHEMA_VERSION,
+)
 from app.domain.models import TrainingSessionState
 from app.history.events import UsageEventType
 from app.history.projections import report_dto, session_summary_dto, turn_dto
@@ -78,6 +86,8 @@ class HistoryService:
                 "initial_state_snapshot": self._session_snapshot(session),
                 "public_brief": session.public_brief,
                 "summary": session.summary,
+                "persona_schema_version": PERSONA_SCHEMA_VERSION,
+                "persona_prompt_version": PERSONA_PROMPT_VERSION,
             },
             event_kwargs=self._usage_event_kwargs(
                 event_type=UsageEventType.SESSION_STARTED.value,
@@ -85,7 +95,11 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"scenario_id": session.scenario_id},
+                event_payload={
+                    "scenario_id": session.scenario_id,
+                    "persona_schema_version": PERSONA_SCHEMA_VERSION,
+                    "persona_prompt_version": PERSONA_PROMPT_VERSION,
+                },
             ),
         )
 
@@ -117,6 +131,8 @@ class HistoryService:
                 "llm_payload_snapshot": self._safe_payload_snapshot(turn_result.llm_payload),
                 "llm_response_snapshot": self._safe_response_snapshot(turn_result.llm_response),
                 "evaluation_snapshot": evaluation.model_dump(mode="json") if evaluation is not None else None,
+                "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
                 "created_at": turn.created_at,
             },
             rollup={
@@ -133,7 +149,13 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"turn_index": turn.index, "interest_after": turn.interest_after, "stage_after": turn.stage_after},
+                event_payload={
+                    "turn_index": turn.index,
+                    "interest_after": turn.interest_after,
+                    "stage_after": turn.stage_after,
+                    "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                    "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
+                },
             ),
         )
 
@@ -179,6 +201,8 @@ class HistoryService:
                 "llm_payload_snapshot": None,
                 "llm_response_snapshot": None,
                 "evaluation_snapshot": evaluation.model_dump(mode="json") if evaluation is not None else None,
+                "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
                 "created_at": turn.created_at,
             },
             rollup={
@@ -195,7 +219,13 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"turn_index": turn.index, "interest_after": turn.interest_after, "stage_after": turn.stage_after},
+                event_payload={
+                    "turn_index": turn.index,
+                    "interest_after": turn.interest_after,
+                    "stage_after": turn.stage_after,
+                    "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                    "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
+                },
             ),
         )
         return True
@@ -249,6 +279,8 @@ class HistoryService:
                 "final_interest_score": session.interest_score,
                 "final_stage": session.stage,
             },
+            judge_schema_version=JUDGE_SCHEMA_VERSION,
+            judge_prompt_version=JUDGE_PROMPT_VERSION,
         )
         self.record_usage_event(
             event_type=UsageEventType.REPORT_GENERATED.value,
@@ -256,7 +288,11 @@ class HistoryService:
             user_id=user_id,
             training_config_id=training_config_id,
             session_id=session.session_id,
-            event_payload={"report_version": report.report_version},
+            event_payload={
+                "report_version": report.report_version,
+                "judge_schema_version": report.judge_schema_version,
+                "judge_prompt_version": report.judge_prompt_version,
+            },
         )
         return report_dto(report)
 
@@ -312,6 +348,8 @@ class HistoryService:
                 "final_interest_score": session.interest_score,
                 "final_stage": session.stage,
             },
+            judge_schema_version=JUDGE_SCHEMA_VERSION,
+            judge_prompt_version=JUDGE_PROMPT_VERSION,
             finish_event_kwargs=self._usage_event_kwargs(
                 event_type=UsageEventType.SESSION_FINISHED.value,
                 client_account_id=client_account_id,
@@ -326,7 +364,11 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"report_version": 1},
+                event_payload={
+                    "report_version": 1,
+                    "judge_schema_version": JUDGE_SCHEMA_VERSION,
+                    "judge_prompt_version": JUDGE_PROMPT_VERSION,
+                },
             ),
         )
         return report_dto(report)

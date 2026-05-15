@@ -52,6 +52,9 @@ export type ClientUserAnalyticsDTO = {
   weakest_skill_id: string | null;
   weakest_skill_title: string | null;
   weakest_skill_avg_score: number | null;
+  strongest_skill_id: string | null;
+  strongest_skill_title: string | null;
+  strongest_skill_avg_score: number | null;
   last_activity_at: string | null;
   sessions_by_status: Record<string, number>;
   sessions_by_scenario: Record<string, number>;
@@ -127,6 +130,19 @@ export type TeamUserDetailDTO = {
   history: HistorySessionSummaryDTO[];
 };
 
+export type ManagerRankingItemDTO = {
+  user_id: string;
+  user_email: string;
+  rank: number;
+  score: number;
+  total_sessions: number;
+  finished_sessions: number;
+  completion_rate: number;
+  avg_final_interest_score: number | null;
+  avg_judgement_score: number | null;
+  sessions_with_judgement: number;
+};
+
 export type TeamUsageSummaryDTO = {
   total_sessions: number;
   finished_sessions: number;
@@ -137,6 +153,13 @@ export type TeamUsageSummaryDTO = {
   avg_turn_count: number | null;
   avg_judgement_score: number | null;
   sessions_with_judgement: number;
+  weakest_skill_id: string | null;
+  weakest_skill_title: string | null;
+  weakest_skill_avg_score: number | null;
+  strongest_skill_id: string | null;
+  strongest_skill_title: string | null;
+  strongest_skill_avg_score: number | null;
+  manager_ranking: ManagerRankingItemDTO[];
   sessions_by_status: Record<string, number>;
   sessions_by_scenario: Record<string, number>;
   sessions_by_training_config: Record<string, number>;

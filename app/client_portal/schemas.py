@@ -41,6 +41,9 @@ class ClientUserAnalyticsDTO(BaseModel):
     weakest_skill_id: str | None
     weakest_skill_title: str | None
     weakest_skill_avg_score: float | None
+    strongest_skill_id: str | None
+    strongest_skill_title: str | None
+    strongest_skill_avg_score: float | None
     last_activity_at: datetime | None
     sessions_by_status: dict[str, int]
     sessions_by_scenario: dict[str, int]
@@ -71,7 +74,27 @@ class TeamUserDetailDTO(BaseModel):
     history: list[ClientHistorySessionSummaryDTO]
 
 
+class ManagerRankingItemDTO(BaseModel):
+    user_id: UUID
+    user_email: str
+    rank: int
+    score: float
+    total_sessions: int
+    finished_sessions: int
+    completion_rate: float
+    avg_final_interest_score: float | None
+    avg_judgement_score: float | None
+    sessions_with_judgement: int
+
+
 class TeamUsageSummaryDTO(UsageSummaryDTO):
     avg_judgement_score: float | None
     sessions_with_judgement: int
+    weakest_skill_id: str | None
+    weakest_skill_title: str | None
+    weakest_skill_avg_score: float | None
+    strongest_skill_id: str | None
+    strongest_skill_title: str | None
+    strongest_skill_avg_score: float | None
+    manager_ranking: list[ManagerRankingItemDTO]
     users: list[TeamUserDTO]

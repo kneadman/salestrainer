@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import Select, and_, desc, distinct, func, select, update
 from sqlalchemy.orm import Session
 
+from app.domain.contract_versions import JUDGE_PROMPT_VERSION, JUDGE_SCHEMA_VERSION
 from app.history.models import (
     TrainingReportRecord,
     TrainingSessionRecord,
@@ -221,6 +222,8 @@ class HistoryRepository:
         report_text: str,
         report_payload: dict[str, object] | None = None,
         report_version: int = 1,
+        judge_schema_version: str = JUDGE_SCHEMA_VERSION,
+        judge_prompt_version: str = JUDGE_PROMPT_VERSION,
     ) -> TrainingReportRecord:
         """Create or replace the saved final report for one session."""
         record = self.get_report(session_id)
@@ -230,12 +233,16 @@ class HistoryRepository:
                 report_text=report_text,
                 report_payload=report_payload,
                 report_version=report_version,
+                judge_schema_version=judge_schema_version,
+                judge_prompt_version=judge_prompt_version,
             )
             self._session.add(record)
         else:
             record.report_text = report_text
             record.report_payload = report_payload
             record.report_version = report_version
+            record.judge_schema_version = judge_schema_version
+            record.judge_prompt_version = judge_prompt_version
         self._session.commit()
         self._session.refresh(record)
         return record
@@ -325,6 +332,8 @@ class HistoryRepository:
         finish_event_kwargs: dict[str, object],
         report_event_kwargs: dict[str, object],
         report_version: int = 1,
+        judge_schema_version: str = JUDGE_SCHEMA_VERSION,
+        judge_prompt_version: str = JUDGE_PROMPT_VERSION,
     ) -> TrainingReportRecord:
         """Mark a session finished, upsert report, and write finish/report events in one commit."""
         session_record = self.get_session(session_id)
@@ -339,12 +348,16 @@ class HistoryRepository:
                 report_text=report_text,
                 report_payload=report_payload,
                 report_version=report_version,
+                judge_schema_version=judge_schema_version,
+                judge_prompt_version=judge_prompt_version,
             )
             self._session.add(report)
         else:
             report.report_text = report_text
             report.report_payload = report_payload
             report.report_version = report_version
+            report.judge_schema_version = judge_schema_version
+            report.judge_prompt_version = judge_prompt_version
         self._session.add_all([UsageEventRecord(**finish_event_kwargs), UsageEventRecord(**report_event_kwargs)])
         try:
             self._session.commit()

@@ -90,6 +90,20 @@ export function AnalyticsPage() {
           trend={analytics.trends_7d.sessions_with_judgement}
         />
         <AnalyticsBentoCard
+          label="Сильнейший навык"
+          value={analytics.strongest_skill_title ?? "—"}
+          footer={formatSkillScore(analytics.strongest_skill_avg_score)}
+          hideDelta
+          wide
+        />
+        <AnalyticsBentoCard
+          label="Зона роста"
+          value={analytics.weakest_skill_title ?? "—"}
+          footer={formatSkillScore(analytics.weakest_skill_avg_score)}
+          hideDelta
+          wide
+        />
+        <AnalyticsBentoCard
           label="Последняя активность"
           value={formatClientDate(analytics.last_activity_at)}
           footer="последнее действие"
@@ -97,6 +111,11 @@ export function AnalyticsPage() {
           wide
         />
       </section>
+      {analytics.sessions_with_judgement === 0 && (
+        <section className="client-panel">
+          <p className="client-muted">Структурные оценки и навыки появятся после завершённых тренировок с отчётом.</p>
+        </section>
+      )}
       <section className="client-panel">
         <h2>По статусам</h2>
         <SimpleBars values={analytics.sessions_by_status} labelFormatter={statusLabel} />
@@ -135,6 +154,11 @@ function AnalyticsBentoCard({ label, value, trend, wide = false, accent = false,
 function formatMetricValue(value: number | null): string {
   /** Keep compact one-decimal formatting for average metrics and a clear dash for nulls. */
   return value === null ? "—" : value.toFixed(1);
+}
+
+function formatSkillScore(value: number | null): string {
+  /** Show skill aggregate score only when structured judge payloads exist. */
+  return value === null ? "нет данных по оценкам" : `средняя оценка ${value.toFixed(1)}`;
 }
 
 function trendWindowLabel(trend: MetricTrendDTO | undefined): string {

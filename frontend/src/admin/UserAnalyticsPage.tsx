@@ -66,8 +66,15 @@ export function AdminUserAnalyticsPage({ organizationId, userId, onNavigate }: A
         <AdminAnalyticsStatCard label="Среднее число ходов" value={formatMetricValue(analytics.avg_turn_count)} trend={analytics.trends_7d.avg_turn_count} />
         <AdminAnalyticsStatCard label="Средняя оценка тренировки" value={formatMetricValue(analytics.avg_judgement_score)} trend={analytics.trends_7d.avg_judgement_score} />
         <AdminAnalyticsStatCard label="С оценкой тренировки" value={analytics.sessions_with_judgement} trend={analytics.trends_7d.sessions_with_judgement} />
+        <StatCard label="Сильнейший навык" value={analytics.strongest_skill_title ?? "—"} detail={formatSkillScore(analytics.strongest_skill_avg_score)} />
+        <StatCard label="Зона роста" value={analytics.weakest_skill_title ?? "—"} detail={formatSkillScore(analytics.weakest_skill_avg_score)} />
         <StatCard label="Последняя активность" value={formatDate(analytics.last_activity_at)} detail="последнее действие" />
       </section>
+      {analytics.sessions_with_judgement === 0 && (
+        <section className="admin-panel">
+          <p className="admin-muted">Структурные оценки появятся после завершённых тренировок с отчётом.</p>
+        </section>
+      )}
       <section className="admin-panel">
         <div className="admin-panel__header"><h2>По статусам</h2></div>
         <AdminBars values={analytics.sessions_by_status} labelFormatter={entityStatusLabel} />
@@ -141,6 +148,11 @@ function formatPercent(value: number): string {
 function formatMetricValue(value: number | null): string {
   /** Keep averages compact and human-readable. */
   return value === null ? "—" : value.toFixed(1);
+}
+
+function formatSkillScore(value: number | null): string {
+  /** Show skill aggregate score only when structured judge payloads exist. */
+  return value === null ? "нет данных по оценкам" : `средняя оценка ${value.toFixed(1)}`;
 }
 
 function formatTrendNumber(value: number): string {

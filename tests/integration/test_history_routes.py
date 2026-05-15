@@ -195,12 +195,18 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert session_record.persona_snapshot
     assert session_record.initial_state_snapshot
     assert session_record.final_state_snapshot
+    assert session_record.persona_schema_version == "persona-profile-v3.1"
+    assert session_record.persona_prompt_version == "global-yandex-persona-agent"
     assert len(turns) == 1
     assert turns[0].turn_index == 1
     assert turns[0].client_state_snapshot is not None
+    assert turns[0].dialogue_schema_version == "dialogue-turn-v1"
+    assert turns[0].dialogue_prompt_version == "global-yandex-dialogue-agent"
     assert report is not None
     assert report.report_text
     assert report.report_payload is not None
+    assert report.judge_schema_version == "judge-session-v1"
+    assert report.judge_prompt_version == "global-yandex-judge-agent"
     assert {"session_started", "turn_processed", "session_finished", "report_generated"}.issubset(set(event_types))
 
     history_list_response = client.get("/api/history/sessions")

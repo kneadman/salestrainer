@@ -428,6 +428,8 @@ def test_personal_analytics_aggregates_saved_judgement_payloads_and_ignores_inva
     assert payload["weakest_skill_id"] == "discovery_quality"
     assert payload["weakest_skill_title"] == "Качество диагностики"
     assert payload["weakest_skill_avg_score"] == 50.0
+    assert payload["strongest_skill_id"] == "discovery_quality"
+    assert payload["strongest_skill_avg_score"] == 50.0
     db_session.close()
 
 
@@ -463,6 +465,10 @@ def test_team_usage_summary_aggregates_saved_judgement_payloads() -> None:
     payload = response.json()
     assert payload["sessions_with_judgement"] == 1
     assert payload["avg_judgement_score"] == 78.0
+    assert payload["weakest_skill_id"] == "discovery_quality"
+    assert payload["strongest_skill_id"] == "discovery_quality"
+    assert payload["manager_ranking"][0]["user_email"] == "manager@example.com"
+    assert payload["manager_ranking"][0]["sessions_with_judgement"] == 1
     db_session.close()
 
 
