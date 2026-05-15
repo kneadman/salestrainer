@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { getTeamUserDetail, getTeamUsers } from "./api";
 import { ClientBadge, ClientState, ClientStat } from "./components/ClientPrimitives";
 import type { HistorySessionSummaryDTO, TeamUserDTO, TeamUserDetailDTO } from "./types";
-import { roleLabel, scenarioLabel, statusLabel } from "../labels";
-import { formatClientDate, getClientErrorMessage } from "./utils";
+import { buildClientHistorySessionViewModel, buildTeamUserViewModel } from "../viewModels";
+import { getClientErrorMessage } from "./utils";
 
 type TeamPageProps = {
   userId?: string;
@@ -78,13 +78,15 @@ function TeamUserDetail({ userId, onNavigate }: { userId: string; onNavigate: (p
   if (error || !detail) {
     return <ClientState title="Менеджер недоступен" detail={error ?? "Не найден."} tone="error" />;
   }
+
+  const userVm = buildTeamUserViewModel(detail.user);
   return (
     <div className="client-page">
       <div className="client-page__header">
         <div>
           <button type="button" className="client-link-button" onClick={() => onNavigate("/app/team")}>← Команда</button>
           <h1>{detail.user.email}</h1>
-          <p>{roleLabel(detail.user.role)}</p>
+          <p>{userVm.roleLabel}</p>
         </div>
       </div>
       <section className="client-stats-grid">
@@ -100,6 +102,7 @@ function TeamUserDetail({ userId, onNavigate }: { userId: string; onNavigate: (p
 
 function TeamUsersTable({ users, onNavigate }: { users: TeamUserDTO[]; onNavigate: (path: string) => void }) {
   /** Render team users in a readable table for client leads. */
+  const vms = users.map(buildTeamUserViewModel);
   return (
     <div className="client-table-wrap">
       <table className="client-table">
@@ -115,36 +118,32 @@ function TeamUsersTable({ users, onNavigate }: { users: TeamUserDTO[]; onNavigat
           </tr>
         </thead>
         <tbody>
-          {users.map((user) => <TeamUsersTableRow key={user.id} user={user} onNavigate={onNavigate} />)}
+          {vms.map((vm, index) => (
+            <tr key={vm.id}>
+              <td>{vm.email}</td>
+              <td>{vm.roleLabel}</td>
+              <td>
+                <ClientBadge tone={vm.statusTone}>{vm.statusLabel}</ClientBadge>
+              </td>
+              <td>{users[index].finished_sessions}/{users[index].total_sessions}</td>
+              <td>{users[index].avg_final_interest_score?.toFixed(1) ?? "—"}</td>
+              <td>{users[index].last_activity_at ? new Date(users[index].last_activity_at).toLocaleDateString("ru-RU") : "—"}</td>
+              <td>
+                <button type="button" className="client-link-button" onClick={() => onNavigate(`/app/team/${vm.id}`)}>
+                  Открыть
+                </button>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
 
-function TeamUsersTableRow({ user, onNavigate }: { user: TeamUserDTO; onNavigate: (path: string) => void }) {
-  /** Render one team member without exposing raw role identifiers. */
-  return (
-    <tr>
-      <td>{user.email}</td>
-      <td>{roleLabel(user.role)}</td>
-      <td>
-        <ClientBadge tone={user.is_active ? "good" : "danger"}>{user.is_active ? "Активен" : "Отключён"}</ClientBadge>
-      </td>
-      <td>{user.finished_sessions}/{user.total_sessions}</td>
-      <td>{user.avg_final_interest_score?.toFixed(1) ?? "—"}</td>
-      <td>{formatClientDate(user.last_activity_at)}</td>
-      <td>
-        <button type="button" className="client-link-button" onClick={() => onNavigate(`/app/team/${user.id}`)}>
-          Открыть
-        </button>
-      </td>
-    </tr>
-  );
-}
-
 function TeamUserDetailHistory({ history }: { history: HistorySessionSummaryDTO[] }) {
   /** Render one user's recent training history. */
+  const vms = history.map(buildClientHistorySessionViewModel);
   return (
     <section className="client-panel">
       <h2>Последние тренировки</h2>
@@ -157,12 +156,12 @@ function TeamUserDetailHistory({ history }: { history: HistorySessionSummaryDTO[
               <tr><th>Дата</th><th>Статус</th><th>Сценарий</th><th>Интерес</th></tr>
             </thead>
             <tbody>
-              {history.map((item) => (
-                <tr key={item.session_id}>
-                  <td>{formatClientDate(item.started_at)}</td>
-                  <td>{statusLabel(item.status)}</td>
-                  <td>{scenarioLabel(item.scenario_id)}</td>
-                  <td>{item.final_interest_score ?? "—"}</td>
+              {vms.map((vm) => (
+                <tr key={vm.sessionId}>
+                  <td>{vm.startedAtLabel}</td>
+                  <td>{vm.statusLabel}</td>
+                  <td>{vm.scenarioLabel}</td>
+                  <td>{vm.finalInterestScore}</td>
                 </tr>
               ))}
             </tbody>

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { getHistorySessionDetail, getHistorySessions, getTrainingConfigs } from "./api";
 import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
-import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, HistoryTurnDTO, TrainingConfigOptionDTO } from "./types";
-import { scenarioLabel, stageLabel, statusLabel } from "../labels";
-import { formatClientDate, getClientErrorMessage } from "./utils";
+import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, TrainingConfigOptionDTO } from "./types";
+import { buildClientHistorySessionViewModel, buildClientTurnViewModel } from "../viewModels";
+import { getClientErrorMessage } from "./utils";
 
 type HistoryPageProps = {
   sessionId?: string;
@@ -41,11 +41,6 @@ function historyFiltersPath(status: string, trainingConfigId: string): string {
   }
   const query = params.toString();
   return query ? `/app/history?${query}` : "/app/history";
-}
-
-function trainingConfigLabel(item: HistorySessionSummaryDTO): string {
-  /** Prefer the saved training config name and keep scenario label only as legacy fallback. */
-  return item.training_config_name || scenarioLabel(item.scenario_id);
 }
 
 function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: string, replace?: boolean) => void }) {
@@ -113,6 +108,9 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
   if (error) {
     return <ClientState title="История недоступна" detail={error} tone="error" />;
   }
+
+  const historyVms = history.map(buildClientHistorySessionViewModel);
+
   return (
     <div className="client-page">
       <div className="client-page__header">
@@ -130,7 +128,7 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
         onReset={resetFilters}
       />
       <section className="client-panel">
-        {history.length === 0 ? <ClientState title="История появится после первых тренировок." /> : <HistoryTable history={history} onNavigate={onNavigate} />}
+        {history.length === 0 ? <ClientState title="История появится после первых тренировок." /> : <HistoryTable vms={historyVms} onNavigate={onNavigate} />}
       </section>
     </div>
   );
@@ -162,7 +160,10 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
   if (error || !detail) {
     return <ClientState title="Тренировка недоступна" detail={error ?? "Не найдена."} tone="error" />;
   }
-  const startedAtLabel = formatClientDate(detail.session.started_at);
+
+  const sessionVm = buildClientHistorySessionViewModel(detail.session);
+  const turnVms = detail.turns.map(buildClientTurnViewModel);
+
   return (
     <div className="client-page">
       <div className="client-page__header">
@@ -170,11 +171,11 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
           <button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>
             ← История
           </button>
-          <h1>{startedAtLabel === "—" ? "Тренировка" : `Тренировка ${startedAtLabel}`}</h1>
+          <h1>{sessionVm.startedAtLabel === "—" ? "Тренировка" : `Тренировка ${sessionVm.startedAtLabel}`}</h1>
         </div>
-        <ClientBadge>{statusLabel(detail.session.status)}</ClientBadge>
+        <ClientBadge>{sessionVm.statusLabel}</ClientBadge>
       </div>
-      <HistoryTurnsList turns={detail.turns} />
+      <HistoryTurnsList vms={turnVms} />
       <section className="client-panel">
         <h2>Отчёт</h2>
         {detail.report ? (
@@ -234,7 +235,7 @@ function HistoryFilters(props: {
   );
 }
 
-function HistoryTable({ history, onNavigate }: { history: HistorySessionSummaryDTO[]; onNavigate: (path: string) => void }) {
+function HistoryTable({ vms, onNavigate }: { vms: ReturnType<typeof buildClientHistorySessionViewModel>[]; onNavigate: (path: string) => void }) {
   /** Render the client history table using public-safe fields only. */
   return (
     <div className="client-table-wrap">
@@ -251,48 +252,43 @@ function HistoryTable({ history, onNavigate }: { history: HistorySessionSummaryD
           </tr>
         </thead>
         <tbody>
-          {history.map((item) => <HistoryTableRow key={item.session_id} item={item} onNavigate={onNavigate} />)}
+          {vms.map((vm) => (
+            <tr key={vm.sessionId}>
+              <td>{vm.startedAtLabel}</td>
+              <td>{vm.userEmail}</td>
+              <td><ClientBadge>{vm.statusLabel}</ClientBadge></td>
+              <td>{vm.scenarioLabel}</td>
+              <td>{vm.turnCount}</td>
+              <td>{vm.finalInterestScore}</td>
+              <td>
+                <button type="button" className="client-link-button" onClick={() => onNavigate(`/app/history/${vm.sessionId}`)}>
+                  Открыть
+                </button>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
 
-function HistoryTableRow({ item, onNavigate }: { item: HistorySessionSummaryDTO; onNavigate: (path: string) => void }) {
-  /** Render one history row without technical database identifiers. */
-  return (
-    <tr>
-      <td>{formatClientDate(item.started_at)}</td>
-      <td>{item.user_email}</td>
-      <td><ClientBadge>{statusLabel(item.status)}</ClientBadge></td>
-      <td>{trainingConfigLabel(item)}</td>
-      <td>{item.turn_count}</td>
-      <td>{item.final_interest_score ?? "—"}</td>
-      <td>
-        <button type="button" className="client-link-button" onClick={() => onNavigate(`/app/history/${item.session_id}`)}>
-          Открыть
-        </button>
-      </td>
-    </tr>
-  );
-}
-
-function HistoryTurnsList({ turns }: { turns: HistoryTurnDTO[] }) {
+function HistoryTurnsList({ vms }: { vms: ReturnType<typeof buildClientTurnViewModel>[] }) {
   /** Render manager/client turns from public history without hidden persona state. */
   return (
     <section className="client-panel">
       <h2>Ходы</h2>
-      {turns.length === 0 ? (
+      {vms.length === 0 ? (
         <ClientState title="Ходов нет" />
       ) : (
         <div className="client-turn-list">
-          {turns.map((turn) => (
-            <article key={turn.turn_index}>
-              <ClientBadge>#{turn.turn_index}</ClientBadge>
-              <p><strong>Менеджер:</strong> {turn.manager_message}</p>
-              <p><strong>Клиент:</strong> {turn.client_answer}</p>
+          {vms.map((vm) => (
+            <article key={vm.turnIndex}>
+              <ClientBadge>#{vm.turnIndex}</ClientBadge>
+              <p><strong>Менеджер:</strong> {vm.managerMessage}</p>
+              <p><strong>Клиент:</strong> {vm.clientAnswer}</p>
               <p className="client-muted">
-                Интерес {turn.interest_before} → {turn.interest_after}; этап {stageLabel(turn.stage_before)} → {stageLabel(turn.stage_after)}
+                Интерес {vm.interestBefore} → {vm.interestAfter}; этап {vm.stageBeforeLabel} → {vm.stageAfterLabel}
               </p>
             </article>
           ))}

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { ReportSurface } from "../components/ReportSurface";
-import { scenarioLabel, stageLabel, statusLabel } from "../labels";
+import { buildHistorySessionViewModel, buildHistoryTurnViewModel } from "../viewModels";
 import { getHistorySession, listOrganizationHistory, listOrganizations, listTrainingConfigs } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO } from "./types";
-import { formatDate, getErrorMessage } from "./utils";
+import { getErrorMessage } from "./utils";
 
 type HistoryPageProps = {
   sessionId?: string;
@@ -86,6 +86,8 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
     return <ErrorState title="История недоступна" detail={error} />;
   }
 
+  const vms = history.map(buildHistorySessionViewModel);
+
   return (
     <div className="admin-page">
       <div className="admin-page__header">
@@ -162,21 +164,21 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
                 </tr>
               </thead>
               <tbody>
-                {history.map((session) => (
-                  <tr key={session.session_id}>
-                    <td>{formatDate(session.started_at)}</td>
-                    <td>{session.user_email}</td>
+                {vms.map((vm) => (
+                  <tr key={vm.sessionId}>
+                    <td>{vm.startedAtLabel}</td>
+                    <td>{vm.userEmail}</td>
                     <td>
-                      <Badge>{statusLabel(session.status)}</Badge>
+                      <Badge>{vm.statusLabel}</Badge>
                     </td>
-                    <td>{trainingConfigLabel(session)}</td>
-                    <td>{session.turn_count}</td>
-                    <td>{session.final_interest_score ?? "—"}</td>
+                    <td>{vm.trainingConfigLabel}</td>
+                    <td>{vm.turnCount}</td>
+                    <td>{vm.finalInterestScore}</td>
                     <td>
                       <button
                         type="button"
                         className="admin-link-button"
-                        onClick={() => onNavigate(`/admin/history/sessions/${session.session_id}`)}
+                        onClick={() => onNavigate(`/admin/history/sessions/${vm.sessionId}`)}
                       >
                         Открыть
                       </button>
@@ -222,6 +224,9 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
     return <ErrorState title="История сессии недоступна" detail={error ?? "Сессия не найдена."} />;
   }
 
+  const sessionVm = buildHistorySessionViewModel(detail.session);
+  const turnVms = detail.turns.map(buildHistoryTurnViewModel);
+
   return (
     <div className="admin-page">
       <div className="admin-page__header">
@@ -229,12 +234,12 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
           <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/history")}>
             ← История
           </button>
-          <h1>Тренировка от {formatDate(detail.session.started_at)}</h1>
+          <h1>Тренировка от {sessionVm.startedAtLabel}</h1>
           <p className="admin-muted">
-            {detail.session.user_email} · {trainingConfigLabel(detail.session)}
+            {detail.session.user_email} · {sessionVm.trainingConfigLabel}
           </p>
         </div>
-        <Badge>{statusLabel(detail.session.status)}</Badge>
+        <Badge>{sessionVm.statusLabel}</Badge>
       </div>
       <section className="admin-panel">
         <h2>Сводка</h2>
@@ -247,20 +252,20 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
           <EmptyState title="Ходов нет" />
         ) : (
           <div className="admin-history-turns">
-            {detail.turns.map((turn) => (
-              <article key={turn.turn_index}>
+            {turnVms.map((vm) => (
+              <article key={vm.turnIndex}>
                 <div>
-                  <Badge>#{turn.turn_index}</Badge>
-                  <span>{formatDate(turn.created_at)}</span>
+                  <Badge>#{vm.turnIndex}</Badge>
+                  <span>{vm.createdAtLabel}</span>
                 </div>
                 <p>
-                  <strong>Менеджер:</strong> {turn.manager_message}
+                  <strong>Менеджер:</strong> {vm.managerMessage}
                 </p>
                 <p>
-                  <strong>Клиент:</strong> {turn.client_answer}
+                  <strong>Клиент:</strong> {vm.clientAnswer}
                 </p>
                 <p className="admin-muted">
-                  Интерес {turn.interest_before} → {turn.interest_after}; этап {stageLabel(turn.stage_before)} → {stageLabel(turn.stage_after)}
+                  Интерес {vm.interestBefore} → {vm.interestAfter}; этап {vm.stageBeforeLabel} → {vm.stageAfterLabel}
                 </p>
               </article>
             ))}
@@ -289,9 +294,4 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
       </section>
     </div>
   );
-}
-
-function trainingConfigLabel(session: HistorySessionSummaryDTO): string {
-  /** Prefer safe training config display names and keep scenario labels only for legacy rows. */
-  return session.training_config_name || scenarioLabel(session.scenario_id);
 }
