@@ -215,16 +215,21 @@ def test_client_lead_can_read_same_org_team_users_and_usage_summary() -> None:
     manager_payload = next(user for user in users_response.json() if user["email"] == "manager@example.com")
     assert manager_payload["total_sessions"] == 1
     assert manager_payload["finished_sessions"] == 1
+    assert "must_change_password" not in manager_payload
     assert summary_response.status_code == 200
     assert summary_response.json()["total_sessions"] == 1
     assert summary_response.json()["finished_sessions"] == 1
     assert summary_response.json()["users"]
+    assert all("must_change_password" not in item for item in summary_response.json()["users"])
     assert history_response.status_code == 200
     assert history_response.json()[0]["user_email"] == "manager@example.com"
     assert history_response.json()[0]["training_config_name"] == "Default"
     assert "user_id" not in history_response.json()[0]
     assert "client_account_id" not in history_response.json()[0]
     assert "training_config_id" not in history_response.json()[0]
+    detail_response = client.get(f"/api/team/users/{users['manager@example.com'].id}/analytics")
+    assert detail_response.status_code == 200
+    assert "must_change_password" not in detail_response.json()["user"]
     db_session.close()
 
 

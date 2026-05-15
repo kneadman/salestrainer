@@ -61,7 +61,6 @@ class TeamUserDTO(BaseModel):
     email: str
     role: str
     is_active: bool
-    must_change_password: bool
     total_sessions: int
     finished_sessions: int
     avg_final_interest_score: float | None
