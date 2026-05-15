@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     debug_cli: bool = False
     debug_llm_payload: bool = False
     llm_backend: str = "fake"
-    allow_fake_llm_fallback: bool = True
+    allow_fake_llm_fallback: bool = False
     allow_in_memory_repository: bool = True
     llm_request_timeout_seconds: int = Field(default=30, ge=1, le=120)
     yandex_api_key: str = ""
@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     @property
     def is_local_env(self) -> bool:
         return self.app_env.lower().strip() == "local"
+
+
+def is_fake_fallback_allowed(settings: Settings) -> bool:
+    """Allow fake LLM fallback only in explicitly non-production-like environments."""
+    env = settings.app_env.lower().strip()
+    return env in {"local", "dev", "development", "test", "demo"} and settings.allow_fake_llm_fallback
 
 
 @lru_cache(maxsize=1)

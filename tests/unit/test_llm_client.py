@@ -18,7 +18,7 @@ from app.infrastructure.llm_client import (
     build_llm_client,
     parse_llm_turn_response,
 )
-from app.infrastructure.config import Settings
+from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.fake_llm_client import FakeLLMClient as ActiveFakeLLMClient
 from app.prompts.schemas import build_strict_json_schema, llm_turn_response_schema
 
@@ -291,7 +291,9 @@ def test_fake_llm_client_revealed_fact_logic_has_no_mojibake_tokens() -> None:
 
 def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None:
     settings = Settings(
+        app_env="local",
         llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=True,
         yandex_api_key="",
         yandex_folder_id="folder-id",
         yandex_agent_id="agent-id",
@@ -336,7 +338,7 @@ def test_build_llm_client_falls_back_to_legacy_yandex_agent_settings() -> None:
 
 def test_build_llm_client_raises_when_provider_config_is_incomplete_and_fallback_is_disabled() -> None:
     settings = Settings(
-        app_env="prod",
+        app_env="production",
         llm_backend="yandex_compatible",
         allow_fake_llm_fallback=False,
         yandex_api_key="",
@@ -346,6 +348,26 @@ def test_build_llm_client_raises_when_provider_config_is_incomplete_and_fallback
 
     with pytest.raises(LLMProviderConfigurationError, match="Incomplete Yandex LLM configuration"):
         build_llm_client(settings)
+
+
+def test_is_fake_fallback_allowed_only_for_explicit_non_production_envs() -> None:
+    assert is_fake_fallback_allowed(Settings(app_env="local", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="dev", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="test", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="demo", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="production", allow_fake_llm_fallback=True)) is False
+    assert is_fake_fallback_allowed(Settings(app_env="local", allow_fake_llm_fallback=False)) is False
+
+
+def test_build_llm_client_raises_for_unknown_backend_in_production_even_when_flag_is_true() -> None:
+    with pytest.raises(LLMProviderConfigurationError):
+        build_llm_client(
+            Settings(
+                app_env="production",
+                llm_backend="unknown-provider",
+                allow_fake_llm_fallback=True,
+            )
+        )
 
 
 def test_yandex_compatible_client_info_logs_do_not_include_full_payload(caplog) -> None:

@@ -11,7 +11,7 @@ from app.domain.errors import LLMProviderConfigurationError, PersonaGenerationEr
 from app.domain.models import PersonaGenerationInput, PersonaProfile
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.scenarios import get_scenario
-from app.infrastructure.config import Settings
+from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.persona_generator_client import (
     FakePersonaGeneratorClient,
     PersonaGenerationBusinessValidationError,
@@ -115,7 +115,7 @@ class PersonaGenerationService:
 
     def _allow_local_fallback(self) -> bool:
         """Allow local persona fallback only in local/debug-compatible environments."""
-        return self._settings.allow_fake_llm_fallback or self._settings.is_local_env
+        return is_fake_fallback_allowed(self._settings)
 
 class PersonaGeneratorClientFactory:
     def __init__(self, *, settings: Settings) -> None:

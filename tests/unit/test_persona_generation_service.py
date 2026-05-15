@@ -83,7 +83,7 @@ def test_persona_generation_client_factory_uses_global_persona_yandex_settings(m
 def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_mode() -> None:
     service = PersonaGenerationService(
         db_session=None,  # type: ignore[arg-type]
-        settings=Settings(),
+        settings=Settings(app_env="local", allow_fake_llm_fallback=True),
         fallback_generator=UniversalFakePersonaGenerator(seed=1),
     )
 
@@ -109,7 +109,7 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
 def test_persona_generation_service_rejects_empty_prompt_without_fallback() -> None:
     service = PersonaGenerationService(
         db_session=None,  # type: ignore[arg-type]
-        settings=Settings(app_env="prod", allow_fake_llm_fallback=False),
+        settings=Settings(app_env="production", allow_fake_llm_fallback=False),
     )
 
     with pytest.raises(LLMProviderConfigurationError, match="persona_generation_context"):
@@ -137,3 +137,13 @@ def test_persona_generation_service_does_not_fallback_when_prompted_client_fails
 
     with pytest.raises(PersonaGenerationError):
         service.generate_for_training_config(training_config=_training_config())
+
+
+def test_persona_generation_service_rejects_empty_prompt_in_production_even_when_flag_is_true() -> None:
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(app_env="production", allow_fake_llm_fallback=True),
+    )
+
+    with pytest.raises(LLMProviderConfigurationError, match="persona_generation_context"):
+        service.generate_for_training_config(training_config=_training_config(prompt=""))
