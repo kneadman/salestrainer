@@ -318,6 +318,21 @@ describe("TrainerPage", () => {
     expect(trainerChatPanel).toContainElement(trainerChatBody as HTMLElement);
   });
 
+  it("does not show report button for active sessions", async () => {
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
+
+    apiMocks.getSession.mockResolvedValue({
+      session: activeSession,
+      turns: [],
+    });
+
+    render(<TrainerPage userId="user-1" />);
+
+    await screen.findByRole("button", { name: "Завершить" });
+    expect(screen.queryByRole("button", { name: "Открыть итоговый отчёт" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Итоговый отчёт" })).not.toBeInTheDocument();
+  });
+
   it("shows config selector on start screen and passes selected config to createSession", async () => {
     const user = userEvent.setup();
 

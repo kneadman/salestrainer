@@ -159,3 +159,39 @@ def test_persona_generation_service_rejects_empty_prompt_in_production_even_when
 
     with pytest.raises(LLMProviderConfigurationError, match="persona_generation_context"):
         service.generate_for_training_config(training_config=_training_config(prompt=""))
+
+
+def test_persona_generation_service_allow_local_fallback_for_all_non_production_envs() -> None:
+    """_allow_local_fallback should return True for local, dev, development, test, demo regardless of flag."""
+    for env in ("local", "dev", "development", "test", "demo"):
+        service = PersonaGenerationService(
+            db_session=None,  # type: ignore[arg-type]
+            settings=Settings(app_env=env, allow_fake_llm_fallback=False),
+        )
+        assert service._allow_local_fallback() is True
+
+
+def test_persona_generation_service_disallows_local_fallback_in_production() -> None:
+    """_allow_local_fallback should return False in production even when flag is true."""
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(app_env="production", allow_fake_llm_fallback=True),
+    )
+    assert service._allow_local_fallback() is False
+
+
+def test_persona_generation_client_factory_raises_for_incomplete_config_in_production() -> None:
+    """Factory should fail closed in production when Yandex config is incomplete."""
+    settings = Settings(
+        app_env="production",
+        llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=False,
+        yandex_api_key="",
+        yandex_folder_id="",
+        yandex_agent_id="",
+    )
+
+    with pytest.raises(LLMProviderConfigurationError, match="Incomplete global Yandex persona configuration"):
+        PersonaGeneratorClientFactory(settings=settings).build_global_persona_client(
+            fallback_generator=UniversalFakePersonaGenerator(),
+        )
