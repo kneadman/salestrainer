@@ -55,41 +55,38 @@ def test_valid_minimal_seed_config() -> None:
     assert seed.segment_and_scale.industries == []
 
 
-def test_invalid_training_type_rejected() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        TrainingContextBlock(
-            product_area="x",
-            target_segment="y",
-            training_type="invalid_type",  # type: ignore[arg-type]
-            target_action="request_product_presentation",
-            target_action_description="z",
-            target_action_proper_name="Z",
-            call_goal="goal",
-        )
-    assert "training_type" in str(exc_info.value)
+def test_training_type_accepts_any_string() -> None:
+    block = TrainingContextBlock(
+        product_area="x",
+        target_segment="y",
+        training_type="completely_custom_type",
+        target_action="request_product_presentation",
+        target_action_description="z",
+        target_action_proper_name="Z",
+        call_goal="goal",
+    )
+    assert block.training_type == "completely_custom_type"
 
 
-def test_invalid_target_action_rejected() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        TrainingContextBlock(
-            product_area="x",
-            target_segment="y",
-            training_type="cold_call_presentation",
-            target_action="buy_now",  # type: ignore[arg-type]
-            target_action_description="z",
-            target_action_proper_name="Z",
-            call_goal="goal",
-        )
-    assert "target_action" in str(exc_info.value)
+def test_target_action_accepts_any_string() -> None:
+    block = TrainingContextBlock(
+        product_area="x",
+        target_segment="y",
+        training_type="cold_call_presentation",
+        target_action="buy_now",
+        target_action_description="z",
+        target_action_proper_name="Z",
+        call_goal="goal",
+    )
+    assert block.target_action == "buy_now"
 
 
-def test_invalid_role_rejected() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        LprAndRolesBlock(
-            allowed_roles=["invalid_role"],  # type: ignore[list-item]
-            role_requirements="test",
-        )
-    assert "allowed_roles" in str(exc_info.value)
+def test_role_accepts_any_string() -> None:
+    block = LprAndRolesBlock(
+        allowed_roles=["completely_custom_role"],
+        role_requirements="test",
+    )
+    assert block.allowed_roles == ["completely_custom_role"]
 
 
 def test_starting_params_range_validation() -> None:
