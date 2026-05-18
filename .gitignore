@@ -44,3 +44,4 @@ Thumbs.db
 /docs/agent-reference/
 /.kimi/
 /codex_landing_prompt.md
+/uv.lock

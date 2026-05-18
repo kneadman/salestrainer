@@ -81,31 +81,31 @@ class PersonaProfile(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(..., min_length=1, max_length=120)
-    display_name: str = Field(..., min_length=1, max_length=300)
+    id: str = Field(..., min_length=1)
+    display_name: str = Field(..., min_length=1)
     role: Role
-    industry: str = Field(..., min_length=1, max_length=120)
-    company_size: str = Field(..., min_length=1, max_length=80)
+    industry: str = Field(..., min_length=1)
+    company_size: str = Field(..., min_length=1)
     authority_level: AuthorityLevel = "final_decider"
     behavior_model: BehaviorModel
-    target_action: str = Field(..., min_length=1, max_length=120)
+    target_action: str = Field(..., min_length=1)
 
-    current_business_context: str = Field(..., min_length=1, max_length=3000)
-    business_facts: list[str] = Field(..., min_length=2, max_length=5)
-    cares_about: list[str] = Field(..., min_length=3, max_length=6)
+    current_business_context: str = Field(..., min_length=1)
+    business_facts: list[str] = Field(..., min_length=2)
+    cares_about: list[str] = Field(..., min_length=3)
 
-    current_solution: str = Field(..., min_length=1, max_length=1000)
-    alternative_solutions: list[str] = Field(..., min_length=2, max_length=4)
-    information_gaps: list[str] = Field(..., min_length=2, max_length=4)
+    current_solution: str = Field(..., min_length=1)
+    alternative_solutions: list[str] = Field(..., min_length=2)
+    information_gaps: list[str] = Field(..., min_length=2)
 
-    latent_pains: list[str] = Field(..., min_length=2, max_length=5)
-    buying_motivation: list[str] = Field(..., min_length=2, max_length=4)
-    decision_criteria: list[str] = Field(..., min_length=3, max_length=5)
-    hidden_constraints: list[str] = Field(..., min_length=1, max_length=3)
-    typical_objections: list[str] = Field(..., min_length=2, max_length=5)
-    proof_sensitivity: list[str] = Field(..., min_length=2, max_length=4)
-    call_scoring_criteria: list[str] = Field(..., min_length=3, max_length=6)
-    communication_style: str = Field(..., min_length=1, max_length=2000)
+    latent_pains: list[str] = Field(..., min_length=2)
+    buying_motivation: list[str] = Field(..., min_length=2)
+    decision_criteria: list[str] = Field(..., min_length=3)
+    hidden_constraints: list[str] = Field(..., min_length=1)
+    typical_objections: list[str] = Field(..., min_length=2)
+    proof_sensitivity: list[str] = Field(..., min_length=2)
+    call_scoring_criteria: list[str] = Field(..., min_length=3)
+    communication_style: str = Field(..., min_length=1)
 
     initial_openness: int = Field(..., ge=0, le=100)
     starting_interest: int = Field(..., ge=0, le=100)
@@ -261,7 +261,7 @@ class PersonaGenerationOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     persona: PersonaProfile
-    generation_notes: str = Field(default="", max_length=2000)
+    generation_notes: str = Field(default="")
     policy_coverage: list[str] = Field(default_factory=list)
     risk_flags: list[str] = Field(default_factory=list)
 
