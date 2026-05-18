@@ -250,12 +250,14 @@ class InternalAdminService:
         organization_id: UUID,
         name: str,
         persona_generation_context: str = "",
+        seed_config: dict[str, object] | None = None,
     ) -> TrainingConfigDTO:
         self._get_account(organization_id)
         config = ClientTrainingConfig(
             client_account_id=organization_id,
             name=name,
             persona_generation_context=persona_generation_context,
+            seed_config=seed_config,
             is_active=True,
         )
         self._session.add(config)
@@ -276,7 +278,7 @@ class InternalAdminService:
 
     def update_training_config(self, *, actor_user_id: UUID, config_id: UUID, **updates: object) -> TrainingConfigDTO:
         config = self._get_training_config(config_id)
-        for field in ("name", "persona_generation_context"):
+        for field in ("name", "persona_generation_context", "seed_config"):
             if field in updates:
                 setattr(config, field, updates[field])
         self._audit(
@@ -657,6 +659,7 @@ class InternalAdminService:
             name=config.name,
             is_active=config.is_active,
             persona_generation_context=config.persona_generation_context,
+            seed_config=config.seed_config,
             created_at=config.created_at,
             updated_at=config.updated_at,
         )

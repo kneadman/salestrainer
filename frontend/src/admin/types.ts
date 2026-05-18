@@ -79,12 +79,76 @@ export type UserUpdatePayload = {
   role?: "client_lead" | "client_manager";
 };
 
+export type ObjectionItem = {
+  text: string;
+  type: string;
+};
+
+export type SeedConfig = {
+  training_context: {
+    product_area: string;
+    target_segment: string;
+    training_type: string;
+    target_action: string;
+    target_action_description: string;
+    target_action_proper_name: string;
+    call_goal: string;
+    call_goal_is_not?: string[];
+    preconditions?: string[];
+    negative_behaviors?: string[];
+  };
+  product: {
+    category: string;
+    value_proposition: string;
+    what_manager_sells_now: string;
+    full_product_name: string;
+    product_area_short: string;
+  };
+  lpr_and_roles: {
+    allowed_roles?: string[];
+    authority_level?: string;
+    role_requirements: string;
+  };
+  segment_and_scale?: {
+    industries?: string[];
+    company_sizes?: string[];
+  };
+  triggers?: string[];
+  pains?: string[];
+  objections?: ObjectionItem[];
+  decision_criteria?: string[];
+  hidden_constraints?: string[];
+  motivations?: string[];
+  internal_conflict?: {
+    side_a?: string[];
+    side_b?: string[];
+  };
+  current_solutions?: {
+    solution_types?: string[];
+    alternative_solutions?: string[];
+  };
+  information_gaps?: string[];
+  trust_requirements?: string[];
+  novelty?: {
+    anti_patterns?: string[];
+    avoid_clusters?: string[];
+  };
+  starting_params: {
+    initial_openness: { min: number; max: number };
+    starting_interest: { min: number; max: number };
+    trust_baseline: { min: number; max: number };
+    price_sensitivity: { min: number; max: number };
+    urgency: { min: number; max: number };
+  };
+};
+
 export type TrainingConfigDTO = {
   id: string;
   client_account_id: string;
   name: string;
   is_active: boolean;
   persona_generation_context: string;
+  seed_config: SeedConfig | null;
   created_at: string;
   updated_at: string;
 };
@@ -92,6 +156,7 @@ export type TrainingConfigDTO = {
 export type TrainingConfigPayload = {
   name: string;
   persona_generation_context: string;
+  seed_config?: SeedConfig | null;
 };
 
 export type UserTrainingConfigAssignmentDTO = {

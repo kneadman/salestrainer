@@ -22,6 +22,7 @@ import {
   updateUser,
 } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
+import { SeedConfigForm } from "./components/SeedConfigForm";
 import type {
   AuditLogDTO,
   HistorySessionSummaryDTO,
@@ -50,11 +51,15 @@ type ConfigForm = {
   id?: string;
   name: string;
   persona_generation_context: string;
+  seed_config: import("./types").SeedConfig | null;
+  use_seed: boolean;
 };
 
 const DEFAULT_CONFIG_FORM: ConfigForm = {
   name: "",
   persona_generation_context: "",
+  seed_config: null,
+  use_seed: true,
 };
 
 const TAB_LABELS: Record<OrganizationDetailTab, string> = {
@@ -202,17 +207,21 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
     setError(null);
     setSuccess(null);
     try {
+      const payload = configForm.use_seed
+        ? {
+            name: configForm.name,
+            seed_config: configForm.seed_config,
+            persona_generation_context: "",
+          }
+        : {
+            name: configForm.name,
+            persona_generation_context: configForm.persona_generation_context,
+          };
       if (configForm.id) {
-        await updateTrainingConfig(configForm.id, {
-          name: configForm.name,
-          persona_generation_context: configForm.persona_generation_context,
-        });
+        await updateTrainingConfig(configForm.id, payload);
         setSuccess("Настройка тренировки обновлена.");
       } else {
-        await createTrainingConfig(organizationId, {
-          name: configForm.name,
-          persona_generation_context: configForm.persona_generation_context,
-        });
+        await createTrainingConfig(organizationId, payload);
         setSuccess("Настройка тренировки создана.");
       }
       setConfigForm(DEFAULT_CONFIG_FORM);
@@ -465,7 +474,7 @@ function ConfigsSection(props: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggle: (config: TrainingConfigDTO) => void;
 }) {
-  /** Render simplified training config form and config list. */
+  /** Render training config form with seed/legacy toggle and config list. */
   return (
     <section className="admin-panel">
       <div className="admin-panel__header"><h2>Настройки тренировок</h2></div>
@@ -473,28 +482,53 @@ function ConfigsSection(props: {
         <div className="admin-form-grid">
           <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
         </div>
-        <label>
-          <span>Контекст генерации личности</span>
-          <textarea
-            rows={8}
-            value={props.form.persona_generation_context}
-            onChange={(event) => props.setForm({ ...props.form, persona_generation_context: event.target.value })}
+        <div className="admin-form-grid" style={{ marginTop: 12 }}>
+          <label>
+            <span>Режим генерации</span>
+            <select
+              value={props.form.use_seed ? "seed" : "legacy"}
+              onChange={(e) => props.setForm({ ...props.form, use_seed: e.target.value === "seed" })}
+            >
+              <option value="seed">Структурированный seed</option>
+              <option value="legacy">Свободный текст (legacy)</option>
+            </select>
+          </label>
+        </div>
+        {props.form.use_seed ? (
+          <SeedConfigForm
+            seedConfig={props.form.seed_config}
+            onChange={(seed) => props.setForm({ ...props.form, seed_config: seed })}
           />
-          <small className="admin-muted">
-            Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения.
-          </small>
-        </label>
+        ) : (
+          <label>
+            <span>Контекст генерации личности</span>
+            <textarea
+              rows={8}
+              value={props.form.persona_generation_context}
+              onChange={(event) => props.setForm({ ...props.form, persona_generation_context: event.target.value })}
+            />
+            <small className="admin-muted">
+              Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения.
+            </small>
+          </label>
+        )}
         <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Обновить настройку" : "Создать настройку"}</button>
       </form>
       {props.configs.length === 0 ? <EmptyState title="Настроек тренировок нет" /> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Название</th><th>Контекст</th><th>Статус</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Название</th><th>Тип</th><th>Статус</th><th>Действия</th></tr></thead>
             <tbody>
               {props.configs.map((config) => (
                 <tr key={config.id}>
                   <td>{config.name}</td>
-                  <td>{config.persona_generation_context ? `${config.persona_generation_context.slice(0, 120)}${config.persona_generation_context.length > 120 ? "..." : ""}` : "—"}</td>
+                  <td>
+                    {config.seed_config ? (
+                      <Badge tone="good">Seed</Badge>
+                    ) : (
+                      <Badge tone="neutral">Legacy text</Badge>
+                    )}
+                  </td>
                   <td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td>
                   <td>
                     <div className="admin-row-actions">
@@ -505,6 +539,8 @@ function ConfigsSection(props: {
                           id: config.id,
                           name: config.name,
                           persona_generation_context: config.persona_generation_context,
+                          seed_config: config.seed_config,
+                          use_seed: !!config.seed_config,
                         })}
                       >
                         Изменить

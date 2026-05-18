@@ -44,6 +44,7 @@ const trainingConfig: TrainingConfigDTO = {
   name: "Existing config",
   is_active: true,
   persona_generation_context: "Existing persona context",
+  seed_config: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
 };
@@ -103,7 +104,7 @@ describe("OrganizationDetailPage training configs", () => {
 
     expect(screen.queryByRole("columnheader", { name: "Формат" })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Название" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Контекст" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Тип" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Статус" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Действия" })).toBeInTheDocument();
   });

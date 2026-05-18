@@ -28,6 +28,7 @@ class ClientTrainingConfig(Base):
         default="",
         server_default=text("''"),
     )
+    seed_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -161,3 +162,4 @@ class RuntimeTrainingConfig(BaseModel):
     client_account_id: UUID
     name: str
     persona_generation_context: str = ""
+    seed_config: dict | None = None

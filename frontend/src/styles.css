@@ -2007,3 +2007,21 @@ button:disabled {
   }
 }
 
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(125, 242, 196, 0.12);
+  color: var(--color-accent);
+  border: 1px solid rgba(125, 242, 196, 0.25);
+}
+
