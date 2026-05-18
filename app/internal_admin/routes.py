@@ -254,6 +254,7 @@ def create_training_config(
             organization_id=organization_id,
             name=request.name,
             persona_generation_context=request.persona_generation_context,
+            seed_config=request.seed_config,
         )
     except Exception as error:
         _handle_error(error)
