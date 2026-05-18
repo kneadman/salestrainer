@@ -26,6 +26,7 @@ class AccessService:
                 "client_account_id": config.client_account_id,
                 "name": config.name,
                 "persona_generation_context": config.persona_generation_context,
+                "seed_config": config.seed_config,
                 "is_active": config.is_active,
             }
         )
