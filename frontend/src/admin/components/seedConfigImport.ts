@@ -2,50 +2,6 @@ import type { SeedConfig } from "../types";
 
 export type ValidationError = { field: string; message: string };
 
-const VALID_TRAINING_TYPES = [
-  "cold_call_presentation",
-  "inbound_lead_qualification",
-  "follow_up_after_meeting",
-  "reactivation_call",
-  "objection_handling",
-  "upsell_existing_client",
-  "first_contact_after_event",
-  "referral_call",
-];
-
-const VALID_TARGET_ACTIONS = [
-  "request_product_presentation",
-  "schedule_demo_meeting",
-  "agree_to_proposal_review",
-  "introduce_to_decision_maker",
-  "agree_to_pilot_project",
-  "provide_documents_for_audit",
-  "schedule_second_call",
-  "agree_to_cost_estimate",
-];
-
-const VALID_ROLES = [
-  "owner",
-  "founder",
-  "ceo",
-  "general_director",
-  "managing_partner",
-  "commercial_director",
-  "cfo",
-  "chief_accountant",
-  "operations_director",
-  "sales_director",
-];
-
-const VALID_OBJECTION_TYPES = [
-  "anti_presentation",
-  "emotional",
-  "trust",
-  "price",
-  "control",
-  "risk",
-];
-
 const PARAM_NAMES = [
   "initial_openness",
   "starting_interest",
@@ -62,21 +18,6 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
-function collectEnumErrors(
-  errors: ValidationError[],
-  fieldPath: string,
-  value: unknown,
-  validValues: readonly string[]
-): void {
-  if (typeof value !== "string") return;
-  if (!validValues.includes(value)) {
-    errors.push({
-      field: fieldPath,
-      message: `Допустимые значения: ${validValues.join(", ")}`,
-    });
-  }
-}
-
 export function validateSeedJson(data: unknown): ValidationError[] {
   const errors: ValidationError[] = [];
 
@@ -91,11 +32,10 @@ export function validateSeedJson(data: unknown): ValidationError[] {
     }
   }
 
-  // training_context
+  // training_context — enum-валидация отключена; фактическая проверка на совести backend
   const tc = data.training_context;
   if (isPlainObject(tc)) {
-    collectEnumErrors(errors, "training_context.training_type", tc.training_type, VALID_TRAINING_TYPES);
-    collectEnumErrors(errors, "training_context.target_action", tc.target_action, VALID_TARGET_ACTIONS);
+    // collectEnumErrors disabled: accept any string from generator
   }
 
   // starting_params
@@ -134,29 +74,13 @@ export function validateSeedJson(data: unknown): ValidationError[] {
     }
   }
 
-  // lpr_and_roles
+  // lpr_and_roles — enum-валидация отключена; фактическая проверка на совести backend
   const lpr = data.lpr_and_roles;
   if (isPlainObject(lpr)) {
-    collectEnumErrors(errors, "lpr_and_roles.authority_level", lpr.authority_level, [
-      "final_decider",
-      "influencer",
-      "gatekeeper",
-      "user",
-      "recommender",
-    ]);
-    const roles = lpr.allowed_roles;
-    if (Array.isArray(roles)) {
-      const invalid = roles.filter((r) => typeof r === "string" && !VALID_ROLES.includes(r));
-      if (invalid.length) {
-        errors.push({
-          field: "lpr_and_roles.allowed_roles",
-          message: `Недопустимые роли: ${invalid.join(", ")}`,
-        });
-      }
-    }
+    // collectEnumErrors disabled: accept any string from generator
   }
 
-  // objections
+  // objections — enum-валидация отключена; фактическая проверка на совести backend
   const objections = data.objections;
   if (Array.isArray(objections)) {
     objections.forEach((o, i) => {
@@ -164,12 +88,7 @@ export function validateSeedJson(data: unknown): ValidationError[] {
         errors.push({ field: `objections[${i}]`, message: "Должен быть объектом" });
         return;
       }
-      collectEnumErrors(
-        errors,
-        `objections[${i}].type`,
-        o.type,
-        VALID_OBJECTION_TYPES
-      );
+      // collectEnumErrors disabled: accept any string from generator
     });
   }
 

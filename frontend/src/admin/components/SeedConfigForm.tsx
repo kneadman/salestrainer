@@ -3,28 +3,6 @@ import { TagInput } from "./TagInput";
 import type { SeedConfig } from "../types";
 import { validateSeedJson, normalizeSeedJson, type ValidationError } from "./seedConfigImport";
 
-const TRAINING_TYPES = [
-  { value: "cold_call_presentation", label: "Холодный звонок / Презентация" },
-  { value: "inbound_lead_qualification", label: "Входящий лид / Квалификация" },
-  { value: "follow_up_after_meeting", label: "Follow-up после встречи" },
-  { value: "reactivation_call", label: "Реактивация" },
-  { value: "objection_handling", label: "Работа с возражениями" },
-  { value: "upsell_existing_client", label: "Апселл существующему клиенту" },
-  { value: "first_contact_after_event", label: "Первый контакт после мероприятия" },
-  { value: "referral_call", label: "Реферальный звонок" },
-];
-
-const TARGET_ACTIONS = [
-  { value: "request_product_presentation", label: "Запросить продуктовую презентацию" },
-  { value: "schedule_demo_meeting", label: "Назначить демо-встречу" },
-  { value: "agree_to_proposal_review", label: "Согласие на просмотр предложения" },
-  { value: "introduce_to_decision_maker", label: "Познакомить с ЛПР" },
-  { value: "agree_to_pilot_project", label: "Согласие на пилот" },
-  { value: "provide_documents_for_audit", label: "Предоставить документы для аудита" },
-  { value: "schedule_second_call", label: "Назначить второй звонок" },
-  { value: "agree_to_cost_estimate", label: "Согласие на оценку стоимости" },
-];
-
 function defaultSeedConfig(): SeedConfig {
   return {
     training_context: {
@@ -233,29 +211,23 @@ export function SeedConfigForm(props: {
           </label>
           <label>
             <span>Тип тренировки</span>
-            <select
+            <input
               value={seed.training_context.training_type}
               onChange={(e) => updateTrainingContext({ training_type: e.target.value })}
-            >
-              {TRAINING_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            />
+            <small className="admin-muted">
+              cold_call_presentation, warm_call, discovery_call, presentation_demo, negotiation, objection_handling, closing, follow_up
+            </small>
           </label>
           <label>
             <span>Целевое действие</span>
-            <select
+            <input
               value={seed.training_context.target_action}
               onChange={(e) => updateTrainingContext({ target_action: e.target.value })}
-            >
-              {TARGET_ACTIONS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            />
+            <small className="admin-muted">
+              request_product_presentation, schedule_demo_meeting, schedule_meeting, agree_to_proposal_review, introduce_to_decision_maker, agree_to_pilot_project
+            </small>
           </label>
           <label>
             <span>Описание целевого действия</span>
