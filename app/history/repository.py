@@ -4,15 +4,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, and_, desc, distinct, func, select
+from sqlalchemy import Select, and_, desc, distinct, func, select, update
 from sqlalchemy.orm import Session
 
+from app.domain.contract_versions import JUDGE_PROMPT_VERSION, JUDGE_SCHEMA_VERSION
 from app.history.models import (
     TrainingReportRecord,
     TrainingSessionRecord,
     TrainingTurnRecord,
     UsageEventRecord,
 )
+from app.access.models import ClientTrainingConfig
 from app.identity.models import User
 
 
@@ -121,6 +123,58 @@ class HistoryRepository:
         self._session.refresh(record)
         return record
 
+    def expire_session(self, *, session_id: UUID, expired_at: datetime | None = None) -> TrainingSessionRecord | None:
+        """Mark one active persistent session as expired without exposing hidden runtime state."""
+        record = self.get_session(session_id)
+        if record is None or record.status != "active":
+            return record
+        record.status = "expired"
+        record.finished_at = expired_at or record.last_activity_at
+        self._session.commit()
+        self._session.refresh(record)
+        return record
+
+    def touch_session_activity(self, *, session_id: UUID, touched_at: datetime) -> TrainingSessionRecord | None:
+        """Refresh durable last activity for one active persistent session."""
+        record = self.get_session(session_id)
+        if record is None or record.status != "active":
+            return record
+        record.last_activity_at = touched_at
+        record.updated_at = touched_at
+        self._session.commit()
+        self._session.refresh(record)
+        return record
+
+    def expire_active_sessions(
+        self,
+        *,
+        last_activity_before: datetime,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+    ) -> int:
+        """Bulk-expire active persistent sessions whose durable last activity is stale."""
+        conditions = [
+            TrainingSessionRecord.status == "active",
+            TrainingSessionRecord.last_activity_at < last_activity_before,
+        ]
+        if client_account_id is not None:
+            conditions.append(TrainingSessionRecord.client_account_id == client_account_id)
+        if user_id is not None:
+            conditions.append(TrainingSessionRecord.user_id == user_id)
+        statement = (
+            update(TrainingSessionRecord)
+            .where(and_(*conditions))
+            .values(
+                status="expired",
+                finished_at=TrainingSessionRecord.last_activity_at,
+                updated_at=func.now(),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        result = self._session.execute(statement)
+        self._session.commit()
+        return int(result.rowcount or 0)
+
     def append_turn(
         self,
         *,
@@ -168,6 +222,8 @@ class HistoryRepository:
         report_text: str,
         report_payload: dict[str, object] | None = None,
         report_version: int = 1,
+        judge_schema_version: str = JUDGE_SCHEMA_VERSION,
+        judge_prompt_version: str = JUDGE_PROMPT_VERSION,
     ) -> TrainingReportRecord:
         """Create or replace the saved final report for one session."""
         record = self.get_report(session_id)
@@ -177,12 +233,16 @@ class HistoryRepository:
                 report_text=report_text,
                 report_payload=report_payload,
                 report_version=report_version,
+                judge_schema_version=judge_schema_version,
+                judge_prompt_version=judge_prompt_version,
             )
             self._session.add(record)
         else:
             record.report_text = report_text
             record.report_payload = report_payload
             record.report_version = report_version
+            record.judge_schema_version = judge_schema_version
+            record.judge_prompt_version = judge_prompt_version
         self._session.commit()
         self._session.refresh(record)
         return record
@@ -272,6 +332,8 @@ class HistoryRepository:
         finish_event_kwargs: dict[str, object],
         report_event_kwargs: dict[str, object],
         report_version: int = 1,
+        judge_schema_version: str = JUDGE_SCHEMA_VERSION,
+        judge_prompt_version: str = JUDGE_PROMPT_VERSION,
     ) -> TrainingReportRecord:
         """Mark a session finished, upsert report, and write finish/report events in one commit."""
         session_record = self.get_session(session_id)
@@ -286,12 +348,16 @@ class HistoryRepository:
                 report_text=report_text,
                 report_payload=report_payload,
                 report_version=report_version,
+                judge_schema_version=judge_schema_version,
+                judge_prompt_version=judge_prompt_version,
             )
             self._session.add(report)
         else:
             report.report_text = report_text
             report.report_payload = report_payload
             report.report_version = report_version
+            report.judge_schema_version = judge_schema_version
+            report.judge_prompt_version = judge_prompt_version
         self._session.add_all([UsageEventRecord(**finish_event_kwargs), UsageEventRecord(**report_event_kwargs)])
         try:
             self._session.commit()
@@ -352,6 +418,13 @@ class HistoryRepository:
     def get_user_email(self, user_id: UUID) -> str | None:
         """Load the email needed for history summary DTOs."""
         return self._session.scalar(select(User.email).where(User.id == user_id))
+
+    def training_config_names(self, training_config_ids: set[UUID]) -> dict[UUID, str]:
+        """Return safe display names for training config ids used in history rows."""
+        if not training_config_ids:
+            return {}
+        statement = select(ClientTrainingConfig.id, ClientTrainingConfig.name).where(ClientTrainingConfig.id.in_(training_config_ids))
+        return {config_id: name for config_id, name in self._session.execute(statement)}
 
     def usage_summary(self, client_account_id: UUID) -> dict[str, object]:
         """Aggregate basic organization usage metrics from history and event tables."""

@@ -35,6 +35,12 @@ Thumbs.db
 /codex_landing_prompt.md
 
 /landing-*.png
-AGENTS.override.md
-# /docs/agent-reference/
+
+# Local agent/internal repository documentation. Do not publish to GitHub.
+/AGENTS.md
+/AGENTS.override.md
+/BACKLOG.md
+/sales_trainer_mvp_docs_backlog.md
 /docs/agent-reference/
+/.kimi/
+/codex_landing_prompt.md

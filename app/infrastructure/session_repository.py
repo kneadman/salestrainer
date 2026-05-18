@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from threading import RLock
 from typing import Protocol
 
@@ -8,6 +9,8 @@ from redis.exceptions import WatchError
 
 from app.domain.errors import SessionNotFoundError, StateVersionConflictError
 from app.domain.models import TrainingSessionState
+
+logger = logging.getLogger(__name__)
 
 
 class SessionRepository(Protocol):
@@ -18,6 +21,9 @@ class SessionRepository(Protocol):
         ...
 
     def save(self, session: TrainingSessionState, *, expected_version: int | None = None) -> None:
+        ...
+
+    def touch(self, session_id: str) -> None:
         ...
 
     def delete(self, session_id: str) -> None:
@@ -31,7 +37,13 @@ class InMemorySessionRepository:
 
     def create(self, session: TrainingSessionState) -> None:
         with self._lock:
-            self._store[str(session.session_id)] = session.model_dump_json()
+            payload = session.model_dump_json()
+            logger.debug(
+                "runtime_session_payload_size session_id=%s bytes=%s action=create",
+                session.session_id,
+                len(payload.encode("utf-8")),
+            )
+            self._store[str(session.session_id)] = payload
 
     def get(self, session_id: str) -> TrainingSessionState | None:
         with self._lock:
@@ -51,7 +63,20 @@ class InMemorySessionRepository:
                 raise StateVersionConflictError(
                     f"Session '{session_id}' was updated concurrently."
                 )
-            self._store[session_id] = session.model_dump_json()
+            payload = session.model_dump_json()
+            logger.debug(
+                "runtime_session_payload_size session_id=%s bytes=%s action=save turn_count=%s state_version=%s",
+                session.session_id,
+                len(payload.encode("utf-8")),
+                session.turn_count,
+                session.state_version,
+            )
+            self._store[session_id] = payload
+
+    def touch(self, session_id: str) -> None:
+        with self._lock:
+            if str(session_id) not in self._store:
+                raise SessionNotFoundError(f"Session '{session_id}' not found.")
 
     def delete(self, session_id: str) -> None:
         with self._lock:
@@ -59,7 +84,7 @@ class InMemorySessionRepository:
 
 
 class RedisSessionRepository:
-    def __init__(self, client: Redis, ttl_seconds: int = 86400) -> None:
+    def __init__(self, client: Redis, ttl_seconds: int = 1800) -> None:
         self._client = client
         self._ttl_seconds = ttl_seconds
 
@@ -67,9 +92,15 @@ class RedisSessionRepository:
         return f"sales_trainer:session:{session_id}"
 
     def create(self, session: TrainingSessionState) -> None:
+        payload = session.model_dump_json()
+        logger.debug(
+            "runtime_session_payload_size session_id=%s bytes=%s action=create",
+            session.session_id,
+            len(payload.encode("utf-8")),
+        )
         created = self._client.set(
             self._session_key(str(session.session_id)),
-            session.model_dump_json(),
+            payload,
             ex=self._ttl_seconds,
             nx=True,
         )
@@ -84,10 +115,22 @@ class RedisSessionRepository:
             return None
         return TrainingSessionState.model_validate_json(payload)
 
+    def touch(self, session_id: str) -> None:
+        key = self._session_key(str(session_id))
+        if not self._client.expire(key, self._ttl_seconds):
+            raise SessionNotFoundError(f"Session '{session_id}' not found.")
+
     def save(self, session: TrainingSessionState, *, expected_version: int | None = None) -> None:
         session_id = str(session.session_id)
         key = self._session_key(session_id)
         payload = session.model_dump_json()
+        logger.debug(
+            "runtime_session_payload_size session_id=%s bytes=%s action=save turn_count=%s state_version=%s",
+            session.session_id,
+            len(payload.encode("utf-8")),
+            session.turn_count,
+            session.state_version,
+        )
 
         with self._client.pipeline() as pipeline:
             try:

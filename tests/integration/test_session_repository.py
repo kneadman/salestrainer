@@ -3,10 +3,14 @@ from __future__ import annotations
 import pytest
 
 from app.application.session_service import TrainingSessionService
-from app.domain.errors import RepositoryUnavailableError, StateVersionConflictError
+from app.domain.errors import RepositoryUnavailableError, SessionNotFoundError, StateVersionConflictError
 from app.infrastructure.config import Settings
 from app.infrastructure.redis_client import build_repository, create_redis_client, redis_is_available
 from app.infrastructure.session_repository import InMemorySessionRepository, RedisSessionRepository
+
+
+def test_default_runtime_session_ttl_is_thirty_minutes() -> None:
+    assert Settings.model_fields["session_ttl_seconds"].default == 1800
 
 
 def test_redis_session_repository_roundtrip() -> None:
@@ -33,6 +37,9 @@ def test_redis_session_repository_roundtrip() -> None:
 
     ttl = client.ttl(f"sales_trainer:session:{session.session_id}")
     assert ttl > 0
+    repository.touch(str(session.session_id))
+    refreshed_ttl = client.ttl(f"sales_trainer:session:{session.session_id}")
+    assert refreshed_ttl > 0
 
     repository.delete(str(session.session_id))
     assert repository.get(str(session.session_id)) is None
@@ -67,3 +74,10 @@ def test_in_memory_repository_rejects_stale_version_conflict() -> None:
     stale_copy.state_version += 1
     with pytest.raises(StateVersionConflictError, match="updated concurrently"):
         repository.save(stale_copy, expected_version=1)
+
+
+def test_in_memory_repository_touch_requires_existing_session() -> None:
+    repository = InMemorySessionRepository()
+
+    with pytest.raises(SessionNotFoundError, match="not found"):
+        repository.touch("missing-session")

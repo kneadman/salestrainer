@@ -5,20 +5,25 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.client_portal.schemas import ClientUserAnalyticsDTO, TeamUsageSummaryDTO, TeamUserDTO, TeamUserDetailDTO
+from app.client_portal.schemas import ClientTrainingConfigOptionDTO, ClientUserAnalyticsDTO, TeamUsageSummaryDTO, TeamUserDTO, TeamUserDetailDTO
 from app.client_portal.service import ClientPortalAccessError, ClientPortalNotFoundError, ClientPortalService
+from app.api.dependencies import get_app_settings
 from app.history.repository import SessionListFilters
-from app.history.schemas import HistorySessionSummaryDTO
+from app.history.schemas import ClientHistorySessionSummaryDTO
 from app.identity.dependencies import require_current_user
 from app.identity.service import CurrentSession
+from app.infrastructure.config import Settings
 from app.infrastructure.db import get_db_session
 
 router = APIRouter(prefix="/api", tags=["client-portal"])
 
 
-def get_client_portal_service(db_session: Session = Depends(get_db_session)) -> ClientPortalService:
+def get_client_portal_service(
+    db_session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> ClientPortalService:
     """Build the client portal service for request handlers."""
-    return ClientPortalService(db_session)
+    return ClientPortalService(db_session, inactive_ttl_seconds=settings.session_ttl_seconds)
 
 
 def _handle_client_portal_error(error: Exception) -> None:
@@ -37,6 +42,15 @@ def get_my_analytics(
 ) -> ClientUserAnalyticsDTO:
     """Return personal analytics for the current client user."""
     return service.get_my_analytics(user_id=current_session.user.id)
+
+
+@router.get("/client/training-configs", response_model=list[ClientTrainingConfigOptionDTO])
+def list_my_training_configs(
+    service: ClientPortalService = Depends(get_client_portal_service),
+    current_session: CurrentSession = Depends(require_current_user),
+) -> list[ClientTrainingConfigOptionDTO]:
+    """Return active training configs available to the current client user."""
+    return service.list_training_configs(requester=current_session.user)
 
 
 @router.get("/team/users", response_model=list[TeamUserDTO])
@@ -63,7 +77,7 @@ def get_team_usage_summary(
         _handle_client_portal_error(error)
 
 
-@router.get("/team/users/{user_id}/history/sessions", response_model=list[HistorySessionSummaryDTO])
+@router.get("/team/users/{user_id}/history/sessions", response_model=list[ClientHistorySessionSummaryDTO])
 def list_team_user_history(
     user_id: UUID,
     status: str | None = None,
@@ -73,7 +87,7 @@ def list_team_user_history(
     offset: int = Query(default=0, ge=0),
     service: ClientPortalService = Depends(get_client_portal_service),
     current_session: CurrentSession = Depends(require_current_user),
-) -> list[HistorySessionSummaryDTO]:
+) -> list[ClientHistorySessionSummaryDTO]:
     """Return one same-organization user's history for client leads."""
     try:
         return service.list_team_user_history(

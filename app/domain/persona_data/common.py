@@ -3,10 +3,13 @@ from __future__ import annotations
 CALL_SCORING_CRITERIA = [
     "manager_took_initiative",
     "manager_collected_required_context",
-    "manager_identified_current_accounting_model",
-    "manager_identified_tax_system",
+    "manager_identified_current_solution",
+    "manager_understood_current_process",
     "manager_identified_pain",
-    "manager_did_not_quote_price_too_early",
+    "manager_uncovered_information_gap",
+    "manager_identified_decision_criteria",
+    "manager_identified_constraints",
+    "manager_did_not_pitch_too_early",
     "manager_handled_objections",
     "manager_explained_next_step",
     "manager_requested_target_action",
@@ -26,6 +29,7 @@ ROLES = [
     "chief_accountant",
     "operations_director",
     "sales_director",
+    "purchase_manager",
 ]
 
 COMPANY_SIZES = ["1-10", "10-30", "30-100", "100-250", "250-500"]
@@ -40,6 +44,8 @@ BEHAVIOR_MODELS = [
     "friendly_but_defensive",
     "formal_and_distant",
     "interested_but_overloaded",
+    "process_oriented",
+    "friendly_but_distrustful",
 ]
 
 COMMUNICATION_STYLES = [
@@ -74,7 +80,6 @@ HIDDEN_CONSTRAINTS = [
     "Бюджет ограничен, но проблема уже раздражает.",
     "Нельзя допустить остановку текущих процессов.",
     "Решение нужно объяснить партнеру или руководству.",
-    "Клиент не хочет конфликтовать с текущим бухгалтером.",
     "Клиент не уверен, что сможет быстро предоставить данные.",
     "Клиент боится, что аудит вскроет неприятные ошибки.",
 ]
@@ -98,17 +103,17 @@ OBJECTION_GROUPS = {
         "Что вы будете смотреть?",
         "А если данные утекут?",
     ],
-    "current_accountant_loyalty": [
-        "Я доверяю своей бухгалтерии.",
-        "У нас хороший бухгалтер.",
-        "Бухгалтер подумает, что я ему не доверяю.",
-        "Не хочу портить отношения с бухгалтером.",
+    "current_vendor_loyalty": [
+        "Я доволен текущим подрядчиком.",
+        "У нас уже есть проверенный партнёр.",
+        "Не хочу портить отношения с текущим поставщиком.",
+        "Нам ничего не нужно менять.",
     ],
     "remote_work": [
         "Где вы находитесь?",
-        "Как это удаленная бухгалтерия?",
+        "Как это удалённое сопровождение?",
         "А если нужно срочно?",
-        "Как передавать документы?",
+        "Как передавать доступы?",
     ],
     "stalling": [
         "Отправьте КП.",
@@ -120,31 +125,16 @@ OBJECTION_GROUPS = {
 }
 
 PROOF_POINTS = {
-    "tax_savings": [
-        "переход на более выгодный налоговый режим",
-        "снижение налоговой нагрузки",
-        "поиск законных способов оптимизации налогов",
-    ],
-    "vat_refund": [
-        "помощь с возмещением НДС",
-        "подготовка документов для налоговой",
-        "сопровождение сложных налоговых вопросов",
-    ],
-    "tax_audit_support": [
-        "помощь при требованиях и проверках",
-        "снижение риска штрафов и доначислений",
-        "наведение порядка в документах",
-    ],
     "process_stability": [
-        "регламентная работа с первичкой",
-        "снижение зависимости от одного бухгалтера",
-        "контроль сроков отчетности",
+        "регламентная работа с процессами",
+        "снижение зависимости от одного человека",
+        "контроль сроков и качества",
     ],
     "financial_visibility": [
-        "управленческая отчетность",
+        "управленческая отчётность",
         "P&L",
         "ДДС",
-        "платежный календарь",
+        "платёжный календарь",
     ],
     "cash_flow_control": [
         "прогнозирование денежных потоков",
@@ -155,5 +145,10 @@ PROOF_POINTS = {
         "анализ маржинальности направлений",
         "поиск убыточных продуктов/клиентов/каналов",
         "понимание реальной прибыли",
+    ],
+    "relevant_cases": [
+        "похожий кейс из отрасли клиента",
+        "измеримый результат за известный срок",
+        "контакты для обратной связи",
     ],
 }

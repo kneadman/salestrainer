@@ -11,13 +11,13 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer"
-    session_ttl_seconds: int = 86400
+    session_ttl_seconds: int = Field(default=1800, ge=60)
     app_env: str = "local"
     log_level: str = "INFO"
     debug_cli: bool = False
     debug_llm_payload: bool = False
     llm_backend: str = "fake"
-    allow_fake_llm_fallback: bool = True
+    allow_fake_llm_fallback: bool = False
     allow_in_memory_repository: bool = True
     llm_request_timeout_seconds: int = Field(default=30, ge=1, le=120)
     yandex_api_key: str = ""
@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = Field(default=300, ge=1)
     lead_rate_limit_attempts: int = Field(default=10, ge=0)
     lead_rate_limit_window_seconds: int = Field(default=3600, ge=1)
+    trusted_proxy_ips: str = ""
     secret_encryption_key: str = ""
     stt_enabled: bool = False
     stt_backend: str = "fake"
@@ -54,6 +55,9 @@ class Settings(BaseSettings):
     stt_max_concurrent_jobs: int = Field(default=1, ge=1, le=2)
     stt_queue_wait_timeout_seconds: int = Field(default=20, ge=1, le=120)
     stt_per_user_concurrency: int = Field(default=1, ge=1, le=2)
+    stt_rate_limit_attempts: int = Field(default=20, ge=0)
+    stt_rate_limit_window_seconds: int = Field(default=3600, ge=1)
+    stt_global_rate_limit_attempts: int = Field(default=120, ge=0)
     stt_reject_unknown_duration: bool = True
     stt_temp_dir: str = "/tmp/salestrainer-stt"
     stt_whisper_cpp_binary: str = ""
@@ -65,6 +69,12 @@ class Settings(BaseSettings):
     @property
     def is_local_env(self) -> bool:
         return self.app_env.lower().strip() == "local"
+
+
+def is_fake_fallback_allowed(settings: Settings) -> bool:
+    """Allow fake LLM fallback only in explicitly non-production-like environments."""
+    env = settings.app_env.lower().strip()
+    return env in {"local", "dev", "development", "test", "demo"} and settings.allow_fake_llm_fallback
 
 
 @lru_cache(maxsize=1)

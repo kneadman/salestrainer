@@ -94,6 +94,7 @@ class AccessRepository:
                 "name": training_config.name,
                 "persona_generation_context": training_config.persona_generation_context,
                 "seed_config": training_config.seed_config,
+                "is_active": training_config.is_active,
             }
         )
 

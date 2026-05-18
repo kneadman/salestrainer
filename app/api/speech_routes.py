@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from app.access.service import AccessService
-from app.api.dependencies import get_speech_service
+from app.api.dependencies import get_runtime_activity_service, get_speech_service
 from app.api.schemas import ErrorResponse, SpeechTranscriptionResponse
+from app.api.speech_rate_limit import SpeechRateLimitExceeded
+from app.application.runtime_activity_service import RuntimeActivityService
 from app.application.speech_service import SpeechService
 from app.domain.errors import (
+    SessionHistorySyncPendingError,
+    SessionNotActiveError,
+    SessionNotFoundError,
     SpeechConcurrencyLimitError,
     SpeechDisabledError,
     SpeechDurationUnknownError,
@@ -41,9 +46,11 @@ def build_speech_router() -> APIRouter:
         responses=ERROR_RESPONSES,
     )
     async def transcribe_speech(
+        request: Request,
         audio: UploadFile = File(...),
         session_id: str | None = Form(default=None),
         speech_service: SpeechService = Depends(get_speech_service),
+        runtime_activity_service: RuntimeActivityService = Depends(get_runtime_activity_service),
         access_service: AccessService = Depends(get_access_service),
         current_session: CurrentSession = Depends(require_current_user),
     ) -> SpeechTranscriptionResponse:
@@ -51,11 +58,18 @@ def build_speech_router() -> APIRouter:
         try:
             if session_id is not None:
                 access_service.require_session_access(session_id, current_session.user.id)
+                runtime_activity_service.touch_active_session(session_id)
+            request.app.state.speech_rate_limiter.hit(user_id=str(current_session.user.id))
             payload = await speech_service.transcribe_upload(
                 upload=audio,
                 session_id=session_id,
                 user_id=str(current_session.user.id),
             )
+        except SpeechRateLimitExceeded as error:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many speech transcription requests. Please try again later.",
+            ) from error
         except SpeechUploadTooLargeError as error:
             raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error)) from error
         except UnsupportedAudioTypeError as error:
@@ -72,6 +86,12 @@ def build_speech_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
         except SpeechTranscriptionError as error:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+        except SessionNotFoundError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+        except (SessionHistorySyncPendingError, SessionNotActiveError) as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.") from error
         except LookupError as error:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
         return SpeechTranscriptionResponse.model_validate(payload)

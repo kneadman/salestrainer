@@ -5,6 +5,7 @@ from app.application.judgement_service import JudgementService
 from app.application.report_service import ReportService
 from app.domain.judgement_models import JudgeSessionOutput
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
+from tests.unit._persona_fixtures import valid_minimal_persona
 from app.infrastructure.judge_client import FakeJudgeClient
 from app.infrastructure.session_repository import InMemorySessionRepository
 
@@ -16,13 +17,9 @@ def _create_finished_session(repository: InMemorySessionRepository) -> str:
         session_id=uuid4(),
         scenario_id="sales_audit_cold_outreach",
         status="finished",
-        persona=PersonaProfile(
+        persona=valid_minimal_persona(
             id="generated_persona",
             display_name="Unknown B2B contact",
-            role="owner",
-            industry="professional_services",
-            company_size="20-50",
-            authority_level="final_decider",
             behavior_model="analytical_and_cautious",
         ),
         interest_score=52,

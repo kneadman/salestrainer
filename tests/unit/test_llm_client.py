@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 
@@ -7,7 +8,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.errors import LLMProviderConfigurationError
-from app.domain.models import LLMTurnInput
+from app.domain.models import LLMTurnInput, LLMTurnResponse
 from app.domain.personas import get_persona
 from app.domain.scenarios import get_scenario
 from app.infrastructure.llm_client import (
@@ -17,7 +18,8 @@ from app.infrastructure.llm_client import (
     build_llm_client,
     parse_llm_turn_response,
 )
-from app.infrastructure.config import Settings
+from app.infrastructure.config import Settings, is_fake_fallback_allowed
+from app.infrastructure.fake_llm_client import FakeLLMClient as ActiveFakeLLMClient
 from app.prompts.schemas import build_strict_json_schema, llm_turn_response_schema
 
 
@@ -54,7 +56,9 @@ def sample_payload() -> LLMTurnInput:
                 "discovered_decision_criteria": [],
                 "discovered_constraints": [],
                 "discovered_current_process": [],
+                "revealed_facts": [],
             },
+            "revealed_facts": [],
         },
         discovered_facts={},
         conversation_summary="Training started.",
@@ -86,6 +90,7 @@ def test_parse_llm_turn_response_from_yandex_prompt_response_payload() -> None:
                                     "add_buying_signals": [],
                                     "add_red_flags": [],
                                 },
+                                "revealed_facts": [{"category": "pain", "text": "manual reports take too long"}],
                                 "stage": "value_clarification",
                                 "internal_notes": "Valid JSON in nested payload.",
                             }
@@ -94,11 +99,31 @@ def test_parse_llm_turn_response_from_yandex_prompt_response_payload() -> None:
                 ],
             }
         ],
-        "output_text": "{\"answer\":\"What exactly do you review?\",\"interest_delta\":3,\"state_patch\":{\"tone\":\"skeptical\",\"trust_delta\":1,\"irritation_delta\":0,\"urgency_delta\":0,\"add_open_objections\":[],\"remove_open_objections\":[],\"add_known_pains\":[],\"add_buying_signals\":[],\"add_red_flags\":[]},\"stage\":\"value_clarification\",\"internal_notes\":\"Valid JSON in nested payload.\"}",
+        "output_text": json.dumps(
+            {
+                "answer": "What exactly do you review?",
+                "interest_delta": 3,
+                "state_patch": {
+                    "tone": "skeptical",
+                    "trust_delta": 1,
+                    "irritation_delta": 0,
+                    "urgency_delta": 0,
+                    "add_open_objections": [],
+                    "remove_open_objections": [],
+                    "add_known_pains": [],
+                    "add_buying_signals": [],
+                    "add_red_flags": [],
+                },
+                "revealed_facts": [{"category": "pain", "text": "manual reports take too long"}],
+                "stage": "value_clarification",
+                "internal_notes": "Valid JSON in nested payload.",
+            }
+        ),
     }
     parsed = parse_llm_turn_response(raw)
     assert parsed.answer == "What exactly do you review?"
     assert parsed.stage == "value_clarification"
+    assert parsed.revealed_facts[0].category == "pain"
 
 
 def test_yandex_compatible_client_builds_expected_request_and_retries_then_succeeds() -> None:
@@ -160,6 +185,7 @@ def test_yandex_compatible_client_builds_expected_request_and_retries_then_succe
     assert input_payload["hidden_profile"]["id"] == "owner"
     assert "latent_pains" in input_payload["hidden_profile"]
     assert input_payload["current_state"]["stage"] == "first_contact"
+    assert input_payload["current_state"]["revealed_facts"] == []
     assert input_payload["discovered_facts"] == {}
     assert input_payload["recent_turns"] == []
     retry_input_payload = json.loads(calls[1]["input"])
@@ -182,9 +208,100 @@ def test_yandex_compatible_client_falls_back_to_fake_client() -> None:
     assert -15 <= response.interest_delta <= 15
 
 
+def test_llm_client_exports_single_active_fake_client() -> None:
+    assert FakeLLMClient is ActiveFakeLLMClient
+
+
+def test_fake_llm_client_discovers_current_process_from_russian_accounting_question() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Как сейчас ведёте бухгалтерию и где теряется процесс?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    discovered_process = response.state_patch.add_discovered_current_process
+    assert response.revealed_facts
+    assert discovered_process
+    combined_process = " ".join(discovered_process)
+    assert any(
+        "Owner wants more control" in item or "Текущее решение" in item
+        for item in discovered_process
+    )
+    assert "Учет финансовых данных обсуждается как часть текущего процесса." in discovered_process
+    assert "Бухгалтерия и учёт обсуждаются как часть текущего процесса." not in discovered_process
+    assert "current_accounting_model" not in combined_process
+    assert "legal_form" not in combined_process
+    assert "tax_system" not in combined_process
+    assert "accounting_software" not in combined_process
+    assert "primary_docs_owner" not in combined_process
+
+
+def test_fake_llm_client_reveals_decision_criterion_only_when_answer_says_it() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Что важно, когда выбираете подрядчика?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    criteria = [fact for fact in response.revealed_facts if fact.category == "decision_criterion"]
+    assert criteria == [response.revealed_facts[-1]]
+    assert len(criteria) == 1
+    assert criteria[0].text in response.answer
+
+
+def test_fake_llm_client_reveals_constraint_only_when_answer_says_it() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Какие ограничения или риски сейчас мешают?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    constraints = [fact for fact in response.revealed_facts if fact.category == "constraint"]
+    pains = [fact for fact in response.revealed_facts if fact.category == "pain"]
+    assert constraints
+    assert constraints[0].text in response.answer
+    assert pains == []
+
+
+def test_fake_llm_client_revealed_facts_do_not_contain_technical_values() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Кто вы, кто принимает решение и что важно?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+    combined = " ".join(fact.text for fact in response.revealed_facts)
+
+    assert "cfo" not in combined
+    assert "final_decider" not in combined
+    assert "snake_case" not in combined
+    assert "_" not in combined
+
+
+def test_fake_llm_client_revealed_facts_follow_answer_branch_priority() -> None:
+    payload = sample_payload().model_copy(
+        update={"manager_message": "Кто вы, кто принимает решение и что для вас важно?"}
+    )
+
+    response = FakeLLMClient().generate_client_turn(payload)
+
+    assert [fact.category for fact in response.revealed_facts] == ["role"]
+    assert response.revealed_facts[0].text in response.answer
+
+
+def test_fake_llm_client_revealed_fact_logic_has_no_mojibake_tokens() -> None:
+    source = inspect.getsource(ActiveFakeLLMClient._build_revealed_facts)
+
+    assert "Р " not in source
+    assert "РЎ" not in source
+    assert "Ð" not in source
+    assert "Ñ" not in source
+
+
 def test_build_llm_client_uses_fake_when_provider_config_is_incomplete() -> None:
     settings = Settings(
+        app_env="local",
         llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=True,
         yandex_api_key="",
         yandex_folder_id="folder-id",
         yandex_agent_id="agent-id",
@@ -229,7 +346,7 @@ def test_build_llm_client_falls_back_to_legacy_yandex_agent_settings() -> None:
 
 def test_build_llm_client_raises_when_provider_config_is_incomplete_and_fallback_is_disabled() -> None:
     settings = Settings(
-        app_env="prod",
+        app_env="production",
         llm_backend="yandex_compatible",
         allow_fake_llm_fallback=False,
         yandex_api_key="",
@@ -239,6 +356,26 @@ def test_build_llm_client_raises_when_provider_config_is_incomplete_and_fallback
 
     with pytest.raises(LLMProviderConfigurationError, match="Incomplete Yandex LLM configuration"):
         build_llm_client(settings)
+
+
+def test_is_fake_fallback_allowed_only_for_explicit_non_production_envs() -> None:
+    assert is_fake_fallback_allowed(Settings(app_env="local", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="dev", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="test", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="demo", allow_fake_llm_fallback=True)) is True
+    assert is_fake_fallback_allowed(Settings(app_env="production", allow_fake_llm_fallback=True)) is False
+    assert is_fake_fallback_allowed(Settings(app_env="local", allow_fake_llm_fallback=False)) is False
+
+
+def test_build_llm_client_raises_for_unknown_backend_in_production_even_when_flag_is_true() -> None:
+    with pytest.raises(LLMProviderConfigurationError):
+        build_llm_client(
+            Settings(
+                app_env="production",
+                llm_backend="unknown-provider",
+                allow_fake_llm_fallback=True,
+            )
+        )
 
 
 def test_yandex_compatible_client_info_logs_do_not_include_full_payload(caplog) -> None:
@@ -332,6 +469,38 @@ def test_llm_turn_response_schema_contains_key_fields() -> None:
     assert "state_patch" in properties
     assert "stage" in properties
     assert "internal_notes" in properties
+    assert "revealed_facts" in properties
+    assert properties["revealed_facts"]["default"] == []
+
+
+def test_llm_turn_response_schema_constrains_revealed_fact_items() -> None:
+    schema = llm_turn_response_schema()
+    revealed_schema = schema["$defs"]["RevealedFactPatch"]
+
+    assert revealed_schema["additionalProperties"] is False
+    assert set(revealed_schema["properties"]["category"]["enum"]) == {
+        "role",
+        "authority",
+        "pain",
+        "decision_criterion",
+        "constraint",
+        "current_process",
+        "buying_signal",
+        "objection",
+    }
+    assert revealed_schema["properties"]["text"]["minLength"] == 1
+    assert revealed_schema["properties"]["text"]["maxLength"] == 300
+
+
+def test_llm_turn_response_defaults_revealed_facts_to_empty_list() -> None:
+    response = LLMTurnResponse(
+        answer="ok",
+        interest_delta=0,
+        state_patch={},
+        stage="first_contact",
+    )
+
+    assert response.revealed_facts == []
 
 
 def test_llm_turn_response_schema_forbids_additional_properties_at_top_level() -> None:

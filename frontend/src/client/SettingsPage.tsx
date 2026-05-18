@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import type { AuthUser } from "../types";
 import { changePassword } from "./api";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
+import { buildUserProfileViewModel } from "../viewModels";
 import { getClientErrorMessage } from "./utils";
 
 type SettingsPageProps = {
@@ -17,6 +18,8 @@ export function SettingsPage({ user, onUserUpdated }: SettingsPageProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const vm = buildUserProfileViewModel(user);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     /** Validate and submit password change without persisting password fields. */
@@ -63,10 +66,10 @@ export function SettingsPage({ user, onUserUpdated }: SettingsPageProps) {
       <div className="client-page__header"><div><span className="client-kicker">Профиль</span><h1>Настройки</h1></div></div>
       <section className="client-panel">
         <dl className="client-profile-list">
-          <div><dt>Email</dt><dd>{user.email}</dd></div>
-          <div><dt>Role</dt><dd><ClientBadge>{user.role}</ClientBadge></dd></div>
-          <div><dt>Organization</dt><dd>{user.client_account.name}</dd></div>
-          <div><dt>Password status</dt><dd>{user.must_change_password ? <ClientBadge tone="warning">must change</ClientBadge> : <ClientBadge tone="good">ok</ClientBadge>}</dd></div>
+          <div><dt>Email</dt><dd>{vm.email}</dd></div>
+          <div><dt>Роль</dt><dd><ClientBadge>{vm.roleLabel}</ClientBadge></dd></div>
+          <div><dt>Организация</dt><dd>{vm.organizationName}</dd></div>
+          <div><dt>Статус пароля</dt><dd><ClientBadge tone={vm.passwordStatusTone}>{vm.passwordStatusLabel}</ClientBadge></dd></div>
         </dl>
       </section>
       <section className="client-panel">

@@ -13,7 +13,7 @@ from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.scenarios import get_scenario
 from app.domain.seed_config import PersonaSeedConfig
 from app.application.seed_prompt_renderer import SeedPromptRenderer
-from app.infrastructure.config import Settings
+from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.persona_generator_client import (
     FakePersonaGeneratorClient,
     PersonaGenerationBusinessValidationError,
@@ -94,7 +94,6 @@ class PersonaGenerationService:
             difficulty_level=None,
             randomization_seed=None,
             constraints={},
-            schema_version=1,
         )
 
     def _resolve_generation_context(self, training_config: RuntimeTrainingConfig) -> str:
@@ -141,7 +140,9 @@ class PersonaGenerationService:
 
     def _allow_local_fallback(self) -> bool:
         """Allow local persona fallback only in local/debug-compatible environments."""
-        return self._settings.allow_fake_llm_fallback or self._settings.is_local_env
+        env = self._settings.app_env.lower().strip()
+        local_like_env = env in {"local", "dev", "development", "test", "demo"}
+        return local_like_env or is_fake_fallback_allowed(self._settings)
 
 class PersonaGeneratorClientFactory:
     def __init__(self, *, settings: Settings) -> None:

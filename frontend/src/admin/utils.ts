@@ -2,17 +2,6 @@ import { ApiError } from "../apiClient";
 import { formatDate as formatSharedDate, statusLabel as sharedStatusLabel } from "../labels";
 import type { AdminRouteState, JsonObject, OrganizationDetailTab } from "./types";
 
-export const FALLBACK_SCENARIOS = [
-  "first_contact_discovery",
-  "qualification_and_authority",
-  "needs_diagnosis",
-  "objection_handling",
-  "price_and_value",
-  "bad_experience_recovery",
-  "next_step_booking",
-  "follow_up_after_pause",
-];
-
 const ORGANIZATION_DETAIL_TABS = new Set<OrganizationDetailTab>(["overview", "users", "configs", "history", "usage", "audit"]);
 
 export function parseAdminPath(path: string): AdminRouteState {
@@ -81,9 +70,27 @@ export function stringifyJson(value: JsonObject | null | undefined): string {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
-export function compactJson(value: JsonObject): string {
-  /** Render compact JSON for audit/history payload cells. */
-  return JSON.stringify(value, null, 2);
+export function auditPayloadSummary(value: JsonObject | null | undefined): string {
+  /** Build a human-readable audit payload summary without exposing raw ids or JSON. */
+  if (!value) {
+    return "Без дополнительных данных";
+  }
+
+  const parts: string[] = [];
+  if (typeof value.email === "string" && value.email.trim()) {
+    parts.push(`Пользователь: ${value.email}`);
+  }
+  if (typeof value.name === "string" && value.name.trim()) {
+    parts.push(`Настройка: ${value.name}`);
+  }
+  if (typeof value.client_slug === "string" && value.client_slug.trim()) {
+    parts.push(`Организация: ${value.client_slug}`);
+  }
+  if (typeof value.default === "boolean") {
+    parts.push(value.default ? "Назначена по умолчанию" : "Назначена как дополнительная");
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : "Без дополнительных данных";
 }
 
 export function statusLabel(active: boolean): string {

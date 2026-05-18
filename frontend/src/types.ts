@@ -3,17 +3,39 @@ export type InterestDTO = {
   band: string;
 };
 
+export type RevealedFactCategory =
+  | "role"
+  | "authority"
+  | "pain"
+  | "decision_criterion"
+  | "constraint"
+  | "current_process"
+  | "buying_signal"
+  | "objection";
+
+export type RevealedFact = {
+  category: RevealedFactCategory;
+  text: string;
+  turn_index: number;
+};
+
 export type ClientStatePublic = {
   tone?: string;
   trust?: number;
   visible_objections?: string[];
-  known_pains?: string[];
   buying_signals?: string[];
-  discovered_role?: string | null;
-  discovered_authority_level?: string | null;
-  discovered_decision_criteria?: string[];
-  discovered_constraints?: string[];
-  discovered_current_process?: string[];
+  revealed_facts?: RevealedFact[];
+};
+
+export type FactsPanelItemDTO = {
+  category: RevealedFactCategory;
+  label: string;
+  text: string;
+  turn_index: number;
+};
+
+export type FactsPanelDTO = {
+  items: FactsPanelItemDTO[];
 };
 
 export type TurnPublicDTO = {
@@ -32,14 +54,15 @@ export type SessionPublicDTO = {
   session_id: string;
   scenario_id: string;
   status: string;
-  persona_name: string;
   public_brief: string;
   stage: string;
   interest: InterestDTO;
   client_state_public: ClientStatePublic;
+  facts_panel: FactsPanelDTO;
   turn_count: number;
   summary: string;
   state_version: number;
+  training_config_id?: string | null;
 };
 
 export type SessionStateResponse = {
@@ -143,7 +166,6 @@ export type JudgeSessionOutputDTO = {
 
 export type SpeechTranscriptionResponse = {
   text: string;
-  raw_text: string;
   normalized: boolean;
   duration_ms: number | null;
 };

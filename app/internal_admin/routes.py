@@ -178,7 +178,16 @@ def update_user(
     current_session: CurrentSession = Depends(require_internal_admin_session),
 ) -> UserDTO:
     try:
-        return service.update_user(actor_user_id=current_session.user.id, user_id=user_id, email=request.email, role=request.role)
+        updates = request.model_dump(exclude_unset=True)
+        kwargs: dict[str, object] = {
+            "actor_user_id": current_session.user.id,
+            "user_id": user_id,
+            "email": request.email,
+            "role": request.role,
+        }
+        if "default_training_config_id" in updates:
+            kwargs["default_training_config_id"] = request.default_training_config_id
+        return service.update_user(**kwargs)  # type: ignore[arg-type]
     except Exception as error:
         _handle_error(error)
 

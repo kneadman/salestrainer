@@ -68,6 +68,7 @@ class UserDTO(BaseModel):
     must_change_password: bool
     created_at: datetime
     updated_at: datetime
+    default_training_config_id: UUID | None = None
     client_account: ClientAccountBriefDTO | None = None
 
 
@@ -90,6 +91,7 @@ class UserUpdateRequest(BaseModel):
 
     email: EmailStr | None = None
     role: ClientUserRole | None = None
+    default_training_config_id: UUID | None = None
 
 
 class PasswordResetRequest(BaseModel):

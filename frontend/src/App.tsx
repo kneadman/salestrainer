@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ApiError, getMe, logout as logoutRequest } from "./api";
 import { AdminApp } from "./admin/AdminApp";
 import { ClientApp } from "./client/ClientApp";
-import { LandingPage } from "./components/LandingPage";
+import { clearLegacyTrainerSessionId, clearTrainerSessionRestoreState } from "./client/trainerSessionStorage";
 import { LoginPage } from "./components/LoginPage";
+import { DemoPage } from "./demo/DemoPage";
 import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
+const LandingPage = lazy(() => import("./components/LandingPage").then((module) => ({ default: module.LandingPage })));
 
 function getErrorMessage(error: unknown): string {
   /** Normalize app-level API errors for display. */
@@ -19,42 +22,33 @@ function getErrorMessage(error: unknown): string {
   return "Неожиданная ошибка.";
 }
 
-function getCurrentPath(): string {
-  /** Read the current browser path for the lightweight path-based router. */
-  return window.location.pathname;
-}
-
 export default function App() {
   /** Render public, login, client cabinet, and internal admin routes. */
-  const [path, setPath] = useState(getCurrentPath);
+  const location = useLocation();
+  const routerNavigate = useNavigate();
+  const path = `${location.pathname}${location.search}`;
+  const routePathname = location.pathname;
+  const [bootstrapPathname] = useState(routePathname);
   const [authBootstrapping, setAuthBootstrapping] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
 
-  const navigate = (nextPath: string, replace = false) => {
-    /** Push or replace one browser history entry and update local route state. */
-    if (window.location.pathname === nextPath) {
-      setPath(nextPath);
-      return;
-    }
-    if (replace) {
-      window.history.replaceState({}, "", nextPath);
-    } else {
-      window.history.pushState({}, "", nextPath);
-    }
-    setPath(nextPath);
-  };
-
-  useEffect(() => {
-    /** Keep route state synchronized with browser back/forward navigation. */
-    const handlePopState = () => setPath(getCurrentPath());
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  const navigate = useCallback(
+    (nextPath: string, replace = false) => {
+      /** Delegate browser history updates to react-router while preserving the local callback contract. */
+      routerNavigate(nextPath, { replace });
+    },
+    [routerNavigate],
+  );
 
   useEffect(() => {
     /** Bootstrap auth once so protected routes can decide redirect/access states. */
+    if (bootstrapPathname === "/demo") {
+      setAuthBootstrapping(false);
+      return;
+    }
+
     const bootstrapAuth = async () => {
       try {
         const response = await getMe();
@@ -74,37 +68,41 @@ export default function App() {
     };
 
     void bootstrapAuth();
-  }, []);
+  }, [bootstrapPathname]);
 
   useEffect(() => {
-    /** Enforce protected route redirects without adding a routing dependency. */
+    /** Enforce protected route redirects while route matching stays in feature modules. */
     if (authBootstrapping) {
       return;
     }
-    if (path === "/") {
+    if (routePathname === "/") {
       return;
     }
-    if ((path.startsWith("/admin") || path.startsWith("/app")) && !user) {
+    if (routePathname === "/demo") {
+      return;
+    }
+    if ((routePathname.startsWith("/admin") || routePathname.startsWith("/app")) && !user) {
       sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, path);
       navigate("/login", true);
       return;
     }
-    if (path === "/login" && user) {
+    if (routePathname === "/login" && user) {
       const storedRedirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
       sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
       navigate(storedRedirect?.startsWith("/admin") || storedRedirect?.startsWith("/app") ? storedRedirect : "/app", true);
       return;
     }
-    if (path.startsWith("/admin") || path.startsWith("/app")) {
+    if (routePathname.startsWith("/admin") || routePathname.startsWith("/app")) {
       return;
     }
-    if (path !== "/login") {
+    if (routePathname !== "/login") {
       navigate(user ? "/app" : "/login", true);
     }
-  }, [authBootstrapping, path, user]);
+  }, [authBootstrapping, navigate, path, routePathname, user]);
 
   const handleAuthenticated = (authenticatedUser: AuthUser) => {
     /** Store the authenticated user and honor protected-route redirects after login. */
+    clearLegacyTrainerSessionId();
     setUser(authenticatedUser);
     setAuthError(null);
     const storedRedirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
@@ -123,21 +121,30 @@ export default function App() {
     } catch {
       // A failed logout request should not keep stale authenticated UI around.
     } finally {
+      clearTrainerSessionRestoreState(user?.id);
       setUser(null);
       setLogoutBusy(false);
       navigate("/login", true);
     }
   };
 
+  if (routePathname === "/demo") {
+    return <DemoPage onNavigate={navigate} />;
+  }
+
   if (authBootstrapping) {
     return <div className="app-shell">Загрузка...</div>;
   }
 
-  if (path === "/") {
-    return <LandingPage authenticated={Boolean(user)} />;
+  if (routePathname === "/") {
+    return (
+      <Suspense fallback={<div className="app-shell">Загрузка...</div>}>
+        <LandingPage authenticated={Boolean(user)} />
+      </Suspense>
+    );
   }
 
-  if (path === "/login" || !user) {
+  if (routePathname === "/login" || !user) {
     return (
       <>
         {authError ? (
@@ -150,7 +157,7 @@ export default function App() {
     );
   }
 
-  if (path.startsWith("/admin")) {
+  if (routePathname.startsWith("/admin")) {
     return <AdminApp user={user} path={path} onNavigate={navigate} onLogout={handleLogout} />;
   }
 

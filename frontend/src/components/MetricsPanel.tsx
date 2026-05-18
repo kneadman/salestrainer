@@ -1,24 +1,9 @@
-import type { ClientStatePublic, SessionPublicDTO } from "../types";
+import type { SessionPublicDTO } from "../types";
+import { buildMetricsViewModel } from "../viewModels";
 
 type MetricsPanelProps = {
   session: SessionPublicDTO;
-};
-
-const toneLabels: Record<string, string> = {
-  cold: "Холодный",
-  skeptical: "Скептичный",
-  neutral: "Нейтральный",
-  interested: "Заинтересованный",
-  warm: "Тёплый",
-  ready_next_step: "Готов к следующему шагу",
-};
-
-const interestBandLabels: Record<string, string> = {
-  cold: "Холодный",
-  skeptical: "Скептичный",
-  neutral: "Нейтральный",
-  warm: "Тёплый",
-  hot: "Горячий",
+  trainingConfigName?: string;
 };
 
 function ProgressBar({
@@ -46,43 +31,35 @@ function ProgressBar({
   );
 }
 
-function readTrust(state: ClientStatePublic): number {
-  return typeof state.trust === "number" ? state.trust : 0;
-}
-
-function localizeTone(value?: string): string {
-  if (!value) {
-    return "Неизвестно";
-  }
-  return toneLabels[value] ?? value;
-}
-
-function localizeInterestBand(value: string): string {
-  return interestBandLabels[value] ?? value;
-}
-
-export function MetricsPanel({ session }: MetricsPanelProps) {
-  const state = session.client_state_public;
+export function MetricsPanel({ session, trainingConfigName }: MetricsPanelProps) {
+  /** Render session metrics with localized labels from the view model. */
+  const vm = buildMetricsViewModel(session, trainingConfigName);
 
   return (
     <section className="panel-card">
       <div className="panel-card__header">
         <h2>Метрики</h2>
       </div>
-      <ProgressBar label="Интерес" value={session.interest.score} tone="interest" />
-      <ProgressBar label="Доверие" value={readTrust(state)} tone="trust" />
+      <ProgressBar label="Интерес" value={vm.interestScore} tone="interest" />
+      <ProgressBar label="Доверие" value={vm.trust} tone="trust" />
       <dl className="metrics-list">
+        {vm.trainingConfigName ? (
+          <div>
+            <dt>Сценарий</dt>
+            <dd>{vm.trainingConfigName}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>Тон</dt>
-          <dd>{localizeTone(state.tone)}</dd>
+          <dd>{vm.toneLabel}</dd>
         </div>
         <div>
           <dt>Количество ходов</dt>
-          <dd>{session.turn_count}</dd>
+          <dd>{vm.turnCount}</dd>
         </div>
         <div>
           <dt>Уровень интереса</dt>
-          <dd>{localizeInterestBand(session.interest.band)}</dd>
+          <dd>{vm.interestBandLabel}</dd>
         </div>
       </dl>
     </section>

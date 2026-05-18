@@ -1,25 +1,80 @@
 # Sales Trainer MVP
 
-CLI/API MVP for an interactive sales training simulator. A manager writes messages, the system simulates a hidden B2B client, and the application owns all session state.
+Sales Trainer MVP — тренажёр B2B-продаж для менеджеров и руководителей команд. Менеджер ведёт диалог с симулированным клиентом, а система оценивает ход разговора, обновляет интерес клиента, сохраняет историю и формирует отчёт.
 
-## Agent-facing code reference
+Главный архитектурный принцип: backend владеет состоянием. LLM не хранит сессию и не принимает бизнес-решения; она возвращает следующую реплику клиента, ограниченный `state_patch` и новые публично раскрытые `revealed_facts`, которые backend валидирует и мержит.
 
-Detailed agent-facing documentation is stored in `docs/agent-reference/`.
-Start from `docs/agent-reference/README.md`.
+## Возможности
 
-## Current MVP scope
+- Клиентский кабинет `/app` с тренажёром, историей, отчётами, персональной и командной аналитикой.
+- Внутренний админский кабинет `/admin` для организаций, пользователей, training configs, истории, usage summary и audit log.
+- FastAPI backend, React 18 + TypeScript + Vite frontend.
+- Redis для активного runtime-состояния тренировки.
+- PostgreSQL для пользователей, доступов, training configs, durable history, отчётов, usage events и audit log.
+- Cookie auth через HttpOnly session cookie и CSRF для mutating-запросов.
+- Роли `internal_admin`, `client_lead`, `client_manager`; legacy `client_user` нормализуется в `client_manager`.
+- Yandex/OpenAI-compatible LLM adapters для persona generation, dialogue и judge.
+- Fake/local LLM fallback для разработки и демо.
+- Voice input MVP: браузерная запись голоса, batch STT через `/api/speech/transcribe`, вставка текста в composer без auto-send.
+- Public landing `/` и lead form `/api/leads`.
 
-- CLI chat plus FastAPI API
-- Fake LLM is the default working flow
-- Session state stored in app-managed repository
-- Redis docker setup included
-- PostgreSQL stores identity and client access data; Alembic manages relational migrations
-- PostgreSQL stores persistent training history, reports, and usage events for authenticated API sessions
-- Internal admin backend foundation exists under `/api/internal/*`
-- Domain validation via Pydantic v2
-- The client profile is generated at session start and remains hidden during the training
+## Стек
 
-## Install
+- Python 3.13+, FastAPI, Pydantic v2, SQLAlchemy, Alembic.
+- PostgreSQL, Redis.
+- React 18, TypeScript, Vite, nginx.
+- Yandex-compatible LLM agents; fake fallback только для local/dev/demo.
+
+## Архитектура
+
+Поток активной тренировки:
+
+```text
+frontend / API / CLI
+  -> application services
+  -> domain models and rules
+  -> infrastructure adapters
+  -> Redis runtime state
+  -> PostgreSQL durable history
+```
+
+Важные границы:
+
+- Domain layer не импортирует FastAPI, Redis, SQLAlchemy или frontend-типы.
+- Redis хранит активную runtime-сессию.
+- PostgreSQL хранит durable history, auth, analytics и audit.
+- `StatePatch` — предложение модели, а не источник истины.
+- `interest_score` и stage transitions контролируются backend.
+- Hidden persona не попадает в client-facing API, frontend, browser state или обычные логи.
+- Блок «Факты и боли» строится только из `revealed_facts`; legacy `discovered_*` остаются для внутренней логики стадий, отчётов и совместимости.
+
+## Документация для разработки
+
+Подробная карта кода и правил лежит в:
+
+```text
+docs/agent-reference/README.md
+```
+
+Полезные разделы:
+
+- `ARCHITECTURE.md` — слои и runtime flow.
+- `API_REFERENCE.md` — основные endpoints.
+- `DATA_AND_STATE.md` — Redis/PostgreSQL и DTO boundaries.
+- `SECURITY_AND_AUTH.md` — auth, CSRF, роли, audit.
+- `LLM_AND_PROMPTS.md` — persona/dialogue/judge contracts.
+- `STT.md` — голосовой ввод.
+- `DEVOPS.md` — Docker, nginx, env и smoke checks.
+
+## Быстрый локальный запуск
+
+Требования:
+
+- Python 3.13+.
+- Node.js для frontend.
+- Docker, если Redis/PostgreSQL запускаются через compose.
+
+Backend:
 
 ```bash
 python -m venv .venv
@@ -27,439 +82,16 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
-## Run CLI
-
-```bash
-python -m app.cli.main
-```
-
-Available commands:
-
-- `/start`
-- `/resume`
-- `/scenarios`
-- `/state`
-- `/history`
-- `/finish`
-- `/help`
-- `/exit`
-
-On startup, the CLI stays idle until you explicitly run `/start` or `/resume <session_id>`.
-
-Core training loop:
-
-- `/start` creates a session with the default `generic_b2b_first_contact` scenario
-- The trainer generates a hidden client profile at random
-- The manager does not choose a persona and does not see the client's exact role up front
-- The goal is discovery-first: identify role, authority, pain, constraints, and decision criteria before pushing a next step
-- The hidden profile is revealed only in the final report after `/finish`
-
-Enable CLI debug output:
-
-```bash
-set DEBUG_CLI=true
-python -m app.cli.main
-```
-
-Choose LLM backend:
-
-```bash
-set LLM_BACKEND=fake
-python -m app.cli.main
-```
-
-Deterministic persona generation for tests or debug:
-
-```bash
-set PERSONA_RANDOM_SEED=42
-python -m app.cli.main
-```
-
-Default scenario selection:
-
-```bash
-set DEFAULT_TRAINING_SCENARIO_ID=generic_b2b_first_contact
-python -m app.cli.main
-```
-
-## Admin CLI (internal)
-
-Internal admin CLI for manual management of clients, users, and training configs.
-
-Before running commands, ensure migrations are applied (`python -m alembic upgrade head`) and `DATABASE_URL` points to the target PostgreSQL.
-
-Create client:
-
-```bash
-python -m app.admin.cli create-client --name "ООО Ромашка" --slug romashka
-```
-
-Create user (stores only password hash):
-
-```bash
-python -m app.admin.cli create-user --client romashka --email manager@romashka.ru --password "temporary-password"
-```
-
-Create client training config from persona policy JSON:
-
-```bash
-python -m app.admin.cli create-config \
-  --client romashka \
-  --name "Бухгалтерский аутсорсинг" \
-  --product-line accounting_outsourcing \
-  --scenario generic_b2b_first_contact \
-  --persona-policy-file configs/romashka-accounting.json
-```
-
-Assign config to user (`--default` makes it default for that user):
-
-```bash
-python -m app.admin.cli assign-config --email manager@romashka.ru --config "Бухгалтерский аутсорсинг" --default
-```
-
-Reset password (updates `password_hash` and sets `must_change_password=true`):
-
-```bash
-python -m app.admin.cli reset-password --email manager@romashka.ru --password "new-temporary-password"
-```
-
-Disable user (sets `is_active=false`):
-
-```bash
-python -m app.admin.cli disable-user --email manager@romashka.ru
-```
-
-## Roles and internal admin API
-
-User roles are centralized in `app.identity.roles`:
-
-- `internal_admin`: platform owner / internal operator
-- `client_lead`: client-side lead
-- `client_manager`: client-side manager
-- legacy `client_user` is normalized to `client_manager` for backward compatibility
-
-Internal admin API endpoints are mounted under `/api/internal/*` and require an authenticated `internal_admin` session plus CSRF for mutating requests. Client roles receive `403`.
-
-Internal admin foundation includes:
-
-- organizations: list/create/detail/update/disable/enable via `/api/internal/organizations`
-- organization users: create `client_lead` / `client_manager`, update, disable/enable, reset temporary password
-- training configs: create/update/disable/enable and assign/unassign/make-default per user
-- legacy LLM provider config endpoints remain available for future/internal use, but are not part of the MVP training flow
-- audit log: `GET /api/internal/audit-log`
-
-Training runtime sessions still use Redis and the existing `/api/sessions/*` flow. Billing is not implemented.
-
-## Internal Admin UI
-
-The internal platform owner cabinet is available at:
-
-```text
-/admin
-```
-
-Access rules:
-
-- unauthenticated users are redirected to `/login`;
-- `internal_admin` can open the admin cabinet;
-- `client_lead` and `client_manager` see a no-access screen and can return to `/app`;
-- admin requests use the existing HttpOnly auth cookie and CSRF token flow.
-
-Admin UI sections:
-
-- Dashboard: organization totals, users/config counts, usage totals, latest audit events;
-- Organizations: list/search/create/edit/enable/disable organizations;
-- Organization detail: overview, users, training configs, history, usage, audit;
-- Users: create/update users, reset temporary passwords, enable/disable, assign/default/unassign training configs;
-- Training Configs: create/update/enable/disable configs with client-side JSON validation and `persona_generation_context`;
-- Training History: persistent history list and public-safe session detail;
-- Usage Analytics: basic usage summary from persistent history;
-- Audit Log: filterable audit events with compact JSON payload display.
-
-Security notes:
-
-- global Yandex API keys, folder IDs, and agent IDs are configured through `.env`, not through the admin UI;
-- passwords are not stored in localStorage/sessionStorage and reset fields are cleared after success;
-- hidden persona snapshots, raw LLM payloads, raw LLM responses, and secrets are not rendered in admin history views.
-
-## Persistent Training History
-
-Active training state and long-term history have separate owners:
-
-- Redis stores active runtime `TrainingSessionState` while a dialog is in progress.
-- PostgreSQL stores durable history, reports, usage events, and analytics inputs.
-
-The authenticated `/api/sessions/*` flow now writes persistent history after the runtime operation succeeds:
-
-- `POST /api/sessions` creates a `training_sessions` row and `session_started` usage event.
-- `POST /api/sessions/{session_id}/messages` appends `training_turns`, updates session counters/snapshots, and writes `turn_processed`.
-- `POST /api/sessions/{session_id}/finish` marks the session finished, stores `training_reports`, and writes `session_finished` plus `report_generated`.
-- `GET /api/sessions/{session_id}` and resume calls may write view/resume usage events.
-
-New tables:
-
-- `training_sessions`: durable session metadata, public brief, summary, server-side persona and state snapshots.
-- `training_turns`: durable turn history with manager/client messages, interest/stage transition, public-safe state snapshots, and evaluation snapshot.
-- `training_reports`: saved final report text per session.
-- `usage_events`: minimal event stream for future analytics.
-
-Client-facing history endpoints:
-
-- `GET /api/history/sessions`
-- `GET /api/history/sessions/{session_id}`
-- `GET /api/history/sessions/{session_id}/report`
-
-Internal admin history endpoints:
-
-- `GET /api/internal/organizations/{organization_id}/history/sessions`
-- `GET /api/internal/organizations/{organization_id}/usage-summary`
-- `GET /api/internal/users/{user_id}/history/sessions`
-
-Access rules:
-
-- `client_manager` sees only their own history.
-- `client_lead` sees sessions for users in the same client account.
-- `internal_admin` uses `/api/internal/*` history and usage endpoints.
-- Client-facing history DTOs do not expose `persona_snapshot`, raw LLM payloads, raw LLM responses, API keys, or hidden persona fields.
-
-Limitations:
-
-- History starts only for sessions created after the migration is applied.
-- Old Redis-only sessions are not backfilled.
-- Analytics is a basic aggregation API, not a dashboard.
-- Hidden snapshots can be stored server-side for future internal/admin use, but are not returned by client-facing endpoints.
-- If a persistent history turn write fails after Redis state is updated, the API returns a controlled `500` and logs a critical consistency error; automated retry/reconciliation is a later step.
-
-## Password change flow
-
-`/auth/login` and `/auth/me` now include `user.must_change_password`. A user with a temporary password can call:
-
-```http
-POST /auth/change-password
-```
-
-```json
-{
-  "current_password": "temporary-password",
-  "new_password": "new-password"
-}
-```
-
-The endpoint requires auth cookie and CSRF token, verifies the current password, stores only an Argon2id hash, clears `must_change_password`, and writes an audit record.
-
-## MVP LLM model
-
-MVP runtime no longer depends on organization-level `llm_provider_config_id`.
-
-- One global `YANDEX_API_KEY` is configured in `.env`.
-- One global persona generator agent is configured in `.env`.
-- One global dialogue agent is configured in `.env`.
-- `persona_generation_context` is stored on `client_training_configs` and edited only by `internal_admin`.
-- Persona and dialogue master prompts plus JSON templates live inside Yandex Agents, not in the service database.
-- Backend still validates provider JSON through Pydantic and business rules before it touches runtime state.
-
-Recommended environment variables:
-
-```bash
-set LLM_BACKEND=yandex_compatible
-set YANDEX_API_KEY=...
-set YANDEX_BASE_URL=https://ai.api.cloud.yandex.net/v1
-set YANDEX_PERSONA_FOLDER_ID=...
-set YANDEX_PERSONA_AGENT_ID=...
-set YANDEX_DIALOGUE_FOLDER_ID=...
-set YANDEX_DIALOGUE_AGENT_ID=...
-```
-
-Legacy fallback variables are still supported:
-
-```bash
-set YANDEX_FOLDER_ID=...
-set YANDEX_AGENT_ID=...
-```
-
-`llm_provider_configs` and `/api/internal/*/llm-provider-configs` remain in the backend as legacy/future-enterprise groundwork, but the MVP runtime and primary admin UI do not use them.
-
-## LLM Persona Generation
-
-Authenticated API session creation separates persona generation from dialogue simulation:
-
-- Persona Generator LLM creates the hidden `PersonaProfile` once at session start from the user's default `client_training_config`.
-- Dialogue Simulator LLM continues to answer manager turns from the saved hidden profile and runtime state.
-- Redis stores the active `TrainingSessionState`, including the hidden persona.
-- PostgreSQL history stores server-side snapshots after the API session is created.
-
-Generation input is normalized into `PersonaGenerationInput`:
-
-- scenario;
-- training config name;
-- `persona_generation_context` business context;
-- free-form `persona_policy`;
-- optional organization context, target action, allowed roles/product lines, training goal, difficulty, seed, and constraints.
-
-Generation output must validate as `PersonaGenerationOutput` and contain a Pydantic-valid `PersonaProfile`. Provider responses are parsed as structured JSON; invalid output is retried by the provider client and then fails the API request unless local fallback is explicitly allowed.
-
-Provider behavior:
-
-- `fake` provider uses the legacy Python `PersonaGenerator`.
-- `yandex_compatible` uses the global persona agent from `.env`.
-- If `persona_generation_context` is empty, local mode can fall back to the legacy Python generator; production-like mode returns a controlled configuration error.
-- API keys are read from environment settings, are never logged in full, and are never returned.
-
-Security notes:
-
-- client-facing session and history endpoints still do not expose the hidden persona before the final report flow allows it;
-- raw persona-generation prompts, raw provider payloads, raw provider responses, and secrets are not written to client endpoints or usage events;
-- debug payload logging remains gated by `DEBUG_LLM_PAYLOAD`.
-
-Set `SECRET_ENCRYPTION_KEY` for application-level secret encryption:
-
-```bash
-set SECRET_ENCRYPTION_KEY=replace-with-random-32-plus-character-secret
-```
-
-In `APP_ENV=local`, a development fallback key is available for local tests and demos. Outside local environment, operations that encrypt/decrypt provider secrets require `SECRET_ENCRYPTION_KEY`.
-
-Dialogue runtime uses the same global API key and base URL, plus dialogue-specific routing:
-
-```bash
-set LLM_BACKEND=yandex_compatible
-set YANDEX_API_KEY=...
-set YANDEX_DIALOGUE_FOLDER_ID=...
-set YANDEX_DIALOGUE_AGENT_ID=...
-python -m app.cli.main
-```
-
-Fallback policy:
-
-- `APP_ENV=local` allows fallback to `FakeLLMClient` and `InMemorySessionRepository` even if the explicit allow-flags are `false`
-- `APP_ENV=staging` or `APP_ENV=prod` should usually run with `ALLOW_FAKE_LLM_FALLBACK=false` and `ALLOW_IN_MEMORY_REPOSITORY=false`
-- In those environments, incomplete Yandex config or unavailable Redis now fail explicitly during startup instead of silently degrading
-
-LLM logging:
-
-- INFO logs contain only sanitized metadata
-- Full request payload logging is disabled by default and can be enabled with `DEBUG_LLM_PAYLOAD=true`
-- API keys are never logged in full
-
-Public vs hidden state:
-
-- Public CLI/API state exposes only a safe brief, current stage, interest, visible objections, discovered pains, and buying signals
-- Hidden role, authority level, latent pains, constraints, motivations, and internal behavior model stay server-side during the session
-- `FakeLLMClient` and real LLM adapters receive the hidden profile so the client behavior stays consistent
-
-Prompt ownership:
-
-- Master prompts for persona generation and dialogue live in Yandex Agents and are edited in Yandex, not in this service.
-- JSON schema/templates for structured responses are configured in Yandex Agent plus validated again by this backend.
-- `app/prompts/client_simulator.md` and `app/prompts/persona_generator.md` are local reference prompts for documentation and prompt iteration only.
-- The MVP service stores only `persona_generation_context` as client business context on a training config.
-- Client/training config records do not store API keys, folder IDs, agent IDs, master prompts, or JSON templates.
-
-Example `persona_generation_context`:
-
-```text
-Client sells accounting outsourcing and outsourced CFO services to Russian B2B companies with 20-200 employees.
-Target decision-makers are owners, CEOs, CFOs, and managing partners.
-Typical pains: late management reporting, unclear cash gaps, tax risks, overloaded in-house accountant.
-Typical objections: already have an accountant, do not want to share financial data, had bad vendor experience, price concerns.
-Decision criteria: reliability, relevant cases, clear onboarding, transparent reporting, ability to work with 1C and primary documents.
-Training goal: manager should discover role, current accounting process, pain, decision criteria, and earn a relevant next step.
-```
-
-## Judgement Layer contract
-
-- Judge runs only after finish.
-- PR1 adds the strict Pydantic contract, PR2 adds `FakeJudgeClient` plus `JudgementService`, PR3 adds the reference judge prompt plus `StructuredJudgeClient`, PR4 wires `build_judge_client(settings)` into runtime, PR5 makes judge payload generation fail-open with minimal `report_payload` support, and PR6 adds typed frontend bento report rendering plus basic analytics from saved judge payloads.
-- Runtime dialogue flow does not change.
-- Judge still runs only after finish/report generation.
-- `JudgeSessionOutput` is persisted into `training_reports.report_payload`.
-- `GET /report` reuses saved `report_payload` when available instead of regenerating it.
-- If judge payload generation fails, `/finish` and `/report` still return the plain text report instead of failing the core flow.
-- API finish/report responses and history report DTOs now include optional `report_payload`.
-- Frontend opens the structured bento report in a modal after session finish. A compact `Отчёт` button is shown near the chat for finished sessions and reopens the saved report. The legacy plain text report is used only as a modal fallback when structured payload is unavailable or invalid.
-- Client/team analytics can optionally include basic aggregates from saved valid `JudgeSessionOutput` payloads such as average judge score and weakest skill.
-- Judge uses shared `YANDEX_API_KEY` and `YANDEX_BASE_URL`.
-- Optional judge routing env vars:
-  - `YANDEX_JUDGE_FOLDER_ID`
-  - `YANDEX_JUDGE_AGENT_ID`
-- User-facing judge text should be Russian by default unless the whole input session is clearly in another language.
-
-## Demo run checklist
-
-1. Start the production-like local stack:
-
-```bash
-docker compose up --build
-```
-
-2. Migrations are run by the `migrate` compose service. For manual local backend runs, use:
-
-```bash
-python -m alembic upgrade head
-```
-
-3. Create the first internal admin:
-
-```bash
-python -m app.admin.cli create-internal-admin --client-name "Platform" --client-slug platform --email admin@example.com --password "temporary-password"
-```
-
-4. Open `http://localhost:8080/login`, sign in, then open `/admin`.
-5. Create an organization.
-6. Create a training config with name, scenario, limits, and `persona_generation_context`.
-7. Create a client manager or lead user.
-8. Assign the training config to the user and mark it as default.
-9. Sign in as the client user.
-10. Open `/app/trainer`.
-11. Start a training and send at least one manager message.
-12. Finish the session.
-13. Open `/app/history`, the saved report, and `/app/analytics`.
-
-Demo notes:
-
-- Authenticated session creation uses the global persona agent from `.env`.
-- Runtime dialogue turns use the global dialogue agent from `.env`.
-- Legacy organization-level LLM provider configs are not part of the MVP demo flow.
-- Landing form submissions are persisted in `landing_leads`.
-- `/app/balance` is a usage placeholder, not billing or payment processing.
-
-If real Yandex credentials are unavailable, keep `APP_ENV=local` and use fake/local fallback for a presentation of the product flow. For staging/prod, configure real secrets and disable fake fallback.
-
-## Run tests
-
-```bash
-pytest
-```
-
-## Local infrastructure
-
-Start Redis and PostgreSQL for local backend development:
+Инфраструктура и миграции:
 
 ```bash
 docker compose up -d redis postgres
-```
-
-Default local URLs:
-
-```text
-REDIS_URL=redis://localhost:6379/0
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer
-```
-
-Apply migrations:
-
-```bash
 python -m alembic upgrade head
 ```
 
-## Frontend GUI
-
-Minimal React/Vite web UI lives in `frontend/`.
-
-Backend:
+Backend API:
 
 ```bash
-python -m alembic upgrade head
 python -m uvicorn app.api.main:app --reload
 ```
 
@@ -471,108 +103,31 @@ npm install
 npm run dev
 ```
 
-Open:
+Открыть:
 
 ```text
 http://localhost:5173
 ```
 
-The Vite dev server proxies API requests to `http://localhost:8000`, so the frontend uses relative calls such as `/auth/login`, `/auth/csrf`, and `/api/sessions`.
+Vite dev server использует относительные API-пути и проксирует запросы на backend.
 
-Production serving through FastAPI:
+## Docker stack
 
-```bash
-cd frontend
-npm install
-npm run build
-cd ..
-python -m uvicorn app.api.main:app
-```
-
-Open:
-
-```text
-http://localhost:8000/login
-```
-
-Current client access flow:
-
-- `/auth/login`, `/auth/logout`, `/auth/me`, and `/auth/csrf` implement the browser login flow
-- `/auth/change-password` lets authenticated users replace temporary passwords and clears `must_change_password`
-- auth uses an HttpOnly session cookie; CSRF tokens are sent with mutating requests through `X-CSRF-Token`
-- `/app` is the client cabinet dashboard
-- `/app/trainer` contains the Redis-backed active training flow
-- `/api/sessions` requires an authenticated user
-- `POST /api/sessions` creates a training session from the current user's default training config
-- `training_session_ownership` is used to check access to session endpoints
-- PostgreSQL stores identity, access data, persistent training history, reports, and usage events
-- Redis stores runtime training sessions
-- `/admin` serves the internal admin UI for `internal_admin` users
-
-## Client Cabinet
-
-The client cabinet is mounted under `/app` and is separate from the internal admin cabinet.
-
-Routes:
-
-- `/app`: client dashboard with personal overview and lead team summary when available;
-- `/app/trainer`: active training simulator;
-- `/app/history`: role-scoped persistent training history;
-- `/app/history/{session_id}`: public-safe session detail and saved report;
-- `/app/analytics`: personal analytics;
-- `/app/team`: same-organization manager list for `client_lead`;
-- `/app/team/{user_id}`: manager analytics card for `client_lead`;
-- `/app/team-analytics`: organization analytics for `client_lead`;
-- `/app/balance`: usage and billing placeholder without payment processing;
-- `/app/settings`: profile and password change form.
-
-Role rules:
-
-- `client_manager` sees only personal navigation and personal history/analytics.
-- `client_lead` sees personal sections plus team and team analytics for the same organization.
-- `client_manager` cannot use `/app/team` or `/app/team-analytics`.
-- Team APIs never use `/api/internal/*`; they use client-facing `/api/team/*` endpoints protected by `client_lead`.
-
-Client-facing analytics endpoints:
-
-- `GET /api/client/analytics/me`
-- `GET /api/team/users`
-- `GET /api/team/usage-summary`
-- `GET /api/team/users/{user_id}/analytics`
-- `GET /api/team/users/{user_id}/history/sessions`
-
-Limitations:
-
-- Balance is usage-oriented only; real billing, invoices, and payment forms are not implemented.
-- Detailed skill/evaluation aggregates are shown as an empty state until backend exposes safe aggregates.
-- Analytics appears only after persistent history rows exist.
-- `/api/leads` uses persistence, payload limits, attribution whitelisting, and a honeypot, but full rate limiting and CRM integration are not implemented yet.
-
-## Run with Docker
-
-Production-like local stack:
+Production-like локальный запуск:
 
 ```bash
 docker compose up --build
 ```
 
-Open:
+Открыть:
 
 ```text
 http://localhost:8080
 ```
 
-Notes:
+Compose поднимает `postgres`, `redis`, `migrate`, `backend` и `frontend` на nginx. `migrate` применяет Alembic migrations до старта backend. Nginx проксирует `/api/*` и `/auth/*` в backend, а frontend отдаёт как SPA.
 
-- `frontend` is built once and served by `nginx`
-- `migrate` runs `python -m alembic upgrade head` before `backend` starts
-- `nginx` proxies `/api/*` and `/auth/*` to the internal `backend:8000` service
-- `backend` connects to Redis through `redis://redis:6379/0`
-- `backend` connects to PostgreSQL through `postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer`
-- `backend` image now includes `ffmpeg`/`ffprobe`, a built-in `whisper-cli`, and the default `ggml-base.bin` model, so browser-audio duration probing, WAV preprocessing, and `whisper.cpp` STT can run in-container without manual VPS setup
-- only port `8080` is exposed to the host
-
-Smoke checks through nginx:
+Smoke checks:
 
 ```bash
 curl -i http://localhost:8080/auth/me
@@ -580,90 +135,302 @@ curl -i http://localhost:8080/auth/csrf
 curl -i http://localhost:8080/api/health
 ```
 
-STT container smoke test:
+Ожидаемо:
+
+- `/auth/me` без cookie возвращает `401` JSON.
+- `/auth/csrf` возвращает `200` JSON с `csrf_token`.
+- `/api/health` возвращает `200 {"status":"ok"}`.
+
+## Переменные окружения
+
+Настройки читаются из `.env` через `app.infrastructure.config.Settings`. Безопасный шаблон лежит в `.env.example`.
+
+Ключевые группы:
+
+- Redis/PostgreSQL: `REDIS_URL`, `DATABASE_URL`.
+- Runtime: `APP_ENV`, `SESSION_TTL_SECONDS`, `DEFAULT_TRAINING_SCENARIO_ID`.
+- Auth/cookies: `AUTH_SESSION_TTL_SECONDS`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `CSRF_TOKEN_TTL_SECONDS`.
+- Rate limits/proxy: `LOGIN_RATE_LIMIT_ATTEMPTS`, `LEAD_RATE_LIMIT_ATTEMPTS`, `TRUSTED_PROXY_IPS`.
+- LLM: `LLM_BACKEND`, `ALLOW_FAKE_LLM_FALLBACK`, `YANDEX_API_KEY`, `YANDEX_BASE_URL`, `YANDEX_PERSONA_*`, `YANDEX_DIALOGUE_*`, `YANDEX_JUDGE_*`.
+- STT: `STT_ENABLED`, `STT_BACKEND`, `STT_WHISPER_CPP_BINARY`, `STT_MODEL_PATH`, `STT_RATE_LIMIT_ATTEMPTS`, `STT_GLOBAL_RATE_LIMIT_ATTEMPTS`.
+
+`.env` не должен попадать в Git.
+
+## Auth и роли
+
+Browser auth использует HttpOnly session cookie. Mutating-запросы в `/auth/*`, `/api/*` и `/api/internal/*` требуют CSRF header `X-CSRF-Token`, кроме явно открытых endpoints вроде `/auth/login` и `/api/leads`.
+
+Роли:
+
+- `internal_admin` — внутренний оператор платформы, доступ к `/admin` и `/api/internal/*`.
+- `client_lead` — руководитель команды клиента, видит свои данные и командные разделы организации.
+- `client_manager` — менеджер, видит только свои тренировки, историю и аналитику.
+
+Пароли хэшируются Argon2id. Постоянный пароль должен быть длиной 8–256 символов и состоять только из латинских букв и цифр. Temporary/reset passwords переводят пользователя в `must_change_password=true`.
+
+## Клиентский кабинет
+
+Кабинет клиента находится под `/app`.
+
+Основные маршруты:
+
+- `/app` — dashboard.
+- `/app/trainer` — активная тренировка.
+- `/app/history` — история тренировок.
+- `/app/history/{session_id}` — детали сессии и отчёт.
+- `/app/analytics` — персональная аналитика.
+- `/app/team` — список пользователей команды для `client_lead`.
+- `/app/team/{user_id}` — аналитика и история конкретного пользователя для `client_lead`.
+- `/app/team-analytics` — командная аналитика и рейтинг менеджеров.
+- `/app/settings` — профиль и смена пароля.
+
+Клиентский UI не вызывает `/api/internal/*`; для team-разделов используются client-facing endpoints `/api/team/*`.
+
+## Внутренний админский кабинет
+
+Админка находится под:
+
+```text
+/admin
+```
+
+Доступ есть только у `internal_admin`.
+
+Основные возможности:
+
+- управление организациями;
+- управление пользователями организаций;
+- reset/disable/enable пользователей;
+- управление training configs;
+- история и usage summary по организациям;
+- audit log;
+- permalink user analytics;
+- backend-groundwork для legacy/future LLM provider config API.
+
+Админка не показывает полные API keys, raw LLM payloads, raw LLM responses, hidden persona snapshots или временные пароли после отправки.
+
+## Training flow
+
+Активная тренировка создаётся через:
+
+```http
+POST /api/sessions
+```
+
+Для обычного client user backend:
+
+1. Проверяет default training config пользователя.
+2. Генерирует скрытую `PersonaProfile` через `PersonaGenerationService`.
+3. Создаёт Redis runtime-сессию.
+4. Создаёт ownership-запись.
+5. Пишет durable history row и usage event в PostgreSQL.
+6. Возвращает public-safe DTO без hidden persona.
+
+Сообщение менеджера:
+
+```http
+POST /api/sessions/{session_id}/messages
+```
+
+Поддерживается optional `idempotency_key`:
+
+- тот же ключ + тот же текст возвращает сохранённый public response;
+- тот же ключ + другой текст возвращает `409`;
+- frontend переиспользует ключ при retry одного и того же сообщения.
+
+Если Redis обновился, а запись turn history в PostgreSQL не прошла, runtime-сессия помечается как pending retry. Следующее resume/send/finish сначала пытается восстановить history gap.
+
+Завершение:
+
+```http
+POST /api/sessions/{session_id}/finish
+GET /api/sessions/{session_id}/report
+```
+
+Judge payload строится после finish. Если judge падает, plain text report остаётся fallback-контрактом.
+
+## Публичные факты и скрытая persona
+
+Во время активной тренировки клиентскому API и frontend нельзя раскрывать:
+
+- полный `PersonaProfile`;
+- hidden display name;
+- скрытую роль, если она не была раскрыта;
+- `authority_level`, если полномочия не были раскрыты;
+- latent pains и hidden constraints до discovery;
+- raw LLM payloads/responses;
+- provider/internal notes.
+
+`revealed_facts` — единственный источник для UI-блока «Факты и боли». Dialogue LLM возвращает только новые факты текущего ответа клиента, backend фильтрует technical-looking значения, дедуплицирует и проставляет `turn_index`. Legacy `discovered_*` поля временно остаются для stage/report compatibility.
+
+## Persistent history и аналитика
+
+Redis хранит активное runtime-состояние. PostgreSQL хранит durable history.
+
+Основные таблицы:
+
+- `training_sessions`
+- `training_turns`
+- `training_reports`
+- `usage_events`
+- identity/access/admin tables
+
+Client-facing history:
+
+- `GET /api/history/sessions`
+- `GET /api/history/sessions/{session_id}`
+- `GET /api/history/sessions/{session_id}/report`
+
+Client/team analytics:
+
+- `GET /api/client/analytics/me`
+- `GET /api/team/users`
+- `GET /api/team/usage-summary`
+- `GET /api/team/users/{user_id}/history/sessions`
+- `GET /api/team/users/{user_id}/analytics`
+
+История и аналитика возвращают только public-safe DTO. Saved judge payloads используются для безопасных агрегатов: strongest/weakest skill, judged-session count, 7-day trends, average final interest, completion rate и manager ranking.
+
+## LLM runtime
+
+Runtime разделён на несколько контрактов:
+
+- Persona Generator LLM возвращает `PersonaGenerationOutput`.
+- Dialogue Simulator LLM возвращает `LLMTurnResponse`.
+- Judge LLM возвращает post-finish judge payload.
+
+Все provider outputs считаются недоверенными и валидируются Pydantic-моделями. Fake/local fallback предназначен для разработки и демо. Staging/prod должны явно конфигурировать реальные credentials и fallback-политику.
+
+Durable history хранит internal metadata версий контрактов:
+
+- persona schema/prompt version;
+- dialogue schema/prompt version;
+- judge schema/prompt version.
+
+Обычные client-facing DTO не раскрывают raw prompts или provider payloads.
+
+## STT / голосовой ввод
+
+STT — pre-send UX layer:
+
+1. Browser записывает audio через `MediaRecorder`.
+2. Frontend отправляет multipart `POST /api/speech/transcribe`.
+3. Backend проверяет auth, CSRF, optional session ownership, размер, content type, длительность, concurrency и rate limits.
+4. Audio конвертируется в WAV 16k mono.
+5. STT backend возвращает текст.
+6. Нормализованный `text` вставляется в composer.
+
+STT endpoint не создаёт turn, не пишет training history и не отправляет текст в dialogue LLM автоматически.
+
+## CLI
+
+Локальный CLI:
 
 ```bash
-docker compose build --no-cache backend
-docker compose up -d backend
-docker compose exec backend bash -lc 'ldd /usr/local/bin/whisper-cli | grep "not found" || true'
-docker compose exec backend bash -lc 'ffmpeg -f lavfi -i sine=frequency=1000:duration=2 -ac 1 -ar 16000 /tmp/test.wav -y'
-docker compose exec backend bash -lc '"$STT_WHISPER_CPP_BINARY" -m "$STT_MODEL_PATH" -f /tmp/test.wav -l ru -otxt -of /tmp/test-out'
-docker compose exec backend cat /tmp/test-out.txt
+python -m app.cli.main
 ```
 
-Expected results:
+Команды:
 
-- `/auth/me` returns a `401` JSON response, not React `index.html`
-- `/auth/csrf` returns `200` JSON with `csrf_token`
-- `/api/health` returns `200 {"status":"ok"}`
+- `/start`
+- `/resume`
+- `/scenarios`
+- `/state`
+- `/history`
+- `/finish`
+- `/help`
+- `/exit`
 
-## API session creation
+CLI полезен для локальной проверки runtime loop. Authenticated SaaS/history flow живёт в API и frontend; CLI может оставаться runtime-only.
 
-The main creation flow no longer requires `persona_id`.
+## Admin CLI
 
-Minimal request:
+Перед использованием примените migrations и проверьте `DATABASE_URL`.
 
-```json
-{}
+Создать первого внутреннего администратора:
+
+```bash
+python -m app.admin.cli create-internal-admin ^
+  --client-name "Platform" ^
+  --client-slug platform ^
+  --email admin@example.com ^
+  --password TempPass123
 ```
 
-Explicit scenario:
+Создать организацию:
 
-```json
-{
-  "scenario_id": "generic_b2b_first_contact"
-}
+```bash
+python -m app.admin.cli create-client --name "ООО Ромашка" --slug romashka
 ```
 
-Debug-compatible preset mode still works:
+Создать пользователя:
 
-```json
-{
-  "scenario_id": "sales_audit_cold_outreach",
-  "persona_id": "owner"
-}
+```bash
+python -m app.admin.cli create-user --client romashka --email manager@example.com --password TempPass123
 ```
 
-## Legacy Hidden Client Generation
+Создать минимальный training config:
 
-The fallback/debug generator lives in `app/domain/persona_generation.py`.
+```bash
+python -m app.admin.cli create-config ^
+  --client romashka ^
+  --name "Базовая тренировка"
+```
 
-Each generated client profile includes:
+Сбросить пароль:
 
-- role
-- industry
-- company_size
-- authority_level
-- behavior_model
-- current_business_context
-- latent_pains
-- typical_objections
-- buying_motivation
-- decision_criteria
-- hidden_constraints
-- communication_style
-- starting_interest / initial_openness
-- price_sensitivity
-- urgency
-- trust_baseline
+```bash
+python -m app.admin.cli reset-password --email manager@example.com --password NewTempPass123
+```
 
-For production client API sessions, prefer configuring `persona_generation_context` plus optional `persona_policy`. To improve the fallback path, extend the role templates in that module with new combinations of role, pains, context, and constraints.
+## Проверки
 
-## MVP limitations
+Backend:
 
-- A live Yandex cloud smoke test is not part of this iteration.
-- Real Yandex/OpenAI API is not connected to the working flow
-- Yandex adapter now follows the AI Studio `OpenAI(...).responses.create(...)` contract and is covered by mocked request/response tests, but is still not verified here against a live cloud account
-- The local `client_simulator.md` file is not injected into Yandex runtime requests; the remote dialogue agent remains the runtime prompt source
-- Legacy `llm_provider_configs` still exist in the backend, but the primary MVP flow does not use them
-- CLI still uses a simple terminal flow
-- Reports and evaluator scores are rule-based, not judge-model based
-- Session resume across process restarts requires Redis; in-memory mode is process-local and does not survive restarts
-- Persistent history is written by the authenticated API flow; CLI local training remains runtime-only.
+```bash
+pytest
+python -m compileall app tests
+```
 
-## Next step roadmap
+Frontend:
 
-1. Client/Admin analytics API hardening with focused frontend tests and richer filtering
-2. Prompt examples, stricter startup validation, and wider regression coverage for hidden-field safety
-3. Real billing/limits model for organization usage
-4. Provider retry/backoff and prompt/schema versioning
+```bash
+cd frontend
+npm test
+npm run build
+```
+
+Docker/nginx/static serving:
+
+```bash
+pytest tests/integration/test_nginx_config.py
+pytest tests/integration/test_static_frontend.py
+```
+
+Полный `pytest` на Windows может быть долгим из-за тяжёлых integration tests. Для диагностики удобно запускать `tests/unit` и отдельные integration-файлы.
+
+## Ограничения MVP
+
+- Live Yandex smoke test не входит в обычный local test suite.
+- Organization-level LLM provider configs не управляют основным MVP runtime.
+- Billing/payment не реализован.
+- Balance/usage surfaces остаются groundwork, а не платёжной системой.
+- CLI не является полным SaaS flow и может не писать durable history.
+- Fake/local fallbacks предназначены для разработки и демо, а не для production-поведения без явного решения.
+
+## Рекомендуемый demo flow
+
+1. Заполнить `.env`.
+2. Запустить PostgreSQL/Redis.
+3. Применить migrations.
+4. Создать `internal_admin`.
+5. Открыть `/login`, войти админом.
+6. Создать организацию.
+7. Создать training config с `persona_generation_context`.
+8. Создать `client_lead` или `client_manager`.
+9. Задать default config пользователю.
+10. Войти клиентским пользователем.
+11. Открыть `/app/trainer`.
+12. Начать тренировку и отправить несколько сообщений.
+13. Завершить сессию.
+14. Посмотреть `/app/history`, отчёт, `/app/analytics` и `/app/team-analytics`.

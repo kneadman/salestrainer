@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.access.models import LandingLead
-from app.api.dependencies import get_app_settings, get_persona_generation_service, get_report_service, get_session_service, get_turn_service
+from app.api.client_ip import client_ip_from_request
+from app.api.dependencies import (
+    get_app_settings,
+    get_persona_generation_service,
+    get_report_service,
+    get_runtime_activity_service,
+    get_session_service,
+    get_turn_service,
+)
 from app.api.errors import conflict, not_found
 from app.access.service import AccessService
 from app.api.rate_limit import LeadRateLimitExceeded
@@ -27,6 +36,7 @@ from app.api.schemas import (
 from app.application.projections import build_session_public_dto, build_turn_public_dto
 from app.application.persona_generation_service import PersonaGenerationService
 from app.application.report_service import ReportService
+from app.application.runtime_activity_service import RuntimeActivityService
 from app.application.session_service import TrainingSessionService
 from app.application.turn_service import TurnService
 from app.domain.errors import (
@@ -116,6 +126,28 @@ def _reconcile_pending_history_sync(
         ) from None
 
 
+def _record_runtime_expiry(session_id: str, history_service: HistoryService) -> None:
+    """Best-effort close of durable history after the runtime session key expired."""
+    try:
+        history_service.record_runtime_session_expired(UUID(session_id))
+    except (ValueError, LookupError):
+        return
+    except Exception:
+        logger.warning("runtime_session_expiry_record_failed session_id=%s", session_id, exc_info=True)
+
+
+def _touch_runtime_session(
+    *,
+    session_id: str,
+    runtime_activity_service: RuntimeActivityService,
+) -> None:
+    """Refresh both runtime TTL and durable last activity for one active session."""
+    try:
+        runtime_activity_service.touch_active_session(session_id)
+    except SalesTrainerError as error:
+        raise_api_error(error)
+
+
 @router.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
@@ -129,7 +161,7 @@ def submit_landing_lead(
 ) -> LandingSubmitResponse:
     try:
         http_request.app.state.lead_rate_limiter.hit(
-            ip_address=_client_ip(http_request),
+            ip_address=client_ip_from_request(http_request),
             email=str(request.email) if request.email else None,
             phone=request.phone if request.phone else None,
         )
@@ -233,15 +265,46 @@ def create_session(
                 detail="persona_id is not allowed for client sessions.",
             )
 
-        try:
-            training_config = access_service.get_default_training_config_for_user(current_session.user.id)
-        except LookupError as error:
-            if is_internal_admin(user_role) and request.persona_id is not None:
-                raise not_found(
-                    "Default training config is required for internal admin debug sessions."
+        training_config = None
+        if request.training_config_id is not None:
+            try:
+                config_id = UUID(request.training_config_id)
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Invalid training_config_id format.",
                 ) from error
-            raise
+            training_config = access_service.get_training_config_by_id(config_id)
+            if training_config is None:
+                raise not_found("Training config not found.")
+            if training_config.client_account_id != current_session.user.client_account_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Training config does not belong to your organization.",
+                )
 
+        if training_config is None:
+            try:
+                training_config = access_service.get_default_training_config_for_user(current_session.user.id)
+            except LookupError as error:
+                if is_internal_admin(user_role) and request.persona_id is not None:
+                    raise not_found(
+                        "Default training config is required for internal admin debug sessions."
+                    ) from error
+                raise not_found(
+                    "Сценарий по умолчанию не назначен. Обратитесь к администратору."
+                ) from error
+
+        if not training_config.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Training config is disabled.",
+            )
+
+        history_service.expire_inactive_sessions(
+            client_account_id=training_config.client_account_id,
+            user_id=current_session.user.id,
+        )
         session = None
         if is_internal_admin(user_role) and request.persona_id is not None:
             session = session_service.start_session(
@@ -287,6 +350,7 @@ def create_session(
 def get_session(
     session_id: str,
     session_service: TrainingSessionService = Depends(get_session_service),
+    runtime_activity_service: RuntimeActivityService = Depends(get_runtime_activity_service),
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
@@ -298,7 +362,13 @@ def get_session(
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found.")
+    _touch_runtime_session(
+        session_id=session_id,
+        runtime_activity_service=runtime_activity_service,
+    )
+    detail_session = history_service.hydrate_session_with_durable_turns(session)
     history_service.record_usage_event(
         event_type=UsageEventType.SESSION_VIEWED.value,
         client_account_id=ownership.client_account_id,
@@ -307,8 +377,8 @@ def get_session(
         session_id=session.session_id,
     )
     return SessionDetailResponse(
-        session=build_session_public_dto(session),
-        turns=build_turn_public_dto(session),
+        session=build_session_public_dto(detail_session),
+        turns=build_turn_public_dto(detail_session),
     )
 
 
@@ -316,6 +386,7 @@ def get_session(
 def resume_session(
     session_id: str,
     session_service: TrainingSessionService = Depends(get_session_service),
+    runtime_activity_service: RuntimeActivityService = Depends(get_runtime_activity_service),
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
@@ -331,6 +402,10 @@ def resume_session(
         )
         ownership = access_service.get_session_ownership(session_id)
         session = session_service.resume_session(session_id)
+        _touch_runtime_session(
+            session_id=session_id,
+            runtime_activity_service=runtime_activity_service,
+        )
         history_service.record_usage_event(
             event_type=UsageEventType.SESSION_RESUMED.value,
             client_account_id=ownership.client_account_id,
@@ -351,6 +426,7 @@ def post_manager_message(
     request: TurnRequest,
     turn_service: TurnService = Depends(get_turn_service),
     session_service: TrainingSessionService = Depends(get_session_service),
+    runtime_activity_service: RuntimeActivityService = Depends(get_runtime_activity_service),
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
     current_session: CurrentSession = Depends(require_current_user),
@@ -371,6 +447,10 @@ def post_manager_message(
                     raise conflict(
                         "This idempotency key was already used for a different manager_message."
                     )
+                _touch_runtime_session(
+                    session_id=session_id,
+                    runtime_activity_service=runtime_activity_service,
+                )
                 return TurnResponse.model_validate(existing_submission.response_payload)
         ownership = access_service.get_session_ownership(session_id)
         turn_result = turn_service.process_message(
@@ -379,11 +459,14 @@ def post_manager_message(
             idempotency_key=request.idempotency_key,
         )
     except SalesTrainerError as error:
+        if isinstance(error, SessionNotFoundError):
+            _record_runtime_expiry(session_id, history_service)
         raise_api_error(error)
     except LookupError as error:
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found after turn.")
     response = (
         TurnResponse.model_validate(turn_result.response_payload)
@@ -440,17 +523,22 @@ def finish_session(
             current_session=current_session,
         )
         ownership = access_service.get_session_ownership(session_id)
-        report_text = report_service.finish_session(session_id)
+        report_service.finish_session(session_id)
     except SalesTrainerError as error:
+        if isinstance(error, SessionNotFoundError):
+            _record_runtime_expiry(session_id, history_service)
         raise_api_error(error)
     except LookupError as error:
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found after finish.")
-    report_payload = report_service.generate_report_payload_safely(session_id)
+    report_session = history_service.hydrate_session_with_durable_turns(session)
+    report_text = report_service.generate_report_for_session(report_session)
+    report_payload = report_service.generate_report_payload_safely_for_session(report_session)
     history_service.record_session_finished_with_report(
-        session=session,
+        session=report_session,
         report_text=report_text,
         report_payload=report_payload,
         user_id=current_session.user.id,
@@ -458,7 +546,7 @@ def finish_session(
         training_config_id=ownership.training_config_id,
     )
     return FinishSessionResponse(
-        session=build_session_public_dto(session),
+        session=build_session_public_dto(report_session),
         report=report_text,
         report_payload=report_payload,
     )
@@ -480,35 +568,17 @@ def get_report(
         raise not_found(str(error)) from error
     session = session_service.get_session(session_id)
     if session is None:
+        _record_runtime_expiry(session_id, history_service)
         raise not_found("Session not found.")
     if session.status != "finished":
         raise conflict("Session is not finished yet.")
-    report_text = report_service.generate_report(session_id)
-    saved_report_payload = history_service.get_saved_report_payload(session.session_id)
-    if saved_report_payload is None:
-        report_payload = report_service.generate_report_payload_safely(session_id)
-    else:
-        report_payload = saved_report_payload
-    session = session_service.get_session(session_id)
-    if session is None:
-        raise not_found("Session not found after report.")
-    if saved_report_payload is None:
-        history_service.record_report_generated(
-            session=session,
-            report_text=report_text,
-            report_payload=report_payload,
-            user_id=current_session.user.id,
-            client_account_id=ownership.client_account_id,
-            training_config_id=ownership.training_config_id,
-        )
+    report_text = history_service.get_saved_report_text(session.session_id)
+    if report_text is None:
+        report_session = history_service.hydrate_session_with_durable_turns(session)
+        report_text = report_service.generate_report_for_session(report_session)
+    report_payload = history_service.get_saved_report_payload(session.session_id)
     return SessionReportResponse(
         session=build_session_public_dto(session),
         report=report_text,
         report_payload=report_payload,
     )
-
-
-def _client_ip(request: Request) -> str | None:
-    if request.client is None:
-        return None
-    return request.client.host

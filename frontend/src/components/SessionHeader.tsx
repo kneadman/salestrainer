@@ -3,7 +3,6 @@ type SessionHeaderProps = {
   canFinish: boolean;
   onNewSession: () => void;
   onFinish: () => void;
-  onLogout: () => void;
   canShowReport?: boolean;
   onOpenReport?: () => void;
 };
@@ -13,7 +12,6 @@ export function SessionHeader({
   canFinish,
   onNewSession,
   onFinish,
-  onLogout,
   canShowReport = false,
   onOpenReport,
 }: SessionHeaderProps) {
@@ -39,9 +37,7 @@ export function SessionHeader({
         <button type="button" className="primary-button" onClick={onFinish} disabled={busy || !canFinish}>
           Завершить
         </button>
-        <button type="button" className="secondary-button" onClick={onLogout} disabled={busy}>
-          Выйти
-        </button>
+
       </div>
     </header>
   );

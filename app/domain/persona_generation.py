@@ -12,6 +12,7 @@ GENERIC_ROLES = [
     "managing_partner",
     "commercial_director",
     "cfo",
+    "chief_accountant",
     "operations_director",
     "sales_director",
     "purchase_manager",
@@ -39,6 +40,45 @@ GENERIC_CONSTRAINTS = ["Limited time for meetings.", "Needs internal alignment b
 GENERIC_PROOF_SENSITIVITY = ["relevant cases", "clear numbers", "implementation plan"]
 GENERIC_CALL_SCORING = ["discovery depth", "objection handling", "clarity of next step", "context relevance"]
 
+GENERIC_CURRENT_SOLUTIONS = [
+    "ручной процесс",
+    "Excel + мессенджеры",
+    "текущий подрядчик",
+    "самописный скрипт",
+    "нет полноценного решения",
+    "гибрид: частично автоматизировано, частично вручную",
+]
+
+GENERIC_ALTERNATIVE_SOLUTIONS = [
+    "статус-кво: ничего не менять",
+    "нанять сотрудника в штат",
+    "доработать текущий процесс",
+    "купить конкурирующее решение",
+    "отдать задачу внешнему подрядчику",
+    "сделать самописное решение",
+]
+
+GENERIC_DISPLAY_NAMES_BY_ROLE = {
+    "owner": "Алексей Викторович, собственник B2B-компании",
+    "founder": "Марина Сергеевна, основатель компании",
+    "ceo": "Ирина Павловна, CEO B2B-компании",
+    "general_director": "Виктор Петрович, генеральный директор ООО «Вектор»",
+    "managing_partner": "Олег Андреевич, управляющий партнёр",
+    "commercial_director": "Наталья Игоревна, коммерческий директор",
+    "cfo": "Дмитрий Александрович, финансовый директор",
+    "chief_accountant": "Елена Викторовна, главный бухгалтер",
+    "operations_director": "Сергей Валентинович, операционный директор",
+    "sales_director": "Анна Михайловна, директор по продажам",
+    "purchase_manager": "Павел Николаевич, руководитель закупок",
+}
+
+GENERIC_INFORMATION_GAPS = [
+    "Думает, что внедрение займёт значительно дольше, чем возможно при пилотном запуске.",
+    "Не понимает, чем безопасный первый шаг отличается от полноценного внедрения.",
+    "Считает, что новое решение обязательно перегрузит команду.",
+    "Не знает, какие доказательства результата можно проверить до покупки.",
+]
+
 SCENARIO_BEHAVIOR_HINTS = {
     "first_contact_discovery": "busy_and_short",
     "qualification_and_authority": "formal_and_distant",
@@ -62,14 +102,38 @@ SCENARIO_OBJECTIONS = {
 }
 
 SCENARIO_PAINS = {
-    "first_contact_discovery": ["The team struggles to surface the real situation early."],
-    "qualification_and_authority": ["Too many conversations happen with the wrong stakeholder."],
-    "needs_diagnosis": ["Symptoms are discussed, but root causes stay vague."],
-    "objection_handling": ["Objections stop progress because value is not grounded in context."],
-    "price_and_value": ["Budget concerns dominate before business value is clear."],
-    "bad_experience_recovery": ["Prior disappointment makes every promise sound weak."],
-    "next_step_booking": ["Good conversations still end without a concrete next step."],
-    "follow_up_after_pause": ["Momentum is lost after long silence."],
+    "first_contact_discovery": [
+        "The team struggles to surface the real situation early.",
+        "Initial calls often miss the real stakeholder.",
+    ],
+    "qualification_and_authority": [
+        "Too many conversations happen with the wrong stakeholder.",
+        "Time is wasted on contacts who cannot decide.",
+    ],
+    "needs_diagnosis": [
+        "Symptoms are discussed, but root causes stay vague.",
+        "Surface-level answers hide the real constraints.",
+    ],
+    "objection_handling": [
+        "Objections stop progress because value is not grounded in context.",
+        "Generic responses fail to address specific concerns.",
+    ],
+    "price_and_value": [
+        "Budget concerns dominate before business value is clear.",
+        "ROI is demanded before the problem is quantified.",
+    ],
+    "bad_experience_recovery": [
+        "Prior disappointment makes every promise sound weak.",
+        "The contact is scanning for proof, not pitches.",
+    ],
+    "next_step_booking": [
+        "Good conversations still end without a concrete next step.",
+        "Follow-up momentum fades after the call.",
+    ],
+    "follow_up_after_pause": [
+        "Momentum is lost after long silence.",
+        "The contact feels the vendor gave up.",
+    ],
 }
 
 
@@ -106,27 +170,24 @@ class UniversalFakePersonaGenerator:
 
         return PersonaProfile(
             id=f"generated_{scenario_id}_{role}",
-            display_name="Unknown B2B contact",
+            display_name=GENERIC_DISPLAY_NAMES_BY_ROLE.get(role, "B2B-контакт"),
             role=role,  # type: ignore[arg-type]
             industry=self._random.choice(GENERIC_INDUSTRIES),
             company_size=self._random.choice(GENERIC_COMPANY_SIZES),
             authority_level="final_decider",
             behavior_model=behavior_model,  # type: ignore[arg-type]
             target_action=target_action,
-            current_accounting_model="unknown",
-            legal_form="unknown",
-            tax_system="unknown",
-            accounting_software="unknown",
-            accounting_software_mode="unknown",
-            primary_docs_owner="unknown",
-            cares_about=list(GENERIC_CARES_ABOUT),
-            typical_objections=list(SCENARIO_OBJECTIONS.get(scenario_id, ["We need more context first."])),
             current_business_context=current_context,
-            latent_pains=list(SCENARIO_PAINS.get(scenario_id, ["The current process is underperforming."])),
+            business_facts=business_facts,
+            cares_about=list(GENERIC_CARES_ABOUT),
+            current_solution=self._random.choice(GENERIC_CURRENT_SOLUTIONS),
+            alternative_solutions=self._pick_alternative_solutions(),
+            information_gaps=self._pick_information_gaps(),
+            latent_pains=list(SCENARIO_PAINS.get(scenario_id, ["The current process is underperforming.", "No one owns the metric."])),
             buying_motivation=["Reduce uncertainty.", "Find a workable next step."],
             decision_criteria=list(GENERIC_DECISION_CRITERIA),
             hidden_constraints=list(GENERIC_CONSTRAINTS),
-            business_facts=business_facts,
+            typical_objections=list(SCENARIO_OBJECTIONS.get(scenario_id, ["We need more context first.", "Not the right time."])),
             proof_sensitivity=list(GENERIC_PROOF_SENSITIVITY),
             call_scoring_criteria=list(GENERIC_CALL_SCORING),
             communication_style=self._communication_style_for_behavior(behavior_model),
@@ -176,7 +237,10 @@ class UniversalFakePersonaGenerator:
     def _build_business_facts(self, scenario: Scenario | None, target_action: str) -> list[str]:
         """Expose only generic internal facts that help the simulator stay coherent."""
         if scenario is None:
-            return [f"Preferred next action: {target_action}."]
+            return [
+                f"Preferred next action: {target_action}.",
+                "Generic B2B training scenario.",
+            ]
         return [
             f"Training format: {scenario.training_format}.",
             f"Manager goal: {scenario.manager_goal}.",
@@ -218,6 +282,15 @@ class UniversalFakePersonaGenerator:
         if behavior_model == "distrustful_due_to_bad_experience":
             return self._random.randint(10, 22)
         return self._random.randint(18, 35)
+
+    def _pick_alternative_solutions(self) -> list[str]:
+        status_quo = "статус-кво: ничего не менять"
+        options = [x for x in GENERIC_ALTERNATIVE_SOLUTIONS if x != status_quo]
+        picked = self._random.sample(options, k=2)
+        return [status_quo, *picked]
+
+    def _pick_information_gaps(self) -> list[str]:
+        return self._random.sample(GENERIC_INFORMATION_GAPS, k=2)
 
 
 PersonaGenerator = UniversalFakePersonaGenerator

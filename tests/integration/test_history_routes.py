@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.access.repository import AccessRepository
+from app.api.dependencies import get_report_service
 from app.api.main import create_app
 from app.application.report_service import ReportService
 from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, ReportRecommendation, SkillScore
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
+from tests.unit._persona_fixtures import valid_minimal_persona
 from app.history.models import TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
 from app.history.repository import HistoryRepository
 from app.history.service import HistoryService
@@ -43,7 +45,7 @@ def _create_db_session() -> Session:
 def _create_client(db_session: Session, repository: InMemorySessionRepository) -> TestClient:
     """Create a TestClient wired to the provided database and runtime repository."""
     app = create_app(
-        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, session_ttl_seconds=1800),
         repository=repository,
         llm_client=FakeLLMClient(),
     )
@@ -194,19 +196,36 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert session_record.persona_snapshot
     assert session_record.initial_state_snapshot
     assert session_record.final_state_snapshot
+    assert session_record.persona_schema_version == "persona-profile-v3.1"
+    assert session_record.persona_prompt_version == "global-yandex-persona-agent"
     assert len(turns) == 1
     assert turns[0].turn_index == 1
     assert turns[0].client_state_snapshot is not None
+    assert turns[0].dialogue_schema_version == "dialogue-turn-v1"
+    assert turns[0].dialogue_prompt_version == "global-yandex-dialogue-agent"
     assert report is not None
     assert report.report_text
     assert report.report_payload is not None
+    assert report.judge_schema_version == "judge-session-v1"
+    assert report.judge_prompt_version == "global-yandex-judge-agent"
     assert {"session_started", "turn_processed", "session_finished", "report_generated"}.issubset(set(event_types))
 
+    history_list_response = client.get("/api/history/sessions")
     history_response = client.get(f"/api/history/sessions/{session_id}")
     report_response = client.get(f"/api/history/sessions/{session_id}/report")
 
+    assert history_list_response.status_code == 200
+    assert history_list_response.json()[0]["session_id"] == session_id
+    assert history_list_response.json()[0]["training_config_name"] == "Default config"
+    assert "user_id" not in history_list_response.json()[0]
+    assert "client_account_id" not in history_list_response.json()[0]
+    assert "training_config_id" not in history_list_response.json()[0]
     assert history_response.status_code == 200
     assert history_response.json()["session"]["session_id"] == session_id
+    assert history_response.json()["session"]["training_config_name"] == "Default config"
+    assert "user_id" not in history_response.json()["session"]
+    assert "client_account_id" not in history_response.json()["session"]
+    assert "training_config_id" not in history_response.json()["session"]
     assert len(history_response.json()["turns"]) == 1
     assert "persona_snapshot" not in history_response.text
     assert "llm_payload_snapshot" not in history_response.text
@@ -215,6 +234,160 @@ def test_history_persists_session_turn_report_and_usage_events() -> None:
     assert report_response.json()["report"] == report.report_text
     assert "report_payload" in report_response.json()
     assert report_response.json()["report_payload"] == report.report_payload
+    db_session.close()
+
+
+def test_get_report_does_not_regenerate_or_persist_missing_payload() -> None:
+    """Read-only report fetch must not invoke judge again or backfill a missing payload."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-report-read",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    session_id = _start_turn_finish(client)
+    report_record = db_session.scalar(select(TrainingReportRecord).where(TrainingReportRecord.session_id == UUID(session_id)))
+    assert report_record is not None
+    report_record.report_payload = None
+    db_session.commit()
+
+    counting_judgement_service = CountingJudgementService()
+    client.app.dependency_overrides[get_report_service] = lambda: ReportService(
+        repository,
+        judgement_service=counting_judgement_service,
+    )
+
+    first_response = client.get(f"/api/sessions/{session_id}/report")
+    second_response = client.get(f"/api/sessions/{session_id}/report")
+    db_session.refresh(report_record)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json()["report_payload"] is None
+    assert second_response.json()["report_payload"] is None
+    assert counting_judgement_service.calls == 0
+    assert report_record.report_payload is None
+    db_session.close()
+
+
+def test_create_session_expires_stale_active_history_for_user() -> None:
+    """Starting a new session closes the user's stale active durable sessions."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-ttl",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    first_response = client.post("/api/sessions", json={})
+    assert first_response.status_code == 201
+    first_session_id = UUID(first_response.json()["session"]["session_id"])
+    first_record = db_session.get(TrainingSessionRecord, first_session_id)
+    assert first_record is not None
+    stale_activity_at = datetime.now(tz=UTC) - timedelta(minutes=31)
+    first_record.last_activity_at = stale_activity_at
+    db_session.commit()
+
+    second_response = client.post("/api/sessions", json={})
+    second_session_id = UUID(second_response.json()["session"]["session_id"])
+    db_session.refresh(first_record)
+    second_record = db_session.get(TrainingSessionRecord, second_session_id)
+
+    assert second_response.status_code == 201
+    assert first_record.status == "expired"
+    assert first_record.finished_at is not None
+    assert second_record is not None
+    assert second_record.status == "active"
+    db_session.close()
+
+
+def test_session_touch_refreshes_durable_activity_before_history_expire() -> None:
+    """Runtime touch should keep durable activity fresh enough to avoid premature expiry."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-touch",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    create_response = client.post("/api/sessions", json={})
+    assert create_response.status_code == 201
+    session_id = UUID(create_response.json()["session"]["session_id"])
+    record = db_session.get(TrainingSessionRecord, session_id)
+    assert record is not None
+    stale_activity_at = datetime.now(tz=UTC) - timedelta(minutes=31)
+    record.last_activity_at = stale_activity_at
+    db_session.commit()
+
+    touch_response = client.get(f"/api/sessions/{session_id}")
+    db_session.refresh(record)
+    refreshed_activity_at = record.last_activity_at
+    history_response = client.get("/api/history/sessions")
+    db_session.refresh(record)
+
+    assert touch_response.status_code == 200
+    assert record.status == "active"
+    assert refreshed_activity_at != stale_activity_at
+    assert history_response.status_code == 200
+    assert record.status == "active"
+    db_session.close()
+
+
+def test_history_repository_touch_session_activity_updates_only_active_sessions() -> None:
+    """Durable activity touch must not reactivate expired or finished sessions."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="acme-touch-repository",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+    create_response = client.post("/api/sessions", json={})
+    assert create_response.status_code == 201
+    session_id = UUID(create_response.json()["session"]["session_id"])
+    history_repository = HistoryRepository(db_session)
+    active_touched_at = datetime.now(tz=UTC)
+
+    active_record = history_repository.touch_session_activity(
+        session_id=session_id,
+        touched_at=active_touched_at,
+    )
+    assert active_record is not None
+    assert active_record.status == "active"
+    assert active_record.last_activity_at is not None
+
+    active_record.status = "expired"
+    expired_activity_at = datetime.now(tz=UTC) - timedelta(hours=2)
+    active_record.last_activity_at = expired_activity_at
+    db_session.commit()
+    expired_record = history_repository.touch_session_activity(
+        session_id=session_id,
+        touched_at=datetime.now(tz=UTC),
+    )
+    assert expired_record is not None
+    assert expired_record.status == "expired"
+    assert expired_record.last_activity_at == expired_activity_at
+
+    expired_record.status = "finished"
+    finished_activity_at = datetime.now(tz=UTC) - timedelta(hours=1)
+    expired_record.last_activity_at = finished_activity_at
+    db_session.commit()
+    finished_record = history_repository.touch_session_activity(
+        session_id=session_id,
+        touched_at=datetime.now(tz=UTC),
+    )
+    assert finished_record is not None
+    assert finished_record.status == "finished"
+    assert finished_record.last_activity_at == finished_activity_at
     db_session.close()
 
 
@@ -300,13 +473,9 @@ def test_history_service_persists_report_payload_without_exposing_it_in_dto() ->
         session_id=uuid4(),
         scenario_id="sales_audit_cold_outreach",
         status="finished",
-        persona=PersonaProfile(
+        persona=valid_minimal_persona(
             id="generated_persona",
             display_name="Unknown B2B contact",
-            role="owner",
-            industry="professional_services",
-            company_size="20-50",
-            authority_level="final_decider",
             behavior_model="analytical_and_cautious",
         ),
         interest_score=52,

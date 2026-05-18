@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from app.api.client_ip import client_ip_from_request
 from app.identity.dependencies import get_auth_service, get_auth_settings, get_current_session
 from app.identity.csrf import clear_csrf_cookie, generate_csrf_token, set_csrf_cookie
 from app.identity.models import User
@@ -58,7 +59,7 @@ def login(
     settings: Settings = Depends(get_auth_settings),
 ) -> AuthUserResponse:
     try:
-        request.app.state.login_rate_limiter.hit(email=request_body.email, ip_address=_client_ip(request))
+        request.app.state.login_rate_limiter.hit(email=request_body.email, ip_address=client_ip_from_request(request))
     except LoginRateLimitExceeded as error:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -69,7 +70,7 @@ def login(
         login_result = auth_service.login(
             email=request_body.email,
             password=request_body.password,
-            ip_address=_client_ip(request),
+            ip_address=client_ip_from_request(request),
             user_agent=request.headers.get("user-agent"),
         )
     except AuthenticationError as error:
@@ -106,7 +107,7 @@ def logout(
     response.status_code = status.HTTP_204_NO_CONTENT
     auth_service.logout(
         current_session=current_session,
-        ip_address=_client_ip(request),
+        ip_address=client_ip_from_request(request),
         user_agent=request.headers.get("user-agent"),
     )
     response.delete_cookie(
@@ -132,7 +133,7 @@ def change_password(
             current_session=current_session,
             current_password=request_body.current_password,
             new_password=request_body.new_password,
-            ip_address=_client_ip(request),
+            ip_address=client_ip_from_request(request),
             user_agent=request.headers.get("user-agent"),
         )
     except AuthenticationError as error:
@@ -159,9 +160,3 @@ def _user_dto(user: User) -> AuthUserDTO:
             slug=user.client_account.slug,
         ),
     )
-
-
-def _client_ip(request: Request) -> str | None:
-    if request.client is None:
-        return None
-    return request.client.host

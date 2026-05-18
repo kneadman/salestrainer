@@ -2,25 +2,30 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError, createSession, finishSession, getReport, getSession, sendMessage, transcribeSpeech } from "../api";
 import { ChatWindow } from "../components/ChatWindow";
 import { Composer } from "../components/Composer";
-import { FactsPanel } from "../components/FactsPanel";
-import { MetricsPanel } from "../components/MetricsPanel";
 import { SessionHeader } from "../components/SessionHeader";
+import { TrainerContextPanel } from "../components/TrainerContextPanel";
+import { TrainerStartScreen } from "../components/TrainerStartScreen";
 import { TrainingReportModal } from "../components/TrainingReportModal";
 import type { ReportPayload, SessionPublicDTO, TurnPublicDTO } from "../types";
+import type { TrainingConfigOptionDTO } from "./types";
+import { getTrainingConfigs } from "./api";
+import {
+  clearStoredTrainerSessionId,
+  getStoredTrainerSessionId,
+  storeTrainerSessionId,
+} from "./trainerSessionStorage";
 import { getClientErrorMessage } from "./utils";
-
-const STORAGE_KEY = "salestrainer.currentSessionId";
-
-type TrainerPageProps = {
-  onLogout: () => Promise<void>;
-};
 
 type PendingMessageSubmission = {
   idempotencyKey: string;
   managerMessage: string;
 };
 
-export function TrainerPage({ onLogout }: TrainerPageProps) {
+type TrainerPageProps = {
+  userId: string;
+};
+
+export function TrainerPage({ userId }: TrainerPageProps) {
   /** Keep the runtime trainer flow inside the client cabinet and restore the last session when possible. */
   const [session, setSession] = useState<SessionPublicDTO | null>(null);
   const [turns, setTurns] = useState<TurnPublicDTO[]>([]);
@@ -32,11 +37,13 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
   const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [pendingMessageSubmission, setPendingMessageSubmission] = useState<PendingMessageSubmission | null>(null);
+  const [trainingConfigs, setTrainingConfigs] = useState<TrainingConfigOptionDTO[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
 
   useEffect(() => {
     /** Restore the last runtime session id from localStorage for continuity across page reloads. */
     const restore = async () => {
-      const sessionId = localStorage.getItem(STORAGE_KEY);
+      const sessionId = getStoredTrainerSessionId(userId);
       if (!sessionId) {
         setBusyAction(null);
         return;
@@ -59,7 +66,7 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
         }
       } catch (restoreError) {
         if (restoreError instanceof ApiError && restoreError.code === "not_found") {
-          localStorage.removeItem(STORAGE_KEY);
+          clearStoredTrainerSessionId(userId);
         } else {
           setError(getClientErrorMessage(restoreError));
         }
@@ -69,17 +76,45 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     };
 
     void restore();
+  }, [userId]);
+
+  useEffect(() => {
+    /** Load available training configs for pre-training selection. */
+    const loadConfigs = async () => {
+      try {
+        const configs = await getTrainingConfigs();
+        setTrainingConfigs(configs);
+        const defaultConfig = configs.find((c) => c.is_default);
+        if (defaultConfig) {
+          setSelectedConfigId(defaultConfig.id);
+        } else if (configs.length > 0) {
+          setSelectedConfigId(configs[0].id);
+        }
+      } catch {
+        setError("Настройки тренировки недоступны. Обновите страницу или обратитесь к администратору.");
+        setTrainingConfigs([]);
+      }
+    };
+    void loadConfigs();
   }, []);
 
   const loading = busyAction !== null;
   const isSending = busyAction === "send";
   const canSend = session?.status === "active" && !loading;
   const voiceDisabled = !session || session.status !== "active" || loading;
-  const factsState = useMemo(() => session?.client_state_public ?? {}, [session]);
+  const factsPanel = useMemo(() => session?.facts_panel ?? { items: [] }, [session]);
   const canShowReportButton = session?.status === "finished" && (report !== null || reportPayload !== null);
+  const activeConfigName = useMemo(() => {
+    if (!session?.training_config_id) return undefined;
+    return trainingConfigs.find((c) => c.id === session.training_config_id)?.name;
+  }, [session?.training_config_id, trainingConfigs]);
 
   const startNewSession = async () => {
     /** Start a new runtime session and clear finished-session UI state before the request. */
+    if (!selectedConfigId) {
+      setError("Выберите сценарий перед началом тренировки.");
+      return;
+    }
     setBusyAction("create");
     setError(null);
     setVoiceError(null);
@@ -91,13 +126,13 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
     setInputValue("");
 
     try {
-      const response = await createSession();
+      const response = await createSession(selectedConfigId);
       setSession(response.session);
-      localStorage.setItem(STORAGE_KEY, response.session.session_id);
+      storeTrainerSessionId(userId, response.session.session_id);
     } catch (startError) {
       setError(getClientErrorMessage(startError));
       setSession(null);
-      localStorage.removeItem(STORAGE_KEY);
+      clearStoredTrainerSessionId(userId);
     } finally {
       setBusyAction(null);
     }
@@ -181,24 +216,41 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
 
   if (!session) {
     return (
-      <section className="client-welcome">
-        <span className="client-kicker">Тренажёр</span>
-        <h1>Начните тренировку</h1>
-        <p>Отрабатывайте discovery-first продажи: роль, текущий процесс, боли, ограничения, критерии решения и следующий шаг.</p>
-        {error ? <div className="client-alert client-alert--error">{error}</div> : null}
-        <button type="button" className="client-button client-button--primary" onClick={startNewSession} disabled={loading}>
-          Начать тренировку
-        </button>
-      </section>
+      <TrainerStartScreen
+        kicker="Тренажёр"
+        title="Начните тренировку продаж"
+        description="Отрабатывайте discovery-first продажи: роль, текущий процесс, боли, ограничения, критерии решения и следующий шаг."
+        hint="Тренировка создаст новую симуляцию клиента и откроет рабочий диалог."
+        buttonLabel="Начать тренировку"
+        onStart={startNewSession}
+        disabled={loading || trainingConfigs.length === 0}
+        variant="runtime"
+        error={error}
+      >
+        {trainingConfigs.length > 0 ? (
+          <div className="trainer-config-select">
+            <label>
+              <span>Сценарий</span>
+              <select
+                value={selectedConfigId ?? ""}
+                onChange={(event) => setSelectedConfigId(event.target.value || null)}
+              >
+                {trainingConfigs.map((config) => (
+                  <option key={config.id} value={config.id}>{config.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
+      </TrainerStartScreen>
     );
   }
 
   return (
     <>
       <main className="client-trainer-layout">
-        <aside className="trainer-side-panels" aria-label="Метрики и факты тренировки">
-          <MetricsPanel session={session} />
-          <FactsPanel state={factsState} />
+        <aside className="trainer-side-panels trainer-side-panels--desktop" aria-label="Метрики и факты тренировки">
+          <TrainerContextPanel session={session} factsPanel={factsPanel} mode="desktop" trainingConfigName={activeConfigName} />
         </aside>
         <section className="trainer-chat-area" aria-label="Диалог тренировки">
           <section className="trainer-chat-panel">
@@ -209,10 +261,10 @@ export function TrainerPage({ onLogout }: TrainerPageProps) {
               onNewSession={startNewSession}
               onOpenReport={() => setReportModalOpen(true)}
               onFinish={handleFinish}
-              onLogout={() => {
-                void onLogout();
-              }}
             />
+            <div className="trainer-context-slot trainer-context-slot--mobile">
+              <TrainerContextPanel session={session} factsPanel={factsPanel} mode="mobile" trainingConfigName={activeConfigName} />
+            </div>
             <div className="trainer-chat-body">
               {error ? <div className="error-banner error-banner--inline">{error}</div> : null}
               <ChatWindow turns={turns} loading={isSending} publicBrief={session.public_brief} />

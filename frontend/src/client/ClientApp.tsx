@@ -33,8 +33,8 @@ export function ClientApp({ user, path, onNavigate, onLogout, onUserUpdated }: C
   return (
     <ClientLayout user={user} path={path} onNavigate={onNavigate} onLogout={onLogout}>
       {route.route === "dashboard" ? <DashboardPage user={user} onNavigate={onNavigate} /> : null}
-      {route.route === "trainer" ? <TrainerPage onLogout={onLogout} /> : null}
-      {route.route === "history" ? <HistoryPage onNavigate={onNavigate} /> : null}
+      {route.route === "trainer" ? <TrainerPage userId={user.id} /> : null}
+      {route.route === "history" ? <HistoryPage key={path} path={path} onNavigate={onNavigate} /> : null}
       {route.route === "history-detail" ? <HistoryPage sessionId={route.sessionId} onNavigate={onNavigate} /> : null}
       {route.route === "analytics" ? <AnalyticsPage /> : null}
       {route.route === "team" ? <TeamPage onNavigate={onNavigate} /> : null}

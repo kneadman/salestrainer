@@ -18,6 +18,7 @@ from app.domain.errors import (
 )
 from app.domain.interest import apply_interest_delta, interest_band
 from app.domain.models import LLMTurnInput, MessageSubmissionRecord, TrainingSessionState, Turn
+from app.domain.public_facts import append_revealed_facts
 from app.domain.scenarios import get_scenario
 from app.domain.stages import resolve_next_stage
 from app.domain.state_update import apply_state_patch
@@ -79,6 +80,10 @@ class TurnService:
                 "interest_band": interest_band(session.interest_score),
                 "stage": session.stage,
                 "client_state": session.client_state.model_dump(mode="json"),
+                "revealed_facts": [
+                    fact.model_dump(mode="json")
+                    for fact in session.client_state.revealed_facts
+                ],
             },
             discovered_facts={
                 "role": session.client_state.discovered_role,
@@ -99,6 +104,11 @@ class TurnService:
         llm_response = self._llm_client.generate_client_turn(llm_input)
         response_dump = llm_response.model_dump(mode="json")
         updated_client_state = apply_state_patch(session.client_state, llm_response.state_patch)
+        updated_client_state.revealed_facts = append_revealed_facts(
+            updated_client_state.revealed_facts,
+            llm_response.revealed_facts,
+            turn_index=session.turn_count + 1,
+        )
         interest_after = apply_interest_delta(session.interest_score, llm_response.interest_delta)
         resolved_stage = resolve_next_stage(
             stage_before,
@@ -118,7 +128,7 @@ class TurnService:
             stage_after=resolved_stage,
             created_at=now,
         )
-        full_turns = [*session.turns, turn]
+        runtime_turns = [*session.turns, turn][-self._recent_turn_limit :]
         recent_turns = [*session.recent_turns, turn][-self._recent_turn_limit :]
         overflow_turns = [*session.recent_turns, turn][:-self._recent_turn_limit]
         evaluation = evaluate_turn(
@@ -130,8 +140,8 @@ class TurnService:
         session.interest_score = interest_after
         session.stage = resolved_stage
         session.client_state = updated_client_state
-        session.turns = full_turns
-        session.turn_evaluations = [*session.turn_evaluations, evaluation]
+        session.turns = runtime_turns
+        session.turn_evaluations = [*session.turn_evaluations, evaluation][-self._recent_turn_limit :]
         session.recent_turns = recent_turns
         session.turn_count += 1
         session.state_version = expected_version + 1

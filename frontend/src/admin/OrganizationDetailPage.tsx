@@ -1,39 +1,29 @@
 import { FormEvent, useEffect, useState } from "react";
-import { auditActionLabel, auditEntityLabel, metricNameLabel, roleLabel, scenarioLabel, statusLabel as entityStatusLabel } from "../labels";
+import { buildOrganizationViewModel } from "../viewModels";
 import {
-  assignTrainingConfig,
   createTrainingConfig,
   createUser,
   disableTrainingConfig,
   disableUser,
   enableTrainingConfig,
   enableUser,
-  getUsageSummary,
-  listAuditLog,
-  listOrganizationHistory,
-  listOrganizations,
-  listTrainingConfigs,
-  listUserTrainingConfigs,
-  listUsers,
-  makeDefaultTrainingConfig,
   resetUserPassword,
-  unassignTrainingConfig,
   updateTrainingConfig,
   updateUser,
 } from "./api";
-import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
-import { SeedConfigForm } from "./components/SeedConfigForm";
-import type {
-  AuditLogDTO,
-  HistorySessionSummaryDTO,
-  OrganizationDetailTab,
-  OrganizationDTO,
-  TrainingConfigDTO,
-  UsageSummaryDTO,
-  UserDTO,
-  UserTrainingConfigAssignmentDTO,
-} from "./types";
-import { compactJson, formatDate, getErrorMessage, statusLabel } from "./utils";
+import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
+import {
+  DEFAULT_CONFIG_FORM,
+  OrganizationAuditTab,
+  OrganizationHistoryTab,
+  OrganizationOverviewTab,
+  OrganizationTrainingConfigsTab,
+  OrganizationUsageTab,
+  OrganizationUsersTab,
+  useOrganizationDetail,
+} from "./organizationDetail";
+import type { OrganizationDetailTab, TrainingConfigDTO, UserDTO } from "./types";
+import { getErrorMessage } from "./utils";
 
 type OrganizationDetailPageProps = {
   organizationId: string;
@@ -45,6 +35,7 @@ type UserForm = {
   email: string;
   password: string;
   role: "client_lead" | "client_manager";
+  default_training_config_id: string | null;
 };
 
 type ConfigForm = {
@@ -53,13 +44,6 @@ type ConfigForm = {
   persona_generation_context: string;
   seed_config: import("./types").SeedConfig | null;
   use_seed: boolean;
-};
-
-const DEFAULT_CONFIG_FORM: ConfigForm = {
-  name: "",
-  persona_generation_context: "",
-  seed_config: null,
-  use_seed: true,
 };
 
 const TAB_LABELS: Record<OrganizationDetailTab, string> = {
@@ -74,144 +58,95 @@ const TAB_LABELS: Record<OrganizationDetailTab, string> = {
 export function OrganizationDetailPage({ organizationId, initialTab, onNavigate }: OrganizationDetailPageProps) {
   /** Render one organization workspace with users, training configs, history, usage, and audit sections. */
   const [activeTab, setActiveTab] = useState<OrganizationDetailTab>(initialTab ?? "overview");
-  const [organization, setOrganization] = useState<OrganizationDTO | null>(null);
-  const [users, setUsers] = useState<UserDTO[]>([]);
-  const [configs, setConfigs] = useState<TrainingConfigDTO[]>([]);
-  const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
-  const [usage, setUsage] = useState<UsageSummaryDTO | null>(null);
-  const [audit, setAudit] = useState<AuditLogDTO[]>([]);
-  const [assignmentsByUser, setAssignmentsByUser] = useState<Record<string, UserTrainingConfigAssignmentDTO[]>>({});
-  const [loading, setLoading] = useState(true);
+  const { organization, users, configs, history, usage, audit, loading, error, reload } =
+    useOrganizationDetail(organizationId);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [userForm, setUserForm] = useState<UserForm>({ email: "", password: "", role: "client_manager" });
+  const [userForm, setUserForm] = useState<UserForm>({
+    email: "",
+    password: "",
+    role: "client_manager",
+    default_training_config_id: null,
+  });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [resetPasswordByUser, setResetPasswordByUser] = useState<Record<string, string>>({});
   const [configForm, setConfigForm] = useState<ConfigForm>(DEFAULT_CONFIG_FORM);
-
-  const loadAll = async () => {
-    /** Load all organization detail data from internal admin endpoints. */
-    setLoading(true);
-    setError(null);
-    try {
-      const orgs = await listOrganizations();
-      const selectedOrg = orgs.find((item) => item.id === organizationId) ?? null;
-      setOrganization(selectedOrg);
-      if (!selectedOrg) {
-        throw new Error("Организация не найдена.");
-      }
-      const [loadedUsers, loadedConfigs, loadedHistory, loadedUsage, loadedAudit] = await Promise.all([
-        listUsers(organizationId),
-        listTrainingConfigs(organizationId),
-        listOrganizationHistory(organizationId, { limit: 50, offset: 0 }).catch(() => []),
-        getUsageSummary(organizationId).catch(() => null),
-        listAuditLog({ organization_id: organizationId, limit: 50, offset: 0 }).catch(() => []),
-      ]);
-      setUsers(loadedUsers);
-      setConfigs(loadedConfigs);
-      setHistory(loadedHistory);
-      setUsage(loadedUsage);
-      setAudit(loadedAudit);
-      const assignmentEntries = await Promise.all(
-        loadedUsers.map(async (user) => [user.id, await listUserTrainingConfigs(user.id).catch(() => [])] as const),
-      );
-      setAssignmentsByUser(Object.fromEntries(assignmentEntries));
-    } catch (loadError) {
-      setError(getErrorMessage(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    /** Refresh detail data when the organization id changes. */
-    void loadAll();
-  }, [organizationId]);
 
   useEffect(() => {
     /** Sync requested tab from the route when organization detail opens or changes. */
     setActiveTab(initialTab ?? "overview");
   }, [organizationId, initialTab]);
 
-  const submitUser = async (event: FormEvent<HTMLFormElement>) => {
-    /** Create or update a client user without allowing internal_admin role creation. */
-    event.preventDefault();
+  const withBusy = async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
     setBusy(true);
-    setError(null);
+    setActionError(null);
     setSuccess(null);
     try {
-      if (editingUserId) {
-        await updateUser(editingUserId, { email: userForm.email, role: userForm.role });
-        setSuccess("Пользователь обновлён.");
-      } else {
-        await createUser(organizationId, userForm);
-        setSuccess("Пользователь создан.");
-      }
-      setUserForm({ email: "", password: "", role: "client_manager" });
-      setEditingUserId(null);
-      await loadAll();
-    } catch (submitError) {
-      setError(getErrorMessage(submitError));
+      const result = await operation();
+      return result;
+    } catch (err) {
+      setActionError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
   };
 
+  const submitUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await withBusy(async () => {
+      if (editingUserId) {
+        await updateUser(editingUserId, {
+          email: userForm.email,
+          role: userForm.role,
+          default_training_config_id: userForm.default_training_config_id,
+        });
+        setSuccess("Пользователь обновлён.");
+      } else {
+        await createUser(organizationId, { email: userForm.email, password: userForm.password, role: userForm.role });
+        setSuccess("Пользователь создан.");
+      }
+      setUserForm({ email: "", password: "", role: "client_manager", default_training_config_id: null });
+      setEditingUserId(null);
+      await reload();
+    });
+  };
+
   const toggleUser = async (user: UserDTO) => {
-    /** Enable or disable one client user after confirmation for disable. */
     if (user.is_active && !window.confirm(`Отключить пользователя ${user.email}?`)) {
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
+    await withBusy(async () => {
       if (user.is_active) {
         await disableUser(user.id);
       } else {
         await enableUser(user.id);
       }
       setSuccess(user.is_active ? "Пользователь отключён." : "Пользователь включён.");
-      await loadAll();
-    } catch (toggleError) {
-      setError(getErrorMessage(toggleError));
-    } finally {
-      setBusy(false);
-    }
+      await reload();
+    });
   };
 
   const resetPassword = async (user: UserDTO) => {
-    /** Reset a user password and clear the local password field afterwards. */
     const password = resetPasswordByUser[user.id] ?? "";
     if (!password || !window.confirm(`Сбросить пароль для ${user.email}?`)) {
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
+    await withBusy(async () => {
       await resetUserPassword(user.id, password);
       setResetPasswordByUser({ ...resetPasswordByUser, [user.id]: "" });
       setSuccess("Пароль сброшен.");
-      await loadAll();
-    } catch (resetError) {
-      setError(getErrorMessage(resetError));
-    } finally {
-      setBusy(false);
-    }
+      await reload();
+    });
   };
 
   const submitConfig = async (event: FormEvent<HTMLFormElement>) => {
-    /** Create or update the visible training config fields. */
     event.preventDefault();
-    setBusy(true);
-    setError(null);
-    setSuccess(null);
-    try {
+    await withBusy(async () => {
       const payload = configForm.use_seed
         ? {
             name: configForm.name,
             seed_config: configForm.seed_config,
-            persona_generation_context: "",
           }
         : {
             name: configForm.name,
@@ -225,58 +160,23 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
         setSuccess("Настройка тренировки создана.");
       }
       setConfigForm(DEFAULT_CONFIG_FORM);
-      await loadAll();
-    } catch (submitError) {
-      setError(getErrorMessage(submitError));
-    } finally {
-      setBusy(false);
-    }
+      await reload();
+    });
   };
 
   const toggleConfig = async (config: TrainingConfigDTO) => {
-    /** Enable or disable one training config after confirmation for disable. */
     if (config.is_active && !window.confirm(`Отключить настройку тренировки ${config.name}?`)) {
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
+    await withBusy(async () => {
       if (config.is_active) {
         await disableTrainingConfig(config.id);
       } else {
         await enableTrainingConfig(config.id);
       }
       setSuccess(config.is_active ? "Настройка тренировки отключена." : "Настройка тренировки включена.");
-      await loadAll();
-    } catch (toggleError) {
-      setError(getErrorMessage(toggleError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleAssignment = async (userId: string, configId: string, action: "assign" | "default" | "unassign") => {
-    /** Run one training config assignment action for a user. */
-    if (action === "unassign" && !window.confirm("Убрать этот конфиг у пользователя?")) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      if (action === "assign") {
-        await assignTrainingConfig(userId, configId);
-      } else if (action === "default") {
-        await makeDefaultTrainingConfig(userId, configId);
-      } else {
-        await unassignTrainingConfig(userId, configId);
-      }
-      setSuccess("Назначение обновлено.");
-      await loadAll();
-    } catch (assignmentError) {
-      setError(getErrorMessage(assignmentError));
-    } finally {
-      setBusy(false);
-    }
+      await reload();
+    });
   };
 
   if (loading) {
@@ -291,6 +191,8 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
     return <EmptyState title="Организация не найдена" />;
   }
 
+  const vm = buildOrganizationViewModel(organization);
+
   return (
     <div className="admin-page">
       <div className="admin-page__header">
@@ -300,28 +202,30 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
           </button>
           <h1>{organization.name}</h1>
           <p className="admin-muted">
-            {organization.slug} · создана {formatDate(organization.created_at)} · обновлена {formatDate(organization.updated_at)}
+            {vm.slug} · создана {vm.createdAtLabel} · обновлена {vm.updatedAtLabel}
           </p>
         </div>
-        <Badge tone={organization.is_active ? "good" : "danger"}>{entityStatusLabel(organization.is_active)}</Badge>
+        <Badge tone={vm.statusTone}>{vm.statusLabel}</Badge>
       </div>
-      {error ? <div className="admin-alert admin-alert--error">{error}</div> : null}
+      {actionError ? <div className="admin-alert admin-alert--error">{actionError}</div> : null}
       {success ? <div className="admin-alert">{success}</div> : null}
       <div className="admin-tabs">
         {(["overview", "users", "configs", "history", "usage", "audit"] as OrganizationDetailTab[]).map((tab) => (
-          <button key={tab} type="button" className={activeTab === tab ? "admin-tab admin-tab--active" : "admin-tab"} onClick={() => setActiveTab(tab)}>
+          <button
+            key={tab}
+            type="button"
+            className={activeTab === tab ? "admin-tab admin-tab--active" : "admin-tab"}
+            onClick={() => setActiveTab(tab)}
+          >
             {TAB_LABELS[tab]}
           </button>
         ))}
       </div>
-      {activeTab === "overview" ? (
-        <OverviewSection organization={organization} usage={usage} />
-      ) : null}
+      {activeTab === "overview" ? <OrganizationOverviewTab organization={organization} usage={usage} /> : null}
       {activeTab === "users" ? (
-        <UsersSection
+        <OrganizationUsersTab
           users={users}
           configs={configs}
-          assignmentsByUser={assignmentsByUser}
           userForm={userForm}
           setUserForm={setUserForm}
           editingUserId={editingUserId}
@@ -332,12 +236,11 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
           onSubmit={submitUser}
           onToggle={toggleUser}
           onReset={resetPassword}
-          onAssignment={handleAssignment}
           onOpenAnalytics={(userId) => onNavigate(`/admin/organizations/${organizationId}/users/${userId}/analytics`)}
         />
       ) : null}
       {activeTab === "configs" ? (
-        <ConfigsSection
+        <OrganizationTrainingConfigsTab
           configs={configs}
           form={configForm}
           setForm={setConfigForm}
@@ -346,285 +249,9 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
           onToggle={toggleConfig}
         />
       ) : null}
-      {activeTab === "history" ? <HistorySection history={history} onNavigate={onNavigate} /> : null}
-      {activeTab === "usage" ? <UsageSection usage={usage} /> : null}
-      {activeTab === "audit" ? <AuditSection audit={audit} /> : null}
+      {activeTab === "history" ? <OrganizationHistoryTab history={history} onNavigate={onNavigate} /> : null}
+      {activeTab === "usage" ? <OrganizationUsageTab usage={usage} /> : null}
+      {activeTab === "audit" ? <OrganizationAuditTab audit={audit} /> : null}
     </div>
-  );
-}
-
-function OverviewSection({ organization, usage }: { organization: OrganizationDTO; usage: UsageSummaryDTO | null }) {
-  /** Render organization summary cards and a product-level training architecture note. */
-  return (
-    <>
-      <section className="admin-stats-grid">
-        <StatCard label="Пользователи" value={organization.users_count} detail={`${organization.active_users_count} активны`} />
-        <StatCard label="Настройки тренировок" value={organization.training_configs_count} />
-        <StatCard label="Всего сессий" value={usage?.total_sessions ?? "—"} />
-        <StatCard label="Завершено сессий" value={usage?.finished_sessions ?? "—"} />
-        <StatCard label="Всего сообщений" value={usage?.total_turns ?? "—"} />
-      </section>
-      <section className="admin-panel">
-        <div className="admin-panel__header"><h2>Как устроена тренировка</h2></div>
-        <p className="admin-muted">
-          Организация задаёт бизнес-контекст и сценарий. Диалог, оценка и история работают через защищённые серверные
-          контракты, поэтому скрытая персона и служебные данные не попадают в клиентский кабинет.
-        </p>
-      </section>
-    </>
-  );
-}
-
-function UsersSection(props: {
-  users: UserDTO[];
-  configs: TrainingConfigDTO[];
-  assignmentsByUser: Record<string, UserTrainingConfigAssignmentDTO[]>;
-  userForm: UserForm;
-  setUserForm: (form: UserForm) => void;
-  editingUserId: string | null;
-  setEditingUserId: (id: string | null) => void;
-  resetPasswordByUser: Record<string, string>;
-  setResetPasswordByUser: (value: Record<string, string>) => void;
-  busy: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onToggle: (user: UserDTO) => void;
-  onReset: (user: UserDTO) => void;
-  onAssignment: (userId: string, configId: string, action: "assign" | "default" | "unassign") => void;
-  onOpenAnalytics: (userId: string) => void;
-}) {
-  /** Render user form, assignments, and reset-password actions. */
-  return (
-    <section className="admin-panel">
-      <div className="admin-panel__header"><h2>Пользователи</h2></div>
-      <form className="admin-form admin-form--stacked" onSubmit={props.onSubmit}>
-        <div className="admin-form-grid">
-          <label><span>Email</span><input type="email" value={props.userForm.email} onChange={(event) => props.setUserForm({ ...props.userForm, email: event.target.value })} required /></label>
-          <label><span>Пароль</span><input type="password" minLength={8} value={props.userForm.password} onChange={(event) => props.setUserForm({ ...props.userForm, password: event.target.value })} required={!props.editingUserId} /></label>
-          <label><span>Роль</span><select value={props.userForm.role} onChange={(event) => props.setUserForm({ ...props.userForm, role: event.target.value as UserForm["role"] })}><option value="client_manager">Менеджер</option><option value="client_lead">Руководитель</option></select></label>
-        </div>
-        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.editingUserId ? "Обновить пользователя" : "Создать пользователя"}</button>
-      </form>
-      {props.users.length === 0 ? <EmptyState title="Пользователей нет" /> : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Конфиги</th><th>Пароль</th><th>Действия</th></tr></thead>
-            <tbody>
-              {props.users.map((user) => {
-                const assignments = props.assignmentsByUser[user.id] ?? [];
-                return (
-                  <tr key={user.id}>
-                    <td>{user.email}</td>
-                    <td>{roleLabel(user.role)}</td>
-                    <td><Badge tone={user.is_active ? "good" : "danger"}>{statusLabel(user.is_active)}</Badge></td>
-                    <td>
-                      <div className="admin-assignment-list">
-                        {props.configs.map((config) => {
-                          const assigned = assignments.find((item) => item.training_config_id === config.id);
-                          return (
-                            <div key={config.id}>
-                              <span>{config.name}</span>
-                              {assigned?.is_default ? <Badge tone="good">по умолчанию</Badge> : null}
-                              <button type="button" className="admin-link-button" onClick={() => props.onAssignment(user.id, config.id, assigned ? "default" : "assign")}>
-                                {assigned ? "По умолчанию" : "Назначить"}
-                              </button>
-                              {assigned ? <button type="button" className="admin-link-button" onClick={() => props.onAssignment(user.id, config.id, "unassign")}>Убрать</button> : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-password-reset">
-                        <input
-                          type="password"
-                          placeholder="Новый временный пароль"
-                          minLength={8}
-                          value={props.resetPasswordByUser[user.id] ?? ""}
-                          onChange={(event) => props.setResetPasswordByUser({ ...props.resetPasswordByUser, [user.id]: event.target.value })}
-                        />
-                        <button type="button" className="admin-link-button" onClick={() => props.onReset(user)}>Сбросить</button>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-row-actions">
-                        <button type="button" className="admin-link-button" onClick={() => props.onOpenAnalytics(user.id)}>Аналитика</button>
-                        <button type="button" className="admin-link-button" onClick={() => {
-                          props.setEditingUserId(user.id);
-                          props.setUserForm({ email: user.email, password: "", role: user.role === "client_lead" ? "client_lead" : "client_manager" });
-                        }}>Изменить</button>
-                        <button type="button" className="admin-link-button" onClick={() => props.onToggle(user)}>{user.is_active ? "Отключить" : "Включить"}</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ConfigsSection(props: {
-  configs: TrainingConfigDTO[];
-  form: ConfigForm;
-  setForm: (form: ConfigForm) => void;
-  busy: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onToggle: (config: TrainingConfigDTO) => void;
-}) {
-  /** Render training config form with seed/legacy toggle and config list. */
-  return (
-    <section className="admin-panel">
-      <div className="admin-panel__header"><h2>Настройки тренировок</h2></div>
-      <form className="admin-form admin-form--stacked" onSubmit={props.onSubmit}>
-        <div className="admin-form-grid">
-          <label><span>Название</span><input value={props.form.name} onChange={(event) => props.setForm({ ...props.form, name: event.target.value })} required /></label>
-        </div>
-        <div className="admin-form-grid" style={{ marginTop: 12 }}>
-          <label>
-            <span>Режим генерации</span>
-            <select
-              value={props.form.use_seed ? "seed" : "legacy"}
-              onChange={(e) => props.setForm({ ...props.form, use_seed: e.target.value === "seed" })}
-            >
-              <option value="seed">Структурированный seed</option>
-              <option value="legacy">Свободный текст (legacy)</option>
-            </select>
-          </label>
-        </div>
-        {props.form.use_seed ? (
-          <SeedConfigForm
-            seedConfig={props.form.seed_config}
-            onChange={(seed) => props.setForm({ ...props.form, seed_config: seed })}
-          />
-        ) : (
-          <label>
-            <span>Контекст генерации личности</span>
-            <textarea
-              rows={8}
-              value={props.form.persona_generation_context}
-              onChange={(event) => props.setForm({ ...props.form, persona_generation_context: event.target.value })}
-            />
-            <small className="admin-muted">
-              Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения.
-            </small>
-          </label>
-        )}
-        <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>{props.form.id ? "Обновить настройку" : "Создать настройку"}</button>
-      </form>
-      {props.configs.length === 0 ? <EmptyState title="Настроек тренировок нет" /> : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead><tr><th>Название</th><th>Тип</th><th>Статус</th><th>Действия</th></tr></thead>
-            <tbody>
-              {props.configs.map((config) => (
-                <tr key={config.id}>
-                  <td>{config.name}</td>
-                  <td>
-                    {config.seed_config ? (
-                      <Badge tone="good">Seed</Badge>
-                    ) : (
-                      <Badge tone="neutral">Legacy text</Badge>
-                    )}
-                  </td>
-                  <td><Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge></td>
-                  <td>
-                    <div className="admin-row-actions">
-                      <button
-                        type="button"
-                        className="admin-link-button"
-                        onClick={() => props.setForm({
-                          id: config.id,
-                          name: config.name,
-                          persona_generation_context: config.persona_generation_context,
-                          seed_config: config.seed_config,
-                          use_seed: !!config.seed_config,
-                        })}
-                      >
-                        Изменить
-                      </button>
-                      <button type="button" className="admin-link-button" onClick={() => props.onToggle(config)}>{config.is_active ? "Отключить" : "Включить"}</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function HistorySection({ history, onNavigate }: { history: HistorySessionSummaryDTO[]; onNavigate: (path: string) => void }) {
-  /** Render persistent training history rows without hidden snapshots. */
-  if (history.length === 0) {
-    return <EmptyState title="История тренировок пуста" detail="История появится после первых сохранённых тренировок." />;
-  }
-  return <section className="admin-panel"><div className="admin-panel__header"><h2>История тренировок</h2></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>ID сессии</th><th>Пользователь</th><th>Статус</th><th>Сценарий</th><th>Сообщения</th><th>Интерес</th><th>Начало</th><th>Действия</th></tr></thead><tbody>{history.map((session) => <tr key={session.session_id}><td>{session.session_id.slice(0, 8)}</td><td>{session.user_email}</td><td><Badge>{entityStatusLabel(session.status)}</Badge></td><td>{scenarioLabel(session.scenario_id)}</td><td>{session.turn_count}</td><td>{session.final_interest_score ?? "—"}</td><td>{formatDate(session.started_at)}</td><td><button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/history/sessions/${session.session_id}`)}>Открыть</button></td></tr>)}</tbody></table></div></section>;
-}
-
-function UsageSection({ usage }: { usage: UsageSummaryDTO | null }) {
-  /** Render basic usage analytics from the persistent history summary endpoint. */
-  if (!usage) {
-    return <EmptyState title="Сводка использования недоступна" detail="Сервис не вернул сводку использования для этой организации." />;
-  }
-  return (
-    <section className="admin-panel">
-      <div className="admin-panel__header"><h2>Аналитика использования</h2></div>
-      <div className="admin-stats-grid">
-        <StatCard label="Всего сессий" value={usage.total_sessions} />
-        <StatCard label="Завершено" value={usage.finished_sessions} />
-        <StatCard label="Активно" value={usage.active_sessions} />
-        <StatCard label="Уникальные пользователи" value={usage.unique_users} />
-        <StatCard label="Всего сообщений" value={usage.total_turns} />
-        <StatCard label="Средний интерес" value={usage.avg_final_interest_score ?? "—"} />
-        <StatCard label="Среднее число ходов" value={usage.avg_turn_count ?? "—"} />
-        <StatCard label="События использования" value={usage.usage_events_count} />
-      </div>
-      <details className="admin-technical-details">
-        <summary>Показать технические данные</summary>
-        <pre className="admin-json-block">{compactJson({
-          [metricNameLabel("sessions_by_status")]: usage.sessions_by_status,
-          [metricNameLabel("sessions_by_scenario")]: usage.sessions_by_scenario,
-          [metricNameLabel("sessions_by_training_config")]: usage.sessions_by_training_config,
-        })}</pre>
-      </details>
-    </section>
-  );
-}
-
-function AuditSection({ audit }: { audit: AuditLogDTO[] }) {
-  /** Render organization-scoped audit events with compact JSON payloads. */
-  if (audit.length === 0) {
-    return <EmptyState title="Событий аудита нет" />;
-  }
-  return (
-    <section className="admin-panel">
-      <div className="admin-panel__header"><h2>Аудит</h2></div>
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead><tr><th>Время</th><th>Действие</th><th>Сущность</th><th>Автор</th><th>Данные</th></tr></thead>
-          <tbody>
-            {audit.map((event) => (
-              <tr key={event.id}>
-                <td>{formatDate(event.created_at)}</td>
-                <td>{auditActionLabel(event.action)}</td>
-                <td>{auditEntityLabel(event.entity_type)}</td>
-                <td>{event.actor_user_id ? "Администратор" : "Система"}</td>
-                <td>
-                  <details className="admin-technical-details">
-                    <summary>Показать</summary>
-                    <pre className="admin-json-cell">{compactJson({ id: event.actor_user_id, payload: event.payload })}</pre>
-                  </details>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }

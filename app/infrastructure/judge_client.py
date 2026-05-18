@@ -26,8 +26,8 @@ from app.infrastructure.llm_client import (
     _payload_size,
     _response_to_payload,
     _sanitize_api_key,
-    _should_allow_fake_fallback,
 )
+from app.infrastructure.config import is_fake_fallback_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -424,7 +424,7 @@ class FakeJudgeClient:
     ) -> str:
         """Produce a stable final verdict string."""
         return (
-            f"Детерминированный итог fake judge: уровень «{overall_grade}», оценка {overall_score}/100, "
+            f"Итоговая оценка: уровень «{overall_grade}», оценка {overall_score}/100, "
             f"финальный этап «{payload.final_stage}», обработано ходов: {payload.turn_count}."
         )
 
@@ -650,7 +650,7 @@ def build_judge_client(settings: Settings) -> JudgeClient:
         folder_id = settings.yandex_judge_folder_id or settings.yandex_folder_id
         agent_id = settings.yandex_judge_agent_id or settings.yandex_agent_id
         if not all([settings.yandex_api_key, folder_id, agent_id]):
-            if _should_allow_fake_fallback(settings):
+            if is_fake_fallback_allowed(settings):
                 logger.warning("judge_backend_incomplete_config backend=%s fallback=fake", backend)
                 return FakeJudgeClient()
             raise LLMProviderConfigurationError(
@@ -664,10 +664,10 @@ def build_judge_client(settings: Settings) -> JudgeClient:
             agent_id=agent_id,
             timeout_seconds=settings.llm_request_timeout_seconds,
             max_retries=1,
-            fallback_client=FakeJudgeClient() if _should_allow_fake_fallback(settings) else None,
+            fallback_client=FakeJudgeClient() if is_fake_fallback_allowed(settings) else None,
             debug_payload_logging=settings.debug_llm_payload,
         )
-    if _should_allow_fake_fallback(settings):
+    if is_fake_fallback_allowed(settings):
         logger.warning("judge_backend_unknown backend=%s fallback=fake", settings.llm_backend)
         return FakeJudgeClient()
     raise LLMProviderConfigurationError(

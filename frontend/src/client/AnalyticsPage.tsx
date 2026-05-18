@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { getMyAnalytics } from "./api";
 import { ClientState, SimpleBars } from "./components/ClientPrimitives";
 import type { ClientUserAnalyticsDTO, MetricTrendDTO } from "./types";
+import { buildClientAnalyticsViewModel } from "../viewModels";
 import { scenarioLabel, statusLabel } from "../labels";
-import { formatClientDate, getClientErrorMessage, percent } from "./utils";
+import { getClientErrorMessage } from "./utils";
 
 type AnalyticsCardProps = {
   label: string;
@@ -44,6 +45,9 @@ export function AnalyticsPage() {
   if (!analytics || analytics.total_sessions === 0) {
     return <ClientState title="Аналитика появится после первых тренировок." />;
   }
+
+  const vm = buildClientAnalyticsViewModel(analytics);
+
   return (
     <div className="client-page">
       <div className="client-page__header">
@@ -66,22 +70,22 @@ export function AnalyticsPage() {
         />
         <AnalyticsBentoCard
           label="Доля завершённых"
-          value={percent(analytics.completion_rate)}
+          value={vm.completionRateLabel}
           trend={analytics.trends_7d.completion_rate}
         />
         <AnalyticsBentoCard
           label="Средний интерес"
-          value={formatMetricValue(analytics.avg_final_interest_score)}
+          value={vm.avgFinalInterestScore}
           trend={analytics.trends_7d.avg_final_interest_score}
         />
         <AnalyticsBentoCard
           label="Среднее число ходов"
-          value={formatMetricValue(analytics.avg_turn_count)}
+          value={vm.avgTurnCount}
           trend={analytics.trends_7d.avg_turn_count}
         />
         <AnalyticsBentoCard
           label="Средняя оценка тренировки"
-          value={formatMetricValue(analytics.avg_judgement_score)}
+          value={vm.avgJudgementScore}
           trend={analytics.trends_7d.avg_judgement_score}
         />
         <AnalyticsBentoCard
@@ -90,13 +94,32 @@ export function AnalyticsPage() {
           trend={analytics.trends_7d.sessions_with_judgement}
         />
         <AnalyticsBentoCard
+          label="Сильнейший навык"
+          value={vm.strongestSkillTitle}
+          footer={vm.strongestSkillDetail}
+          hideDelta
+          wide
+        />
+        <AnalyticsBentoCard
+          label="Зона роста"
+          value={vm.weakestSkillTitle}
+          footer={vm.weakestSkillDetail}
+          hideDelta
+          wide
+        />
+        <AnalyticsBentoCard
           label="Последняя активность"
-          value={formatClientDate(analytics.last_activity_at)}
+          value={vm.lastActivityAtLabel}
           footer="последнее действие"
           hideDelta
           wide
         />
       </section>
+      {analytics.sessions_with_judgement === 0 && (
+        <section className="client-panel">
+          <p className="client-muted">Структурные оценки и навыки появятся после завершённых тренировок с отчётом.</p>
+        </section>
+      )}
       <section className="client-panel">
         <h2>По статусам</h2>
         <SimpleBars values={analytics.sessions_by_status} labelFormatter={statusLabel} />
@@ -130,11 +153,6 @@ function AnalyticsBentoCard({ label, value, trend, wide = false, accent = false,
       </div>
     </section>
   );
-}
-
-function formatMetricValue(value: number | null): string {
-  /** Keep compact one-decimal formatting for average metrics and a clear dash for nulls. */
-  return value === null ? "—" : value.toFixed(1);
 }
 
 function trendWindowLabel(trend: MetricTrendDTO | undefined): string {

@@ -5,6 +5,7 @@ import pytest
 from app.domain.errors import LLMProviderConfigurationError
 from app.domain.judgement_models import JudgeSessionInput, JudgeSessionOutput
 from app.domain.models import ClientState, PersonaProfile, Scenario, TurnEvaluation
+from tests.unit._persona_fixtures import valid_minimal_persona
 from app.infrastructure.config import Settings
 from app.infrastructure.judge_client import (
     FakeJudgeClient,
@@ -45,14 +46,9 @@ def _build_payload(*, heuristic: bool = True) -> JudgeSessionInput:
             success_condition="Earn a relevant next step.",
             failure_condition="Pitch too early.",
         ),
-        persona=PersonaProfile(
+        persona=valid_minimal_persona(
             id="persona-1",
             display_name="Owner",
-            role="owner",
-            industry="b2b",
-            company_size="30-100",
-            authority_level="final_decider",
-            behavior_model="skeptical_but_rational",
         ),
         final_client_state=ClientState(
             tone="interested",
@@ -198,9 +194,24 @@ def test_fake_judge_client_uses_russian_user_facing_text() -> None:
     """Fake judge text should stay Russian for the default Russian runtime contract."""
     result = FakeJudgeClient().judge_session(_build_payload())
 
+    combined_text = " ".join(
+        [
+            result.outcome,
+            result.executive_summary,
+            result.final_verdict,
+            *[block.title for block in result.bento_blocks],
+            *[block.short_text for block in result.bento_blocks],
+            *[block.detail for block in result.bento_blocks],
+        ]
+    ).lower()
+
     assert result.bento_blocks[0].title == "Итог сессии"
     assert "Сессия завершилась" in result.outcome
-    assert "Детерминированный итог fake judge" in result.final_verdict
+    assert "Итоговая оценка" in result.final_verdict
+    assert "fake judge" not in combined_text
+    assert "fake" not in combined_text
+    assert "заглуш" not in combined_text
+    assert "детерминирован" not in combined_text
 
 
 def test_parse_judge_session_output_accepts_direct_output_dict() -> None:
@@ -355,6 +366,21 @@ def test_build_judge_client_uses_judge_specific_folder_and_agent_ids() -> None:
     assert client._agent_id == "judge-agent"
 
 
+def test_build_judge_client_allows_fake_fallback_for_incomplete_yandex_in_local_when_flag_is_true() -> None:
+    client = build_judge_client(
+        Settings(
+            app_env="local",
+            llm_backend="yandex_compatible",
+            allow_fake_llm_fallback=True,
+            yandex_api_key="",
+            yandex_judge_folder_id="judge-folder",
+            yandex_judge_agent_id="judge-agent",
+        )
+    )
+
+    assert isinstance(client, FakeJudgeClient)
+
+
 def test_validate_judge_output_accepts_valid_indexes() -> None:
     """Post-validation should accept evidence indexes that point to existing 1-based turns."""
     payload = _build_payload()
@@ -440,13 +466,24 @@ def test_build_judge_client_raises_for_incomplete_yandex_config_when_fallback_di
         build_judge_client(
             Settings(
                 llm_backend="yandex_compatible",
-                app_env="prod",
+                app_env="production",
                 allow_fake_llm_fallback=False,
                 yandex_api_key="secret-key-value",
                 yandex_folder_id="",
                 yandex_agent_id="",
                 yandex_judge_folder_id="judge-folder",
                 yandex_judge_agent_id="",
+            )
+        )
+
+
+def test_build_judge_client_raises_for_unknown_backend_in_production_even_when_flag_is_true() -> None:
+    with pytest.raises(LLMProviderConfigurationError):
+        build_judge_client(
+            Settings(
+                app_env="production",
+                llm_backend="unknown-provider",
+                allow_fake_llm_fallback=True,
             )
         )
 

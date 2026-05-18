@@ -16,6 +16,20 @@ class AccessService:
             raise LookupError(f"Default training config for user '{user_id}' was not found.")
         return training_config
 
+    def get_training_config_by_id(self, config_id: UUID) -> RuntimeTrainingConfig | None:
+        config = self._repository.get_training_config_by_id(config_id)
+        if config is None:
+            return None
+        return RuntimeTrainingConfig.model_validate(
+            {
+                "id": config.id,
+                "client_account_id": config.client_account_id,
+                "name": config.name,
+                "persona_generation_context": config.persona_generation_context,
+                "is_active": config.is_active,
+            }
+        )
+
     def bind_session_to_user(
         self,
         session_id: UUID,

@@ -163,3 +163,4 @@ class RuntimeTrainingConfig(BaseModel):
     name: str
     persona_generation_context: str = ""
     seed_config: dict | None = None
+    is_active: bool = True

@@ -83,7 +83,7 @@ def test_persona_generation_client_factory_uses_global_persona_yandex_settings(m
 def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_mode() -> None:
     service = PersonaGenerationService(
         db_session=None,  # type: ignore[arg-type]
-        settings=Settings(),
+        settings=Settings(app_env="local", allow_fake_llm_fallback=True),
         fallback_generator=UniversalFakePersonaGenerator(seed=1),
     )
 
@@ -98,6 +98,7 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
         "managing_partner",
         "commercial_director",
         "cfo",
+        "chief_accountant",
         "operations_director",
         "sales_director",
         "purchase_manager",
@@ -105,10 +106,22 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
     assert persona.authority_level == "final_decider"
 
 
+def test_persona_generation_service_falls_back_to_local_without_prompt_for_explicit_fake_backend() -> None:
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(app_env="local", llm_backend="fake", allow_fake_llm_fallback=False),
+        fallback_generator=UniversalFakePersonaGenerator(seed=3),
+    )
+
+    persona = service.generate_for_training_config(training_config=_training_config(prompt=""))
+
+    assert persona.id.startswith("generated_first_contact_discovery_")
+
+
 def test_persona_generation_service_rejects_empty_prompt_without_fallback() -> None:
     service = PersonaGenerationService(
         db_session=None,  # type: ignore[arg-type]
-        settings=Settings(app_env="prod", allow_fake_llm_fallback=False),
+        settings=Settings(app_env="production", allow_fake_llm_fallback=False),
     )
 
     with pytest.raises(LLMProviderConfigurationError, match="persona_generation_context"):
@@ -136,3 +149,49 @@ def test_persona_generation_service_does_not_fallback_when_prompted_client_fails
 
     with pytest.raises(PersonaGenerationError):
         service.generate_for_training_config(training_config=_training_config())
+
+
+def test_persona_generation_service_rejects_empty_prompt_in_production_even_when_flag_is_true() -> None:
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(app_env="production", allow_fake_llm_fallback=True),
+    )
+
+    with pytest.raises(LLMProviderConfigurationError, match="persona_generation_context"):
+        service.generate_for_training_config(training_config=_training_config(prompt=""))
+
+
+def test_persona_generation_service_allow_local_fallback_for_all_non_production_envs() -> None:
+    """_allow_local_fallback should return True for local, dev, development, test, demo regardless of flag."""
+    for env in ("local", "dev", "development", "test", "demo"):
+        service = PersonaGenerationService(
+            db_session=None,  # type: ignore[arg-type]
+            settings=Settings(app_env=env, allow_fake_llm_fallback=False),
+        )
+        assert service._allow_local_fallback() is True
+
+
+def test_persona_generation_service_disallows_local_fallback_in_production() -> None:
+    """_allow_local_fallback should return False in production even when flag is true."""
+    service = PersonaGenerationService(
+        db_session=None,  # type: ignore[arg-type]
+        settings=Settings(app_env="production", allow_fake_llm_fallback=True),
+    )
+    assert service._allow_local_fallback() is False
+
+
+def test_persona_generation_client_factory_raises_for_incomplete_config_in_production() -> None:
+    """Factory should fail closed in production when Yandex config is incomplete."""
+    settings = Settings(
+        app_env="production",
+        llm_backend="yandex_compatible",
+        allow_fake_llm_fallback=False,
+        yandex_api_key="",
+        yandex_folder_id="",
+        yandex_agent_id="",
+    )
+
+    with pytest.raises(LLMProviderConfigurationError, match="Incomplete global Yandex persona configuration"):
+        PersonaGeneratorClientFactory(settings=settings).build_global_persona_client(
+            fallback_generator=UniversalFakePersonaGenerator(),
+        )

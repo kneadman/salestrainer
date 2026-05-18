@@ -52,6 +52,9 @@ export type ClientUserAnalyticsDTO = {
   weakest_skill_id: string | null;
   weakest_skill_title: string | null;
   weakest_skill_avg_score: number | null;
+  strongest_skill_id: string | null;
+  strongest_skill_title: string | null;
+  strongest_skill_avg_score: number | null;
   last_activity_at: string | null;
   sessions_by_status: Record<string, number>;
   sessions_by_scenario: Record<string, number>;
@@ -60,10 +63,8 @@ export type ClientUserAnalyticsDTO = {
 
 export type HistorySessionSummaryDTO = {
   session_id: string;
-  user_id: string;
   user_email: string;
-  client_account_id: string;
-  training_config_id: string | null;
+  training_config_name: string | null;
   scenario_id: string;
   status: string;
   started_at: string;
@@ -73,6 +74,12 @@ export type HistorySessionSummaryDTO = {
   final_interest_score: number | null;
   final_stage: string | null;
   summary: string | null;
+};
+
+export type TrainingConfigOptionDTO = {
+  id: string;
+  name: string;
+  is_default: boolean;
 };
 
 export type HistoryTurnDTO = {
@@ -110,7 +117,6 @@ export type TeamUserDTO = {
   email: string;
   role: string;
   is_active: boolean;
-  must_change_password: boolean;
   total_sessions: number;
   finished_sessions: number;
   avg_final_interest_score: number | null;
@@ -123,6 +129,19 @@ export type TeamUserDetailDTO = {
   history: HistorySessionSummaryDTO[];
 };
 
+export type ManagerRankingItemDTO = {
+  user_id: string;
+  user_email: string;
+  rank: number;
+  score: number;
+  total_sessions: number;
+  finished_sessions: number;
+  completion_rate: number;
+  avg_final_interest_score: number | null;
+  avg_judgement_score: number | null;
+  sessions_with_judgement: number;
+};
+
 export type TeamUsageSummaryDTO = {
   total_sessions: number;
   finished_sessions: number;
@@ -133,6 +152,13 @@ export type TeamUsageSummaryDTO = {
   avg_turn_count: number | null;
   avg_judgement_score: number | null;
   sessions_with_judgement: number;
+  weakest_skill_id: string | null;
+  weakest_skill_title: string | null;
+  weakest_skill_avg_score: number | null;
+  strongest_skill_id: string | null;
+  strongest_skill_title: string | null;
+  strongest_skill_avg_score: number | null;
+  manager_ranking: ManagerRankingItemDTO[];
   sessions_by_status: Record<string, number>;
   sessions_by_scenario: Record<string, number>;
   sessions_by_training_config: Record<string, number>;

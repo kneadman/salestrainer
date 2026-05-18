@@ -42,6 +42,9 @@ const detail: AdminUserAnalyticsDetailDTO = {
     weakest_skill_id: "diagnosis",
     weakest_skill_title: "Качество диагностики",
     weakest_skill_avg_score: 5.1,
+    strongest_skill_id: "next_step",
+    strongest_skill_title: "Следующий шаг",
+    strongest_skill_avg_score: 8.4,
     last_activity_at: "2026-05-08T19:23:00Z",
     sessions_by_status: {
       finished: 9,
@@ -68,6 +71,7 @@ const detail: AdminUserAnalyticsDetailDTO = {
       user_email: "manager@example.com",
       client_account_id: "org-1",
       training_config_id: "config-1",
+      training_config_name: "B2B discovery",
       scenario_id: "first_contact_discovery",
       status: "finished",
       started_at: "2026-05-08T19:23:00Z",
@@ -98,6 +102,10 @@ describe("AdminUserAnalyticsPage", () => {
     expect(screen.getByText("Завершено")).toBeInTheDocument();
     expect(screen.getByText("Активные")).toBeInTheDocument();
     expect(screen.getByText("Средняя оценка тренировки")).toBeInTheDocument();
+    expect(screen.getByText("Сильнейший навык")).toBeInTheDocument();
+    expect(screen.getByText("Следующий шаг")).toBeInTheDocument();
+    expect(screen.getByText("Зона роста")).toBeInTheDocument();
+    expect(screen.getByText("Качество диагностики")).toBeInTheDocument();
     expect(screen.getAllByText(/за 7 дней/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Δ \+2 к прошлым 7 дням/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Последние тренировки" })).toBeInTheDocument();

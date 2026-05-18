@@ -1,11 +1,13 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HistoryPage } from "./HistoryPage";
-import type { HistorySessionDetailDTO } from "./types";
+import type { HistorySessionDetailDTO, HistorySessionSummaryDTO } from "./types";
 import type { JudgeSessionOutputDTO, ReportPayload } from "../types";
 
 const apiMocks = vi.hoisted(() => ({
   getHistorySessionDetail: vi.fn<() => Promise<HistorySessionDetailDTO>>(),
   getHistorySessions: vi.fn(),
+  getTrainingConfigs: vi.fn(),
 }));
 
 vi.mock("./api", async () => {
@@ -14,6 +16,7 @@ vi.mock("./api", async () => {
     ...actual,
     getHistorySessionDetail: apiMocks.getHistorySessionDetail,
     getHistorySessions: apiMocks.getHistorySessions,
+    getTrainingConfigs: apiMocks.getTrainingConfigs,
   };
 });
 
@@ -57,17 +60,16 @@ function makeDetail(
   reportPayload: ReportPayload | null,
   overrides: Partial<Pick<HistorySessionDetailDTO, "public_brief">> & {
     session?: Partial<HistorySessionDetailDTO["session"]>;
+    turns?: HistorySessionDetailDTO["turns"];
   } = {},
 ): HistorySessionDetailDTO {
   return {
-    session: {
-      session_id: "session-123456",
-      user_id: "user-1",
-      user_email: "manager@example.com",
-      client_account_id: "account-1",
-      training_config_id: "config-1",
-      scenario_id: "generic_b2b_first_contact",
-      status: "finished",
+      session: {
+        session_id: "session-123456",
+        user_email: "manager@example.com",
+        training_config_name: "B2B discovery",
+        scenario_id: "generic_b2b_first_contact",
+        status: "finished",
       started_at: "2026-05-08T19:23:00Z",
       finished_at: "2026-05-08T19:53:00Z",
       last_activity_at: "2026-05-08T19:53:00Z",
@@ -78,7 +80,7 @@ function makeDetail(
       ...overrides.session,
     },
     public_brief: "public_brief" in overrides ? overrides.public_brief ?? null : "Публичный бриф",
-    turns: [],
+    turns: overrides.turns ?? [],
     report: {
       session_id: "session-123456",
       report: "LEGACY TEXT REPORT",
@@ -89,6 +91,134 @@ function makeDetail(
     },
   };
 }
+
+function makeSummary(overrides: Partial<HistorySessionSummaryDTO> = {}): HistorySessionSummaryDTO {
+  return {
+    session_id: "session-123456",
+    user_email: "manager@example.com",
+    training_config_name: "B2B discovery",
+    scenario_id: "generic_b2b_first_contact",
+    status: "finished",
+    started_at: "2026-05-08T19:23:00Z",
+    finished_at: "2026-05-08T19:53:00Z",
+    last_activity_at: "2026-05-08T19:53:00Z",
+    turn_count: 1,
+    final_interest_score: 72,
+    final_stage: "next_step",
+    summary: "Summary",
+    ...overrides,
+  };
+}
+
+describe("HistoryPage list filters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMocks.getTrainingConfigs.mockResolvedValue([
+      { id: "config-1", name: "B2B discovery", is_default: true },
+      { id: "config-2", name: "Objection practice", is_default: false },
+    ]);
+  });
+
+  it("renders training config filters and rows without raw scenario ids in visible text", async () => {
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    const { container } = render(<HistoryPage onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("generic_b2b_first_contact");
+    expect(container.textContent).not.toContain("sales_audit_cold_outreach");
+    expect(screen.getAllByText("B2B discovery").length).toBeGreaterThan(0);
+    expect(screen.getByText("Objection practice")).toBeInTheDocument();
+    expect(screen.getAllByRole("combobox")[1].textContent).not.toContain("generic_b2b_first_contact");
+  });
+
+  it("loads history with training config filters from query params", async () => {
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history?status=finished&training_config_id=config-2" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(apiMocks.getHistorySessions).toHaveBeenCalledWith({
+      status: "finished",
+      training_config_id: "config-2",
+      limit: 100,
+      offset: 0,
+    });
+  });
+
+  it("updates the URL and refetches history when status changes", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions
+      .mockResolvedValueOnce([makeSummary()])
+      .mockResolvedValueOnce([makeSummary({ session_id: "session-2", user_email: "filtered@example.com" })]);
+
+    const { rerender } = render(<HistoryPage path="/app/history" onNavigate={onNavigate} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "finished");
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?status=finished", true);
+
+    rerender(<HistoryPage path="/app/history?status=finished" onNavigate={onNavigate} />);
+    expect(await screen.findByText("filtered@example.com")).toBeInTheDocument();
+    expect(apiMocks.getHistorySessions).toHaveBeenNthCalledWith(2, {
+      status: "finished",
+      training_config_id: "",
+      limit: 100,
+      offset: 0,
+    });
+  });
+
+  it("updates the URL immediately when training config changes", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history" onNavigate={onNavigate} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    await user.selectOptions(screen.getAllByRole("combobox")[1], "config-2");
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?training_config_id=config-2", true);
+  });
+
+  it("combines both filters into a canonical query string", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history?status=finished" onNavigate={onNavigate} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    await user.selectOptions(screen.getAllByRole("combobox")[1], "config-2");
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history?status=finished&training_config_id=config-2", true);
+  });
+
+  it("resets filters back to the canonical history route", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history?status=finished&training_config_id=config-2" onNavigate={onNavigate} />);
+
+    const resetButton = await screen.findByRole("button", { name: "Сбросить фильтры" });
+    expect(resetButton).toBeEnabled();
+    await user.click(resetButton);
+
+    expect(onNavigate).toHaveBeenCalledWith("/app/history", true);
+  });
+
+  it("keeps the reset button disabled when no filters are active", async () => {
+    apiMocks.getHistorySessions.mockResolvedValue([makeSummary()]);
+
+    render(<HistoryPage path="/app/history" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("manager@example.com")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сбросить фильтры" })).toBeDisabled();
+  });
+});
 
 describe("HistoryPage detail header and layout", () => {
   beforeEach(() => {
@@ -120,6 +250,33 @@ describe("HistoryPage detail header and layout", () => {
     render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
 
     expect(await screen.findByRole("heading", { name: "Тренировка" })).toBeInTheDocument();
+  });
+  it("renders turn stages through shared labels instead of raw stage ids", async () => {
+    apiMocks.getHistorySessionDetail.mockResolvedValue(
+      makeDetail(null, {
+        turns: [
+          {
+            turn_index: 1,
+            manager_message: "Need details?",
+            client_answer: "Can discuss process.",
+            interest_before: 40,
+            interest_delta: 8,
+            interest_after: 48,
+            stage_before: "first_contact",
+            stage_after: "need_discovery",
+            client_state_public: null,
+            evaluation: null,
+            created_at: "2026-05-08T19:24:00Z",
+          },
+        ],
+      }),
+    );
+
+    const { container } = render(<HistoryPage sessionId="session-123456" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByText("Need details?")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("first_contact");
+    expect(container.textContent).not.toContain("need_discovery");
   });
 });
 

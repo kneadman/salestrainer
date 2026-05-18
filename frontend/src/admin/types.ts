@@ -55,6 +55,7 @@ export type UserDTO = {
   must_change_password: boolean;
   created_at: string;
   updated_at: string;
+  default_training_config_id?: string | null;
   client_account?: {
     id: string;
     name: string;
@@ -77,6 +78,7 @@ export type UserCreatePayload = {
 export type UserUpdatePayload = {
   email?: string;
   role?: "client_lead" | "client_manager";
+  default_training_config_id?: string | null;
 };
 
 export type ObjectionItem = {
@@ -159,13 +161,6 @@ export type TrainingConfigPayload = {
   seed_config?: SeedConfig | null;
 };
 
-export type UserTrainingConfigAssignmentDTO = {
-  user_id: string;
-  training_config_id: string;
-  is_default: boolean;
-  training_config: TrainingConfigDTO;
-};
-
 export type AuditLogDTO = {
   id: string;
   actor_user_id: string | null;
@@ -178,25 +173,13 @@ export type AuditLogDTO = {
   created_at: string;
 };
 
-export type ScenarioOptionDTO = {
-  scenario_id: string;
-  name: string;
-  training_format: string;
-  default_starting_interest: number;
-  default_stage: string;
-  manager_goal: string;
-  success_condition: string;
-  failure_condition: string;
-  evaluation_focus: string[];
-  client_behavior_hint: string;
-};
-
 export type HistorySessionSummaryDTO = {
   session_id: string;
   user_id: string;
   user_email: string;
   client_account_id: string;
   training_config_id: string | null;
+  training_config_name: string | null;
   scenario_id: string;
   status: string;
   started_at: string;

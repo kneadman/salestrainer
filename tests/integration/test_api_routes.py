@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 import tempfile
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.access.models import LandingLead, TrainingSessionOwnership
+from app.access.models import LandingLead, TrainingSessionOwnership, UserTrainingConfig
 from app.access.repository import AccessRepository
 from app.api.dependencies import get_persona_generation_service
 from app.api.main import create_app
 from app.application.projections import build_session_public_dto, build_turn_public_dto
 from app.domain.models import PersonaProfile
 from app.history.dependencies import get_history_service
-from app.history.models import TrainingTurnRecord, UsageEventRecord
+from app.history.models import TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
 from app.history.repository import HistoryRepository
 from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
@@ -151,6 +153,23 @@ class StubSTTClient(FakeSTTClient):
         return STTResult(text="  привет   клиенту \n\nкак дела  ", duration_ms=3450)
 
 
+class CountingSessionRepository(InMemorySessionRepository):
+    def __init__(self) -> None:
+        """Track non-mutating runtime TTL refreshes in API consistency tests."""
+        super().__init__()
+        self.touch_count = 0
+
+    def touch(self, session_id: str) -> None:
+        self.touch_count += 1
+        super().touch(session_id)
+
+
+class FailingTouchHistoryService(HistoryService):
+    def touch_runtime_session_activity(self, session_id: UUID, *, now: datetime | None = None) -> bool:
+        """Simulate a durable activity-write outage before runtime TTL is refreshed."""
+        raise RuntimeError("durable touch unavailable")
+
+
 def test_api_session_flow() -> None:
     db_session = _create_db_session()
     repository = InMemorySessionRepository()
@@ -176,7 +195,7 @@ def test_api_session_flow() -> None:
     session_payload = create_response.json()["session"]
     session_id = session_payload["session_id"]
     assert session_payload["status"] == "active"
-    assert session_payload["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in session_payload
     assert session_payload["scenario_id"] == "first_contact_discovery"
     assert "public_brief" in session_payload
 
@@ -271,10 +290,10 @@ def test_api_speech_transcribe_accepts_small_audio_and_normalizes_text() -> None
     assert response.status_code == 200
     assert response.json() == {
         "text": "Привет клиенту\n\nкак дела",
-        "raw_text": "привет   клиенту \n\nкак дела",
         "normalized": True,
         "duration_ms": 3450,
     }
+    assert "привет   клиенту" not in response.text
     db_session.close()
 
 
@@ -343,6 +362,162 @@ def test_api_speech_transcribe_does_not_create_turns_or_mutate_session_state() -
     assert session_after.model_dump_json() == session_before_json
     assert db_session.query(TrainingTurnRecord).count() == turns_before
     assert db_session.query(UsageEventRecord).count() == usage_events_before
+    db_session.close()
+
+
+def test_api_speech_transcribe_refreshes_durable_session_activity() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    client = _create_client(
+        db_session,
+        repository=repository,
+        settings=_speech_settings(session_ttl_seconds=1800),
+        stt_client=StubSTTClient(),
+    )
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+    record = db_session.get(TrainingSessionRecord, UUID(session_id))
+    assert record is not None
+    stale_activity_at = datetime.now(tz=UTC) - timedelta(minutes=31)
+    record.last_activity_at = stale_activity_at
+    db_session.commit()
+
+    response = client.post(
+        "/api/speech/transcribe",
+        data={"session_id": session_id},
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+    db_session.refresh(record)
+    refreshed_activity_at = record.last_activity_at
+    history_response = client.get("/api/history/sessions")
+    db_session.refresh(record)
+
+    assert response.status_code == 200
+    assert refreshed_activity_at != stale_activity_at
+    assert history_response.status_code == 200
+    assert record.status == "active"
+    db_session.close()
+
+
+def test_api_get_session_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.get(f"/api/sessions/{session_id}")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
+    db_session.close()
+
+
+def test_api_resume_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.post(f"/api/sessions/{session_id}/resume")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
+    db_session.close()
+
+
+def test_api_idempotency_replay_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+    first_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you manage this process today?", "idempotency_key": "msg-activity"},
+    )
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+
+    replay_response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"manager_message": "How do you manage this process today?", "idempotency_key": "msg-activity"},
+    )
+
+    assert first_response.status_code == 200
+    assert replay_response.status_code == 409
+    assert replay_response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
+    db_session.close()
+
+
+def test_api_speech_transcribe_does_not_touch_runtime_when_durable_touch_fails() -> None:
+    db_session = _create_db_session()
+    repository = CountingSessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=_speech_settings(),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+        stt_client=StubSTTClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_history_service] = lambda: FailingTouchHistoryService(HistoryRepository(db_session))
+    client = TestClient(app, raise_server_exceptions=False)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+
+    response = client.post(
+        "/api/speech/transcribe",
+        data={"session_id": session_id},
+        files={"audio": ("voice.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert repository.touch_count == 0
     db_session.close()
 
 
@@ -568,8 +743,8 @@ def test_api_message_idempotency_key_returns_saved_result_for_duplicate_request(
     assert first_response.status_code == 200
     assert duplicate_response.status_code == 200
     assert duplicate_response.json() == first_response.json()
-    assert first_response.json()["session"]["persona_name"] == "Unknown B2B contact"
-    assert duplicate_response.json()["session"]["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in first_response.json()["session"]
+    assert "persona_name" not in duplicate_response.json()["session"]
     assert saved_session is not None
     assert saved_session.turn_count == 1
     assert len(saved_session.recent_message_submissions) == 1
@@ -603,14 +778,25 @@ def test_api_message_idempotency_first_and_cached_responses_use_public_safe_proj
                 behavior_model="analytical_and_cautious",
                 target_action="book_diagnostic_call",
                 current_business_context="Company is growing but cash planning is unclear.",
-                latent_pains=["Cash gaps are hard to forecast."],
-                typical_objections=["We already track this in spreadsheets."],
-                buying_motivation=["Improve financial transparency."],
-                decision_criteria=["clear methodology", "similar cases"],
+                business_facts=["Several legal entities.", "Revenue growing 20 % YoY."],
+                cares_about=["cash flow", "control", "speed"],
+                current_solution="Excel + manual cash planning",
+                alternative_solutions=[
+                    "статус-кво: продолжать как сейчас",
+                    "hire a CFO in-house",
+                    "buy forecasting software",
+                ],
+                information_gaps=[
+                    "Thinks forecasting tools require months of setup.",
+                    "Does not know about one-week pilot options.",
+                ],
+                latent_pains=["Cash gaps are hard to forecast.", "Planning takes too much time."],
+                buying_motivation=["Improve financial transparency.", "Reduce firefighting."],
+                decision_criteria=["clear methodology", "similar cases", "fast implementation"],
                 hidden_constraints=["Bad experience with consultants."],
-                business_facts=["Several legal entities."],
-                proof_sensitivity=["cases"],
-                call_scoring_criteria=["discovery"],
+                typical_objections=["We already track this in spreadsheets.", "No time for change."],
+                proof_sensitivity=["cases", "quick pilot"],
+                call_scoring_criteria=["discovery", "objection handling", "next step clarity"],
                 communication_style="short and analytical",
                 initial_openness=30,
                 starting_interest=31,
@@ -655,18 +841,24 @@ def test_api_message_idempotency_first_and_cached_responses_use_public_safe_proj
     assert duplicate_response.json()["session"] == expected_session
     assert first_response.json()["turns"] == expected_turns
     assert duplicate_response.json()["turns"] == expected_turns
-    assert first_response.json()["session"]["persona_name"] == "Unknown B2B contact"
-    assert duplicate_response.json()["session"]["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in first_response.json()["session"]
+    assert "persona_name" not in duplicate_response.json()["session"]
     assert hidden_display_name not in first_response.text
     assert hidden_display_name not in duplicate_response.text
-    assert first_response.json()["session"]["client_state_public"]["known_pains"] == expected_session["client_state_public"]["known_pains"]
+    assert first_response.json()["session"]["facts_panel"] == expected_session["facts_panel"]
+    assert duplicate_response.json()["session"]["facts_panel"] == expected_session["facts_panel"]
+    assert first_response.json()["session"]["client_state_public"]["revealed_facts"] == expected_session["client_state_public"]["revealed_facts"]
+    assert duplicate_response.json()["session"]["client_state_public"]["revealed_facts"] == expected_session["client_state_public"]["revealed_facts"]
+    assert "known_pains" not in first_response.json()["session"]["client_state_public"]
+    assert "known_pains" not in duplicate_response.json()["session"]["client_state_public"]
     assert first_response.json()["session"]["client_state_public"]["visible_objections"] == expected_session["client_state_public"]["visible_objections"]
     assert first_response.json()["session"]["client_state_public"]["buying_signals"] == expected_session["client_state_public"]["buying_signals"]
     assert first_response.json()["session"]["turn_count"] == expected_session["turn_count"]
     assert first_response.json()["session"]["state_version"] == expected_session["state_version"]
     assert saved_session is not None
     assert saved_session.persona.display_name == hidden_display_name
-    assert saved_session.recent_message_submissions[0].response_payload["session"]["persona_name"] == "Unknown B2B contact"
+    assert "persona_name" not in saved_session.recent_message_submissions[0].response_payload["session"]
+    assert "known_pains" not in saved_session.recent_message_submissions[0].response_payload["session"]["client_state_public"]
     assert len(saved_session.turns) == 1
     assert len(turns) == 1
     assert turns[0].turn_index == 1
@@ -852,14 +1044,25 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
                 behavior_model="analytical_and_cautious",
                 target_action="book_diagnostic_call",
                 current_business_context="Company is growing but cash planning is unclear.",
-                latent_pains=["Cash gaps are hard to forecast."],
-                typical_objections=["We already track this in spreadsheets."],
-                buying_motivation=["Improve financial transparency."],
-                decision_criteria=["clear methodology", "similar cases"],
+                business_facts=["Several legal entities.", "Revenue growing 20 % YoY."],
+                cares_about=["cash flow", "control", "speed"],
+                current_solution="Excel + manual cash planning",
+                alternative_solutions=[
+                    "статус-кво: продолжать как сейчас",
+                    "hire a CFO in-house",
+                    "buy forecasting software",
+                ],
+                information_gaps=[
+                    "Thinks forecasting tools require months of setup.",
+                    "Does not know about one-week pilot options.",
+                ],
+                latent_pains=["Cash gaps are hard to forecast.", "Planning takes too much time."],
+                buying_motivation=["Improve financial transparency.", "Reduce firefighting."],
+                decision_criteria=["clear methodology", "similar cases", "fast implementation"],
                 hidden_constraints=["Bad experience with consultants."],
-                business_facts=["Several legal entities."],
-                proof_sensitivity=["cases"],
-                call_scoring_criteria=["discovery"],
+                typical_objections=["We already track this in spreadsheets.", "No time for change."],
+                proof_sensitivity=["cases", "quick pilot"],
+                call_scoring_criteria=["discovery", "objection handling", "next step clarity"],
                 communication_style="short and analytical",
                 initial_openness=30,
                 starting_interest=31,
@@ -890,6 +1093,112 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert captured["scenario_id"] is None
     assert "llm_generated_cfo_cash_gap" not in response.text
 
+    db_session.close()
+
+
+def test_api_create_session_rejects_disabled_explicit_training_config() -> None:
+    """Explicit training_config_id pointing to a disabled config must return 422 and create nothing."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    user, _ = _seed_authenticated_user(db_session)
+    access_repository = AccessRepository(db_session)
+    disabled_config = access_repository.create_training_config(
+        client_account_id=user.client_account_id,
+        name="Disabled config",
+        is_active=False,
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={"training_config_id": str(disabled_config.id)})
+
+    assert response.status_code == 422
+    assert "Training config is disabled." in response.text
+    assert db_session.scalar(select(TrainingSessionRecord)) is None
+    assert db_session.scalar(select(TrainingSessionOwnership)) is None
+    db_session.close()
+
+
+def test_api_create_session_rejects_disabled_default_training_config() -> None:
+    """Default config that is disabled must block session creation without explicit training_config_id."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    client_account = identity_repository.create_client_account(name="Acme", slug="acme")
+    user = identity_repository.create_user(
+        client_account_id=client_account.id,
+        email="manager@example.com",
+        password_hash=hash_password("password"),
+        role="client_manager",
+        must_change_password=False,
+    )
+    disabled_config = access_repository.create_training_config(
+        client_account_id=client_account.id,
+        name="Disabled default",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=user.id,
+        training_config_id=disabled_config.id,
+        is_default=True,
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={})
+
+    assert response.status_code == 422
+    assert "Training config is disabled." in response.text
+    assert db_session.scalar(select(TrainingSessionRecord)) is None
+    assert db_session.scalar(select(TrainingSessionOwnership)) is None
+    db_session.close()
+
+
+def test_api_create_session_allows_explicit_active_unassigned_training_config() -> None:
+    """Any active org config may be chosen explicitly even if not assigned to the user."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    user, default_config = _seed_authenticated_user(db_session)
+    access_repository = AccessRepository(db_session)
+    unassigned_config = access_repository.create_training_config(
+        client_account_id=user.client_account_id,
+        name="Unassigned config",
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={"training_config_id": str(unassigned_config.id)})
+
+    assert response.status_code == 201
+    session_id = response.json()["session"]["session_id"]
+    saved_session = repository.get(session_id)
+    assert saved_session is not None
+    ownership = db_session.scalar(select(TrainingSessionOwnership).where(TrainingSessionOwnership.session_id == saved_session.session_id))
+    assert ownership is not None
+    assert ownership.training_config_id == unassigned_config.id
+    db_session.close()
+
+
+def test_api_create_session_rejects_explicit_training_config_from_other_org() -> None:
+    """Explicit training_config_id from another organization must return 403."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    user, _ = _seed_authenticated_user(db_session)
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    other_account = identity_repository.create_client_account(name="Other", slug="other")
+    other_config = access_repository.create_training_config(
+        client_account_id=other_account.id,
+        name="Other org config",
+    )
+    client = _create_client(db_session, repository=repository)
+    _login(client)
+
+    response = client.post("/api/sessions", json={"training_config_id": str(other_config.id)})
+
+    assert response.status_code == 403
+    assert db_session.scalar(select(TrainingSessionRecord)) is None
     db_session.close()
 
 
@@ -1545,7 +1854,7 @@ def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit()
     repository = InMemorySessionRepository()
     _seed_authenticated_user(db_session)
     app = create_app(
-        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, recent_turn_limit=2),
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, llm_backend="fake", recent_turn_limit=2),
         repository=repository,
         llm_client=FakeLLMClient(),
     )
@@ -1574,12 +1883,66 @@ def test_api_session_detail_returns_full_turn_history_beyond_recent_turn_limit()
     saved_session = repository.get(session_id)
     assert saved_session is not None
     assert len(saved_session.recent_turns) == 2
-    assert len(saved_session.turns) == 3
+    assert len(saved_session.turns) == 2
 
     detail_response = client.get(f"/api/sessions/{session_id}")
     assert detail_response.status_code == 200
     assert len(detail_response.json()["turns"]) == 3
 
+    db_session.close()
+
+
+def test_api_runtime_payload_stays_bounded_during_long_session() -> None:
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_authenticated_user(db_session)
+    app = create_app(
+        settings=Settings(auth_cookie_secure=False, login_rate_limit_attempts=0, llm_backend="fake", recent_turn_limit=3),
+        repository=repository,
+        llm_client=FakeLLMClient(),
+    )
+
+    def override_get_db_session() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    client = TestClient(app)
+    _login(client)
+    session_id = _create_session_for_logged_in_user(client)
+    payload_sizes: list[int] = []
+
+    for index in range(8):
+        response = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"manager_message": f"Question {index}: how do you track this today?"},
+        )
+        assert response.status_code == 200
+        saved_session = repository.get(session_id)
+        assert saved_session is not None
+        payload_sizes.append(len(saved_session.model_dump_json().encode("utf-8")))
+
+    saved_session = repository.get(session_id)
+    assert saved_session is not None
+    durable_turns = list(
+        db_session.scalars(
+            select(TrainingTurnRecord)
+            .where(TrainingTurnRecord.session_id == saved_session.session_id)
+            .order_by(TrainingTurnRecord.turn_index)
+        )
+    )
+    detail_response = client.get(f"/api/sessions/{session_id}")
+    finish_response = client.post(f"/api/sessions/{session_id}/finish")
+
+    assert saved_session.turn_count == 8
+    assert len(saved_session.turns) == 3
+    assert len(saved_session.turn_evaluations) == 3
+    assert len(saved_session.recent_turns) == 3
+    assert [turn.turn_index for turn in durable_turns] == list(range(1, 9))
+    assert detail_response.status_code == 200
+    assert len(detail_response.json()["turns"]) == 8
+    assert finish_response.status_code == 200
+    assert finish_response.json()["report_payload"]["bento_blocks"][0]["evidence_turn_indexes"] == list(range(1, 9))
+    assert max(payload_sizes[-3:]) - min(payload_sizes[-3:]) < 1500
     db_session.close()
 
 

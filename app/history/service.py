@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.application.turn_service import TurnResult
-from app.domain.models import TrainingSessionState
+from app.domain.contract_versions import (
+    DIALOGUE_PROMPT_VERSION,
+    DIALOGUE_SCHEMA_VERSION,
+    JUDGE_PROMPT_VERSION,
+    JUDGE_SCHEMA_VERSION,
+    PERSONA_PROMPT_VERSION,
+    PERSONA_SCHEMA_VERSION,
+)
+from app.domain.models import TrainingSessionState, Turn, TurnEvaluation
 from app.history.events import UsageEventType
 from app.history.projections import report_dto, session_summary_dto, turn_dto
 from app.history.repository import HistoryRepository, SessionListFilters
@@ -26,9 +34,35 @@ class HistoryAccessDeniedError(LookupError):
 
 
 class HistoryService:
-    def __init__(self, repository: HistoryRepository) -> None:
+    def __init__(self, repository: HistoryRepository, *, inactive_ttl_seconds: int = 1800) -> None:
         """Keep the repository that owns all persistent history database access."""
         self._repository = repository
+        self._inactive_ttl_seconds = inactive_ttl_seconds
+
+    def expire_inactive_sessions(
+        self,
+        *,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+        now: datetime | None = None,
+    ) -> int:
+        """Close active durable sessions that exceeded the configured trainer inactivity TTL."""
+        cutoff = (now or datetime.now(tz=UTC)) - timedelta(seconds=self._inactive_ttl_seconds)
+        return self._repository.expire_active_sessions(
+            last_activity_before=cutoff,
+            client_account_id=client_account_id,
+            user_id=user_id,
+        )
+
+    def record_runtime_session_expired(self, session_id: UUID) -> None:
+        """Close durable history when the corresponding runtime session has already expired."""
+        self._repository.expire_session(session_id=session_id)
+
+    def touch_runtime_session_activity(self, session_id: UUID, *, now: datetime | None = None) -> bool:
+        """Refresh durable activity timestamp after successful runtime TTL touch."""
+        touched_at = now or datetime.now(tz=UTC)
+        record = self._repository.touch_session_activity(session_id=session_id, touched_at=touched_at)
+        return record is not None and record.status == "active"
 
     def record_session_started(
         self,
@@ -53,6 +87,8 @@ class HistoryService:
                 "initial_state_snapshot": self._session_snapshot(session),
                 "public_brief": session.public_brief,
                 "summary": session.summary,
+                "persona_schema_version": PERSONA_SCHEMA_VERSION,
+                "persona_prompt_version": PERSONA_PROMPT_VERSION,
             },
             event_kwargs=self._usage_event_kwargs(
                 event_type=UsageEventType.SESSION_STARTED.value,
@@ -60,7 +96,11 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"scenario_id": session.scenario_id},
+                event_payload={
+                    "scenario_id": session.scenario_id,
+                    "persona_schema_version": PERSONA_SCHEMA_VERSION,
+                    "persona_prompt_version": PERSONA_PROMPT_VERSION,
+                },
             ),
         )
 
@@ -92,6 +132,8 @@ class HistoryService:
                 "llm_payload_snapshot": self._safe_payload_snapshot(turn_result.llm_payload),
                 "llm_response_snapshot": self._safe_response_snapshot(turn_result.llm_response),
                 "evaluation_snapshot": evaluation.model_dump(mode="json") if evaluation is not None else None,
+                "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
                 "created_at": turn.created_at,
             },
             rollup={
@@ -108,7 +150,13 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"turn_index": turn.index, "interest_after": turn.interest_after, "stage_after": turn.stage_after},
+                event_payload={
+                    "turn_index": turn.index,
+                    "interest_after": turn.interest_after,
+                    "stage_after": turn.stage_after,
+                    "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                    "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
+                },
             ),
         )
 
@@ -154,6 +202,8 @@ class HistoryService:
                 "llm_payload_snapshot": None,
                 "llm_response_snapshot": None,
                 "evaluation_snapshot": evaluation.model_dump(mode="json") if evaluation is not None else None,
+                "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
                 "created_at": turn.created_at,
             },
             rollup={
@@ -170,7 +220,13 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"turn_index": turn.index, "interest_after": turn.interest_after, "stage_after": turn.stage_after},
+                event_payload={
+                    "turn_index": turn.index,
+                    "interest_after": turn.interest_after,
+                    "stage_after": turn.stage_after,
+                    "dialogue_schema_version": DIALOGUE_SCHEMA_VERSION,
+                    "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
+                },
             ),
         )
         return True
@@ -224,6 +280,8 @@ class HistoryService:
                 "final_interest_score": session.interest_score,
                 "final_stage": session.stage,
             },
+            judge_schema_version=JUDGE_SCHEMA_VERSION,
+            judge_prompt_version=JUDGE_PROMPT_VERSION,
         )
         self.record_usage_event(
             event_type=UsageEventType.REPORT_GENERATED.value,
@@ -231,7 +289,11 @@ class HistoryService:
             user_id=user_id,
             training_config_id=training_config_id,
             session_id=session.session_id,
-            event_payload={"report_version": report.report_version},
+            event_payload={
+                "report_version": report.report_version,
+                "judge_schema_version": report.judge_schema_version,
+                "judge_prompt_version": report.judge_prompt_version,
+            },
         )
         return report_dto(report)
 
@@ -287,6 +349,8 @@ class HistoryService:
                 "final_interest_score": session.interest_score,
                 "final_stage": session.stage,
             },
+            judge_schema_version=JUDGE_SCHEMA_VERSION,
+            judge_prompt_version=JUDGE_PROMPT_VERSION,
             finish_event_kwargs=self._usage_event_kwargs(
                 event_type=UsageEventType.SESSION_FINISHED.value,
                 client_account_id=client_account_id,
@@ -301,7 +365,11 @@ class HistoryService:
                 user_id=user_id,
                 training_config_id=training_config_id,
                 session_id=session.session_id,
-                event_payload={"report_version": 1},
+                event_payload={
+                    "report_version": 1,
+                    "judge_schema_version": JUDGE_SCHEMA_VERSION,
+                    "judge_prompt_version": JUDGE_PROMPT_VERSION,
+                },
             ),
         )
         return report_dto(report)
@@ -339,6 +407,7 @@ class HistoryService:
         """Return history scoped by requester role without exposing hidden snapshots."""
         normalized_role = normalize_role(requester_role)
         if normalized_role == UserRole.CLIENT_MANAGER:
+            self.expire_inactive_sessions(user_id=requester_user_id)
             rows = self._repository.list_sessions_for_user(
                 user_id=requester_user_id,
                 filters=SessionListFilters(
@@ -351,6 +420,7 @@ class HistoryService:
                 offset=offset,
             )
         elif normalized_role == UserRole.CLIENT_LEAD:
+            self.expire_inactive_sessions(client_account_id=requester_client_account_id)
             rows = self._repository.list_sessions_for_client_account(
                 client_account_id=requester_client_account_id,
                 filters=filters,
@@ -358,6 +428,7 @@ class HistoryService:
                 offset=offset,
             )
         else:
+            self.expire_inactive_sessions()
             rows = self._repository.list_all_sessions(filters=filters, limit=limit, offset=offset)
         self.record_usage_event(
             event_type=UsageEventType.HISTORY_VIEWED.value,
@@ -365,7 +436,15 @@ class HistoryService:
             user_id=requester_user_id,
             event_payload={"limit": limit, "offset": offset},
         )
-        return [session_summary_dto(record, user_email=email) for record, email in rows]
+        training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
+        return [
+            session_summary_dto(
+                record,
+                user_email=email,
+                training_config_name=training_config_names.get(record.training_config_id),
+            )
+            for record, email in rows
+        ]
 
     def get_session_history_detail(
         self,
@@ -391,8 +470,9 @@ class HistoryService:
         )
         email = self._repository.get_user_email(record.user_id) or ""
         report = self._repository.get_report(record.id)
+        training_config_name = self._training_config_names_for_rows([record]).get(record.training_config_id)
         return HistorySessionDetailDTO(
-            session=session_summary_dto(record, user_email=email),
+            session=session_summary_dto(record, user_email=email, training_config_name=training_config_name),
             public_brief=record.public_brief,
             turns=[turn_dto(turn) for turn in self._repository.list_turns_for_session(record.id)],
             report=report_dto(report) if report is not None else None,
@@ -425,6 +505,46 @@ class HistoryService:
             return None
         return report.report_payload
 
+    def get_saved_report_text(self, session_id: UUID) -> str | None:
+        """Return saved human report text when finish flow already persisted it."""
+        report = self._repository.get_report(session_id)
+        if report is None:
+            return None
+        return report.report_text
+
+    def hydrate_session_with_durable_turns(self, session: TrainingSessionState) -> TrainingSessionState:
+        """Return a session copy whose turns/evaluations come from durable history."""
+        durable_turns = self._repository.list_turns_for_session(session.session_id)
+        if not durable_turns:
+            return session
+        turns = [
+            Turn(
+                index=turn.turn_index,
+                manager_message=turn.manager_message,
+                client_answer=turn.client_answer,
+                interest_before=turn.interest_before,
+                interest_delta=turn.interest_delta,
+                interest_after=turn.interest_after,
+                stage_before=turn.stage_before,
+                stage_after=turn.stage_after,
+                created_at=turn.created_at,
+            )
+            for turn in durable_turns
+        ]
+        evaluations = [
+            TurnEvaluation.model_validate(turn.evaluation_snapshot)
+            for turn in durable_turns
+            if turn.evaluation_snapshot is not None
+        ]
+        return session.model_copy(
+            update={
+                "turns": turns,
+                "turn_evaluations": evaluations,
+                "recent_turns": turns[-len(session.recent_turns) :] if session.recent_turns else [],
+            },
+            deep=True,
+        )
+
     def list_organization_history(
         self,
         *,
@@ -434,13 +554,22 @@ class HistoryService:
         offset: int,
     ) -> list[HistorySessionSummaryDTO]:
         """Return organization-scoped history for internal admin endpoints."""
+        self.expire_inactive_sessions(client_account_id=client_account_id)
         rows = self._repository.list_sessions_for_client_account(
             client_account_id=client_account_id,
             filters=filters,
             limit=limit,
             offset=offset,
         )
-        return [session_summary_dto(record, user_email=email) for record, email in rows]
+        training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
+        return [
+            session_summary_dto(
+                record,
+                user_email=email,
+                training_config_name=training_config_names.get(record.training_config_id),
+            )
+            for record, email in rows
+        ]
 
     def list_user_history(
         self,
@@ -451,11 +580,21 @@ class HistoryService:
         offset: int,
     ) -> list[HistorySessionSummaryDTO]:
         """Return one user's history for internal admin endpoints."""
+        self.expire_inactive_sessions(user_id=user_id)
         rows = self._repository.list_sessions_for_user(user_id=user_id, filters=filters, limit=limit, offset=offset)
-        return [session_summary_dto(record, user_email=email) for record, email in rows]
+        training_config_names = self._training_config_names_for_rows([record for record, _ in rows])
+        return [
+            session_summary_dto(
+                record,
+                user_email=email,
+                training_config_name=training_config_names.get(record.training_config_id),
+            )
+            for record, email in rows
+        ]
 
     def get_client_usage_summary(self, *, client_account_id: UUID) -> UsageSummaryDTO:
         """Return basic organization usage metrics as an API DTO."""
+        self.expire_inactive_sessions(client_account_id=client_account_id)
         return UsageSummaryDTO.model_validate(self._repository.usage_summary(client_account_id))
 
     def _require_access(
@@ -476,6 +615,15 @@ class HistoryService:
         if normalized_role == UserRole.CLIENT_LEAD and record.client_account_id != requester_client_account_id:
             raise HistoryAccessDeniedError("Session not found.")
         return record
+
+    def _training_config_names_for_rows(self, records: list[object]) -> dict[UUID, str]:
+        """Load training config display names for the provided persistent session rows."""
+        config_ids = {
+            record.training_config_id
+            for record in records
+            if getattr(record, "training_config_id", None) is not None
+        }
+        return self._repository.training_config_names(config_ids)
 
     def _session_snapshot(self, session: TrainingSessionState) -> dict[str, object]:
         """Build a bounded state snapshot that excludes the hidden persona object."""

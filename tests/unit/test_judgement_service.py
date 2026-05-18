@@ -4,6 +4,7 @@ from uuid import uuid4
 from app.application.judgement_service import JudgementService
 from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, SkillScore, build_judge_input_from_session
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, Turn, TurnEvaluation
+from tests.unit._persona_fixtures import valid_minimal_persona
 
 
 class SpyJudgeClient:
@@ -51,14 +52,9 @@ def _build_session_state() -> TrainingSessionState:
         session_id=uuid4(),
         scenario_id="sales_audit_cold_outreach",
         status="finished",
-        persona=PersonaProfile(
+        persona=valid_minimal_persona(
             id="persona-1",
             display_name="Owner",
-            role="owner",
-            industry="b2b",
-            company_size="30-100",
-            authority_level="final_decider",
-            behavior_model="skeptical_but_rational",
         ),
         interest_score=41,
         stage="needs_analysis",

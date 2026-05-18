@@ -2,7 +2,7 @@ from app.application.session_service import TrainingSessionService
 from app.application.summary_compressor import FakeSummaryCompressor
 from app.application.turn_service import TurnService
 from app.domain.errors import StateVersionConflictError
-from app.domain.models import LLMTurnResponse, StatePatch
+from app.domain.models import LLMTurnResponse, RevealedFactPatch, StatePatch
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
 
@@ -45,6 +45,69 @@ class AggressiveSuccessLLMClient:
             stage="finished_success",
             internal_notes="Provider jumped too far.",
         )
+
+
+class RevealedFactsLLMClient:
+    def __init__(self, facts: list[RevealedFactPatch]) -> None:
+        self.facts = facts
+        self.seen_revealed_facts: list[dict[str, object]] | None = None
+
+    def generate_client_turn(self, payload):
+        self.seen_revealed_facts = payload.current_state["revealed_facts"]
+        return LLMTurnResponse(
+            answer="I am the financial director.",
+            interest_delta=1,
+            state_patch=StatePatch(),
+            revealed_facts=self.facts,
+            stage="role_discovery",
+            internal_notes="Revealed facts test.",
+        )
+
+
+def test_turn_service_merges_revealed_facts_with_turn_index_and_payload_context() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    llm_client = RevealedFactsLLMClient([
+        RevealedFactPatch(category="role", text="финансовый директор")
+    ])
+    turn_service = TurnService(repository, llm_client, recent_turn_limit=6)
+    session = session_service.start_session("sales_audit_cold_outreach", "owner")
+
+    turn_service.process_message(str(session.session_id), "What is your role?")
+
+    updated_session = repository.get(str(session.session_id))
+    assert updated_session is not None
+    assert llm_client.seen_revealed_facts == []
+    assert updated_session.client_state.revealed_facts[0].category == "role"
+    assert updated_session.client_state.revealed_facts[0].text == "финансовый директор"
+    assert updated_session.client_state.revealed_facts[0].turn_index == 1
+
+    turn_service.process_message(str(session.session_id), "Can you repeat that?")
+
+    assert llm_client.seen_revealed_facts == [
+        {"category": "role", "text": "финансовый директор", "turn_index": 1}
+    ]
+
+
+def test_turn_service_rejects_technical_revealed_facts_and_deduplicates() -> None:
+    repository = InMemorySessionRepository()
+    session_service = TrainingSessionService(repository)
+    llm_client = RevealedFactsLLMClient([
+        RevealedFactPatch(category="role", text="финансовый директор"),
+        RevealedFactPatch(category="role", text="cfo"),
+        RevealedFactPatch(category="constraint", text="current_vendor_loyalty"),
+        RevealedFactPatch(category="role", text=" финансовый директор "),
+    ])
+    turn_service = TurnService(repository, llm_client, recent_turn_limit=6)
+    session = session_service.start_session("sales_audit_cold_outreach", "owner")
+
+    turn_service.process_message(str(session.session_id), "What is your role?")
+
+    updated_session = repository.get(str(session.session_id))
+    assert updated_session is not None
+    assert [fact.model_dump(mode="json") for fact in updated_session.client_state.revealed_facts] == [
+        {"category": "role", "text": "финансовый директор", "turn_index": 1}
+    ]
 
 
 def test_turn_service_rejects_invalid_finished_success_transition() -> None:
@@ -105,7 +168,7 @@ def test_turn_service_compresses_overflow_turns_into_summary() -> None:
 
     updated_session = repository.get(str(session.session_id))
     assert updated_session is not None
-    assert len(updated_session.turns) == 3
+    assert len(updated_session.turns) == 2
     assert len(updated_session.recent_turns) == 2
     assert "T1:" in updated_session.summary
 

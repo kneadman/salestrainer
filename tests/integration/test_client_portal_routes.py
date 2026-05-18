@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.access.repository import AccessRepository
 from app.api.main import create_app
+from app.client_portal.service import ClientPortalService
 from app.history.models import TrainingReportRecord, TrainingSessionRecord
 from app.identity.dependencies import get_db_session
 from app.identity.models import User
@@ -34,6 +36,28 @@ def _create_db_session() -> Session:
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, class_=Session)
     return session_factory()
+
+
+class _SqlCounter:
+    def __init__(self) -> None:
+        """Track executed SQL statements for query-count regression tests."""
+        self.count = 0
+
+
+@contextmanager
+def _count_sql_statements(db_session: Session) -> Generator[_SqlCounter, None, None]:
+    """Count DB cursor executions on the current test engine."""
+    counter = _SqlCounter()
+    bind = db_session.get_bind()
+
+    def before_cursor_execute(*_args: object) -> None:
+        counter.count += 1
+
+    event.listen(bind, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield counter
+    finally:
+        event.remove(bind, "before_cursor_execute", before_cursor_execute)
 
 
 def _create_client(db_session: Session) -> TestClient:
@@ -208,16 +232,185 @@ def test_client_lead_can_read_same_org_team_users_and_usage_summary() -> None:
 
     users_response = client.get("/api/team/users")
     summary_response = client.get("/api/team/usage-summary")
+    history_response = client.get(f"/api/team/users/{users['manager@example.com'].id}/history/sessions")
 
     assert users_response.status_code == 200
     assert {user["email"] for user in users_response.json()} == {"lead@example.com", "manager@example.com"}
     manager_payload = next(user for user in users_response.json() if user["email"] == "manager@example.com")
     assert manager_payload["total_sessions"] == 1
     assert manager_payload["finished_sessions"] == 1
+    assert "must_change_password" not in manager_payload
     assert summary_response.status_code == 200
     assert summary_response.json()["total_sessions"] == 1
     assert summary_response.json()["finished_sessions"] == 1
     assert summary_response.json()["users"]
+    assert all("must_change_password" not in item for item in summary_response.json()["users"])
+    assert history_response.status_code == 200
+    assert history_response.json()[0]["user_email"] == "manager@example.com"
+    assert history_response.json()[0]["training_config_name"] == "Default"
+    assert "user_id" not in history_response.json()[0]
+    assert "client_account_id" not in history_response.json()[0]
+    assert "training_config_id" not in history_response.json()[0]
+    detail_response = client.get(f"/api/team/users/{users['manager@example.com'].id}/analytics")
+    assert detail_response.status_code == 200
+    assert "must_change_password" not in detail_response.json()["user"]
+    db_session.close()
+
+
+def test_client_training_configs_returns_assigned_active_options() -> None:
+    """Client config selector should expose safe names and ids for assigned active configs only."""
+    db_session = _create_db_session()
+    account, config, users = _seed_account(
+        db_session,
+        slug="config-options",
+        users=[("manager@example.com", "client_manager")],
+    )
+    access_repository = AccessRepository(db_session)
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=users["manager@example.com"].id,
+        training_config_id=inactive_config.id,
+    )
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(config.id),
+            "name": "Default",
+            "is_default": True,
+        }
+    ]
+    db_session.close()
+
+
+def test_client_lead_training_configs_returns_all_active_org_options() -> None:
+    """Client leads should filter team history by all active organization configs."""
+    db_session = _create_db_session()
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    account = identity_repository.create_client_account(name="Lead Configs", slug="lead-configs")
+    lead = identity_repository.create_user(
+        client_account_id=account.id,
+        email="lead@example.com",
+        password_hash=hash_password("password"),
+        role="client_lead",
+        must_change_password=False,
+    )
+    manager = identity_repository.create_user(
+        client_account_id=account.id,
+        email="manager@example.com",
+        password_hash=hash_password("password"),
+        role="client_manager",
+        must_change_password=False,
+    )
+    lead_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Lead default",
+    )
+    manager_only_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Manager only",
+    )
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=lead.id,
+        training_config_id=lead_config.id,
+        is_default=True,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=manager.id,
+        training_config_id=manager_only_config.id,
+        is_default=True,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=lead.id,
+        training_config_id=inactive_config.id,
+    )
+    client = _create_client(db_session)
+    _login(client, "lead@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(lead_config.id),
+            "name": "Lead default",
+            "is_default": True,
+        },
+        {
+            "id": str(manager_only_config.id),
+            "name": "Manager only",
+            "is_default": False,
+        },
+    ]
+    assert all(set(item) == {"id", "name", "is_default"} for item in response.json())
+    assert str(inactive_config.id) not in response.text
+    db_session.close()
+
+
+def test_client_manager_training_configs_returns_all_active_org_options() -> None:
+    """Client managers should see all active organization configs, not only explicitly assigned ones."""
+    db_session = _create_db_session()
+    identity_repository = IdentityRepository(db_session)
+    access_repository = AccessRepository(db_session)
+    account = identity_repository.create_client_account(name="Manager Configs", slug="manager-configs")
+    manager = identity_repository.create_user(
+        client_account_id=account.id,
+        email="manager@example.com",
+        password_hash=hash_password("password"),
+        role="client_manager",
+        must_change_password=False,
+    )
+    default_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Default",
+    )
+    unassigned_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Unassigned",
+    )
+    inactive_config = access_repository.create_training_config(
+        client_account_id=account.id,
+        name="Inactive",
+        is_active=False,
+    )
+    access_repository.assign_training_config_to_user(
+        user_id=manager.id,
+        training_config_id=default_config.id,
+        is_default=True,
+    )
+    client = _create_client(db_session)
+    _login(client, "manager@example.com")
+
+    response = client.get("/api/client/training-configs")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(default_config.id),
+            "name": "Default",
+            "is_default": True,
+        },
+        {
+            "id": str(unassigned_config.id),
+            "name": "Unassigned",
+            "is_default": False,
+        },
+    ]
+    assert str(inactive_config.id) not in response.text
     db_session.close()
 
 
@@ -264,6 +457,8 @@ def test_personal_analytics_aggregates_saved_judgement_payloads_and_ignores_inva
     assert payload["weakest_skill_id"] == "discovery_quality"
     assert payload["weakest_skill_title"] == "Качество диагностики"
     assert payload["weakest_skill_avg_score"] == 50.0
+    assert payload["strongest_skill_id"] == "discovery_quality"
+    assert payload["strongest_skill_avg_score"] == 50.0
     db_session.close()
 
 
@@ -299,6 +494,73 @@ def test_team_usage_summary_aggregates_saved_judgement_payloads() -> None:
     payload = response.json()
     assert payload["sessions_with_judgement"] == 1
     assert payload["avg_judgement_score"] == 78.0
+    assert payload["weakest_skill_id"] == "discovery_quality"
+    assert payload["strongest_skill_id"] == "discovery_quality"
+    assert payload["manager_ranking"][0]["user_email"] == "manager@example.com"
+    assert payload["manager_ranking"][0]["sessions_with_judgement"] == 1
+    db_session.close()
+
+
+def test_team_analytics_uses_bulk_queries_for_larger_team() -> None:
+    """Team analytics should keep stable output and bounded queries for larger teams."""
+    db_session = _create_db_session()
+    manager_emails = [f"manager-{index:02d}@example.com" for index in range(12)]
+    account, config, users = _seed_account(
+        db_session,
+        slug="bulk-team-analytics",
+        users=[("lead@example.com", "client_lead"), *[(email, "client_manager") for email in manager_emails]],
+    )
+    now = datetime.now(UTC).replace(microsecond=0)
+    for index, email in enumerate(manager_emails):
+        finished_session = _add_history(
+            db_session,
+            user=users[email],
+            client_account_id=account.id,
+            training_config_id=config.id,
+            status="finished",
+            final_interest_score=50 + index,
+            turn_count=2 + index,
+            started_at=now - timedelta(minutes=index),
+        )
+        _add_history(
+            db_session,
+            user=users[email],
+            client_account_id=account.id,
+            training_config_id=config.id,
+            status="active",
+            final_interest_score=None,
+            turn_count=1,
+            started_at=now - timedelta(minutes=30 + index),
+        )
+        _add_report_payload(
+            db_session,
+            session_id=finished_session.id,
+            payload=_valid_judge_payload(overall_score=60 + index, skill_score=45 + index),
+        )
+    service = ClientPortalService(db_session, inactive_ttl_seconds=86400)
+    lead = users["lead@example.com"]
+
+    with _count_sql_statements(db_session) as users_counter:
+        team_users = service.list_team_users(requester=lead)
+    with _count_sql_statements(db_session) as summary_counter:
+        summary = service.get_team_usage_summary(requester=lead)
+
+    manager_11 = next(user for user in team_users if user.email == "manager-11@example.com")
+    assert len(team_users) == 13
+    assert manager_11.total_sessions == 2
+    assert manager_11.finished_sessions == 1
+    assert manager_11.avg_final_interest_score == 61.0
+    assert summary.total_sessions == 24
+    assert summary.finished_sessions == 12
+    assert summary.sessions_with_judgement == 12
+    assert summary.avg_judgement_score == 65.5
+    assert len(summary.users) == 13
+    assert [item.user_email for item in summary.manager_ranking[:2]] == [
+        "manager-11@example.com",
+        "manager-10@example.com",
+    ]
+    assert users_counter.count <= 6
+    assert summary_counter.count <= 18
     db_session.close()
 
 

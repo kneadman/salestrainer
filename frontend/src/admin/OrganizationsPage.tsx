@@ -2,7 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createOrganization, disableOrganization, enableOrganization, listOrganizations, updateOrganization } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { OrganizationDTO } from "./types";
-import { formatDate, getErrorMessage, statusLabel } from "./utils";
+import { buildOrganizationViewModel } from "../viewModels";
+import { getErrorMessage } from "./utils";
 
 type OrganizationsPageProps = {
   onNavigate: (path: string) => void;
@@ -103,6 +104,8 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
     return <ErrorState title="Организации недоступны" detail={error} />;
   }
 
+  const orgVms = visibleOrganizations.map(buildOrganizationViewModel);
+
   return (
     <div className="admin-page">
       <div className="admin-page__header">
@@ -161,29 +164,32 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
                 </tr>
               </thead>
               <tbody>
-                {visibleOrganizations.map((org) => (
-                  <tr key={org.id}>
-                    <td>{org.name}</td>
-                    <td>{org.slug}</td>
-                    <td><Badge tone={org.is_active ? "good" : "danger"}>{statusLabel(org.is_active)}</Badge></td>
-                    <td>{org.active_users_count}/{org.users_count}</td>
-                    <td>{org.training_configs_count}</td>
-                    <td>{formatDate(org.updated_at)}</td>
-                    <td>
-                      <div className="admin-row-actions">
-                        <button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/organizations/${org.id}`)}>
-                          Открыть
-                        </button>
-                        <button type="button" className="admin-link-button" onClick={() => setForm({ id: org.id, name: org.name, slug: org.slug })}>
-                          Изменить
-                        </button>
-                        <button type="button" className="admin-link-button" onClick={() => void toggleOrganization(org)}>
-                          {org.is_active ? "Отключить" : "Включить"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {orgVms.map((vm, index) => {
+                  const org = visibleOrganizations[index];
+                  return (
+                    <tr key={vm.id}>
+                      <td>{vm.name}</td>
+                      <td>{vm.slug}</td>
+                      <td><Badge tone={vm.statusTone}>{vm.statusLabel}</Badge></td>
+                      <td>{org.active_users_count}/{org.users_count}</td>
+                      <td>{org.training_configs_count}</td>
+                      <td>{vm.updatedAtLabel}</td>
+                      <td>
+                        <div className="admin-row-actions">
+                          <button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/organizations/${org.id}`)}>
+                            Открыть
+                          </button>
+                          <button type="button" className="admin-link-button" onClick={() => setForm({ id: org.id, name: org.name, slug: org.slug })}>
+                            Изменить
+                          </button>
+                          <button type="button" className="admin-link-button" onClick={() => void toggleOrganization(org)}>
+                            {org.is_active ? "Отключить" : "Включить"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

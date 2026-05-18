@@ -12,6 +12,22 @@ class HistorySessionSummaryDTO(BaseModel):
     user_email: str
     client_account_id: UUID
     training_config_id: UUID | None
+    training_config_name: str | None = None
+    scenario_id: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    last_activity_at: datetime
+    turn_count: int
+    final_interest_score: int | None = Field(default=None, ge=0, le=100)
+    final_stage: str | None = None
+    summary: str | None = None
+
+
+class ClientHistorySessionSummaryDTO(BaseModel):
+    session_id: UUID
+    user_email: str
+    training_config_name: str | None = None
     scenario_id: str
     status: str
     started_at: datetime
@@ -48,6 +64,13 @@ class HistoryReportDTO(BaseModel):
 
 class HistorySessionDetailDTO(BaseModel):
     session: HistorySessionSummaryDTO
+    public_brief: str | None = None
+    turns: list[HistoryTurnDTO]
+    report: HistoryReportDTO | None = None
+
+
+class ClientHistorySessionDetailDTO(BaseModel):
+    session: ClientHistorySessionSummaryDTO
     public_brief: str | None = None
     turns: list[HistoryTurnDTO]
     report: HistoryReportDTO | None = None

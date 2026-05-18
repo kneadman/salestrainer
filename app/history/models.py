@@ -38,6 +38,8 @@ class TrainingSessionRecord(Base):
     final_state_snapshot: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     public_brief: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    persona_schema_version: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'persona-profile-v3.1'"))
+    persona_prompt_version: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'global-yandex-persona-agent'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -76,6 +78,8 @@ class TrainingTurnRecord(Base):
     llm_payload_snapshot: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     llm_response_snapshot: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     evaluation_snapshot: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    dialogue_schema_version: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'dialogue-turn-v1'"))
+    dialogue_prompt_version: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'global-yandex-dialogue-agent'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
@@ -98,6 +102,8 @@ class TrainingReportRecord(Base):
     report_text: Mapped[str] = mapped_column(Text, nullable=False)
     report_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
     report_payload: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    judge_schema_version: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'judge-session-v1'"))
+    judge_prompt_version: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'global-yandex-judge-agent'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

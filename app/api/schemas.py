@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -22,18 +23,39 @@ class TurnPublicDTO(BaseModel):
     created_at: datetime
 
 
+class FactsPanelItemDTO(BaseModel):
+    category: Literal[
+        "role",
+        "authority",
+        "current_process",
+        "decision_criterion",
+        "constraint",
+        "buying_signal",
+        "pain",
+        "objection",
+    ]
+    label: str
+    text: str
+    turn_index: int
+
+
+class FactsPanelDTO(BaseModel):
+    items: list[FactsPanelItemDTO]
+
+
 class SessionPublicDTO(BaseModel):
     session_id: str
     scenario_id: str
     status: str
-    persona_name: str
     public_brief: str
     stage: str
     interest: InterestDTO
     client_state_public: dict[str, object]
+    facts_panel: FactsPanelDTO
     turn_count: int
     summary: str
     state_version: int
+    training_config_id: str | None = None
 
 
 class ScenarioOptionDTO(BaseModel):
@@ -60,6 +82,7 @@ class PersonaOptionDTO(BaseModel):
 class SessionCreateRequest(BaseModel):
     scenario_id: str | None = None
     persona_id: str | None = None
+    training_config_id: str | None = None
 
 
 class LandingLeadRequest(BaseModel):
@@ -129,7 +152,6 @@ class SessionReportResponse(BaseModel):
 
 class SpeechTranscriptionResponse(BaseModel):
     text: str
-    raw_text: str
     normalized: bool
     duration_ms: int | None = None
 

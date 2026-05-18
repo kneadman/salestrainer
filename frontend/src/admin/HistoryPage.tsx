@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { ReportSurface } from "../components/ReportSurface";
-import { scenarioLabel, statusLabel } from "../labels";
-import { getHistorySession, listOrganizationHistory, listOrganizations } from "./api";
+import { buildHistorySessionViewModel, buildHistoryTurnViewModel } from "../viewModels";
+import { getHistorySession, listOrganizationHistory, listOrganizations, listTrainingConfigs } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
-import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO } from "./types";
-import { formatDate, getErrorMessage } from "./utils";
+import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO } from "./types";
+import { getErrorMessage } from "./utils";
 
 type HistoryPageProps = {
   sessionId?: string;
@@ -22,17 +22,19 @@ export function HistoryPage({ sessionId, onNavigate }: HistoryPageProps) {
 function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
   /** Load organization-scoped history for the selected organization filter. */
   const [organizations, setOrganizations] = useState<OrganizationDTO[]>([]);
+  const [trainingConfigs, setTrainingConfigs] = useState<TrainingConfigDTO[]>([]);
   const [organizationId, setOrganizationId] = useState("");
   const [status, setStatus] = useState("");
-  const [scenarioId, setScenarioId] = useState("");
+  const [trainingConfigId, setTrainingConfigId] = useState("");
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async (selectedOrganizationId: string, selectedStatus = status, selectedScenarioId = scenarioId) => {
+  const load = async (selectedOrganizationId: string, selectedStatus = status, selectedTrainingConfigId = trainingConfigId) => {
     /** Fetch history rows only when an organization is selected. */
     if (!selectedOrganizationId) {
       setHistory([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -41,7 +43,7 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
       setHistory(
         await listOrganizationHistory(selectedOrganizationId, {
           status: selectedStatus,
-          scenario_id: selectedScenarioId,
+          training_config_id: selectedTrainingConfigId,
           limit: 100,
           offset: 0,
         }),
@@ -63,7 +65,11 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
         setOrganizations(orgs);
         const firstId = orgs[0]?.id ?? "";
         setOrganizationId(firstId);
-        await load(firstId, "", "");
+        const [configs] = await Promise.all([
+          firstId ? listTrainingConfigs(firstId) : Promise.resolve([]),
+          load(firstId, "", ""),
+        ]);
+        setTrainingConfigs(configs);
       } catch (bootstrapError) {
         setError(getErrorMessage(bootstrapError));
         setLoading(false);
@@ -79,6 +85,8 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
   if (error) {
     return <ErrorState title="История недоступна" detail={error} />;
   }
+
+  const vms = history.map(buildHistorySessionViewModel);
 
   return (
     <div className="admin-page">
@@ -102,7 +110,10 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
               value={organizationId}
               onChange={(event) => {
                 setOrganizationId(event.target.value);
-                void load(event.target.value);
+                setTrainingConfigId("");
+                const selectedOrganizationId = event.target.value;
+                void listTrainingConfigs(selectedOrganizationId).then(setTrainingConfigs).catch(() => setTrainingConfigs([]));
+                void load(selectedOrganizationId, status, "");
               }}
             >
               {organizations.map((org) => (
@@ -122,8 +133,13 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
             </select>
           </label>
           <label>
-            <span>Сценарий</span>
-            <input value={scenarioId} onChange={(event) => setScenarioId(event.target.value)} />
+            <span>Настройка тренировки</span>
+            <select value={trainingConfigId} onChange={(event) => setTrainingConfigId(event.target.value)}>
+              <option value="">Все настройки</option>
+              {trainingConfigs.map((config) => (
+                <option key={config.id} value={config.id}>{config.name}</option>
+              ))}
+            </select>
           </label>
           <button type="submit" className="admin-button admin-button--primary">
             Применить
@@ -138,33 +154,31 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>ID сессии</th>
+                  <th>Начало</th>
                   <th>Пользователь</th>
                   <th>Статус</th>
-                  <th>Сценарий</th>
+                  <th>Настройка</th>
                   <th>Ходы</th>
                   <th>Интерес</th>
-                  <th>Начало</th>
                   <th>Действия</th>
                 </tr>
               </thead>
               <tbody>
-                {history.map((session) => (
-                  <tr key={session.session_id}>
-                    <td>{session.session_id.slice(0, 8)}</td>
-                    <td>{session.user_email}</td>
+                {vms.map((vm) => (
+                  <tr key={vm.sessionId}>
+                    <td>{vm.startedAtLabel}</td>
+                    <td>{vm.userEmail}</td>
                     <td>
-                      <Badge>{statusLabel(session.status)}</Badge>
+                      <Badge>{vm.statusLabel}</Badge>
                     </td>
-                    <td>{scenarioLabel(session.scenario_id)}</td>
-                    <td>{session.turn_count}</td>
-                    <td>{session.final_interest_score ?? "—"}</td>
-                    <td>{formatDate(session.started_at)}</td>
+                    <td>{vm.trainingConfigLabel}</td>
+                    <td>{vm.turnCount}</td>
+                    <td>{vm.finalInterestScore}</td>
                     <td>
                       <button
                         type="button"
                         className="admin-link-button"
-                        onClick={() => onNavigate(`/admin/history/sessions/${session.session_id}`)}
+                        onClick={() => onNavigate(`/admin/history/sessions/${vm.sessionId}`)}
                       >
                         Открыть
                       </button>
@@ -210,6 +224,9 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
     return <ErrorState title="История сессии недоступна" detail={error ?? "Сессия не найдена."} />;
   }
 
+  const sessionVm = buildHistorySessionViewModel(detail.session);
+  const turnVms = detail.turns.map(buildHistoryTurnViewModel);
+
   return (
     <div className="admin-page">
       <div className="admin-page__header">
@@ -217,12 +234,12 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
           <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/history")}>
             ← История
           </button>
-          <h1>Сессия {detail.session.session_id.slice(0, 8)}</h1>
+          <h1>Тренировка от {sessionVm.startedAtLabel}</h1>
           <p className="admin-muted">
-            {detail.session.user_email} · {scenarioLabel(detail.session.scenario_id)}
+            {detail.session.user_email} · {sessionVm.trainingConfigLabel}
           </p>
         </div>
-        <Badge>{statusLabel(detail.session.status)}</Badge>
+        <Badge>{sessionVm.statusLabel}</Badge>
       </div>
       <section className="admin-panel">
         <h2>Сводка</h2>
@@ -235,20 +252,20 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
           <EmptyState title="Ходов нет" />
         ) : (
           <div className="admin-history-turns">
-            {detail.turns.map((turn) => (
-              <article key={turn.turn_index}>
+            {turnVms.map((vm) => (
+              <article key={vm.turnIndex}>
                 <div>
-                  <Badge>#{turn.turn_index}</Badge>
-                  <span>{formatDate(turn.created_at)}</span>
+                  <Badge>#{vm.turnIndex}</Badge>
+                  <span>{vm.createdAtLabel}</span>
                 </div>
                 <p>
-                  <strong>Менеджер:</strong> {turn.manager_message}
+                  <strong>Менеджер:</strong> {vm.managerMessage}
                 </p>
                 <p>
-                  <strong>Клиент:</strong> {turn.client_answer}
+                  <strong>Клиент:</strong> {vm.clientAnswer}
                 </p>
                 <p className="admin-muted">
-                  Интерес {turn.interest_before} → {turn.interest_after}; этап {turn.stage_before} → {turn.stage_after}
+                  Интерес {vm.interestBefore} → {vm.interestAfter}; этап {vm.stageBeforeLabel} → {vm.stageAfterLabel}
                 </p>
               </article>
             ))}

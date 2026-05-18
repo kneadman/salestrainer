@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { listAuditLog, listOrganizations, getUsageSummary } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO, UsageSummaryDTO } from "./types";
-import { formatDate, getErrorMessage } from "./utils";
+import { buildAuditLogViewModel } from "../viewModels";
+import { getErrorMessage } from "./utils";
 
 type AdminDashboardProps = {
   onNavigate: (path: string) => void;
@@ -71,6 +72,8 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     return <ErrorState title="Панель недоступна" detail={error} />;
   }
 
+  const auditVms = auditLog.map(buildAuditLogViewModel);
+
   return (
     <div className="admin-page">
       <div className="admin-page__header">
@@ -116,12 +119,12 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                 </tr>
               </thead>
               <tbody>
-                {auditLog.map((event) => (
-                  <tr key={event.id}>
-                    <td>{formatDate(event.created_at)}</td>
-                    <td><Badge>{event.action}</Badge></td>
-                    <td>{event.entity_type}</td>
-                    <td>{event.actor_user_id ?? "система"}</td>
+                {auditVms.map((vm) => (
+                  <tr key={vm.id}>
+                    <td>{vm.createdAtLabel}</td>
+                    <td><Badge>{vm.actionLabel}</Badge></td>
+                    <td>{vm.entityLabel}</td>
+                    <td>{vm.actorLabel}</td>
                   </tr>
                 ))}
               </tbody>

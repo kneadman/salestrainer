@@ -17,6 +17,7 @@ const apiMocks = vi.hoisted(() => ({
   finishSession: vi.fn<() => Promise<FinishSessionResponse>>(),
   sendMessage: vi.fn(),
   transcribeSpeech: vi.fn<() => Promise<SpeechTranscriptionResponse>>(),
+  getTrainingConfigs: vi.fn<() => Promise<{ id: string; name: string; is_default: boolean }[]>>(),
 }));
 
 vi.mock("../api", async () => {
@@ -29,6 +30,14 @@ vi.mock("../api", async () => {
     finishSession: apiMocks.finishSession,
     sendMessage: apiMocks.sendMessage,
     transcribeSpeech: apiMocks.transcribeSpeech,
+  };
+});
+
+vi.mock("./api", async () => {
+  const actual = await vi.importActual<typeof import("./api")>("./api");
+  return {
+    ...actual,
+    getTrainingConfigs: apiMocks.getTrainingConfigs,
   };
 });
 
@@ -79,11 +88,11 @@ const finishedSession = {
   session_id: "session-1",
   scenario_id: "cold-b2b",
   status: "finished",
-  persona_name: "Ирина",
   public_brief: "Краткий бриф",
   stage: "closed",
   interest: { score: 74, band: "warm" },
   client_state_public: {},
+  facts_panel: { items: [] },
   turn_count: 2,
   summary: "Финальная сводка",
   state_version: 3,
@@ -95,6 +104,8 @@ const activeSession = {
   status: "active",
   stage: "discovery",
 };
+
+const trainerStorageKey = "salestrainer.currentSessionId.user-1";
 
 const makeTurn = (turnIndex: number) => ({
   turn_index: turnIndex,
@@ -112,12 +123,15 @@ describe("TrainerPage", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    apiMocks.getTrainingConfigs.mockResolvedValue([
+      { id: "config-1", name: "B2B discovery", is_default: true },
+    ]);
   });
 
   it("renders the trainer chat panel without phone shell markup and clears report state on new session", async () => {
     const user = userEvent.setup();
 
-    localStorage.setItem("salestrainer.currentSessionId", finishedSession.session_id);
+    localStorage.setItem(trainerStorageKey, finishedSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: finishedSession,
@@ -135,7 +149,7 @@ describe("TrainerPage", () => {
       },
     });
 
-    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    const { container } = render(<TrainerPage userId="user-1" />);
 
     const reportButton = await screen.findByRole("button", { name: "Открыть итоговый отчёт" });
     expect(reportButton).toBeInTheDocument();
@@ -154,6 +168,7 @@ describe("TrainerPage", () => {
     await waitFor(() => {
       expect(apiMocks.createSession).toHaveBeenCalledTimes(1);
     });
+    expect(apiMocks.createSession).toHaveBeenCalledWith("config-1");
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Открыть итоговый отчёт" })).not.toBeInTheDocument();
     });
@@ -164,7 +179,7 @@ describe("TrainerPage", () => {
   it("opens the report modal immediately after finish returns a report payload", async () => {
     const user = userEvent.setup();
 
-    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: activeSession,
@@ -176,7 +191,7 @@ describe("TrainerPage", () => {
       report_payload: structuredReportPayload,
     });
 
-    render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    render(<TrainerPage userId="user-1" />);
 
     const finishButton = await screen.findByRole("button", { name: "Завершить" });
     await user.click(finishButton);
@@ -190,7 +205,7 @@ describe("TrainerPage", () => {
   it("keeps the error banner inside trainer-chat-body while composer remains a direct panel child", async () => {
     const user = userEvent.setup();
 
-    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: activeSession,
@@ -198,11 +213,11 @@ describe("TrainerPage", () => {
     });
     apiMocks.sendMessage.mockRejectedValue(new Error("Сервис временно недоступен"));
 
-    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    const { container } = render(<TrainerPage userId="user-1" />);
 
     const textarea = await screen.findByPlaceholderText("Введите сообщение клиенту");
     await user.type(textarea, "Привет");
-    await user.click(screen.getByRole("button", { name: "Отправить" }));
+    await user.click(screen.getByRole("button", { name: "Отправить сообщение" }));
 
     const errorBanner = await screen.findByText("Сервис временно недоступен");
     const trainerChatPanel = container.querySelector(".trainer-chat-panel");
@@ -236,7 +251,7 @@ describe("TrainerPage", () => {
         },
       });
 
-      localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+      localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
       apiMocks.getSession.mockResolvedValue({
         session: activeSession,
@@ -256,7 +271,7 @@ describe("TrainerPage", () => {
           turn_index: 1,
         });
 
-      const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+      const { container } = render(<TrainerPage userId="user-1" />);
 
       const textarea = await screen.findByRole("textbox");
       const sendButton = container.querySelector(".composer__send");
@@ -278,14 +293,14 @@ describe("TrainerPage", () => {
   });
 
   it("keeps chat-window inside trainer-chat-body for long conversations", async () => {
-    localStorage.setItem("salestrainer.currentSessionId", activeSession.session_id);
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
 
     apiMocks.getSession.mockResolvedValue({
       session: activeSession,
       turns: Array.from({ length: 32 }, (_, index) => makeTurn(index + 1)),
     });
 
-    const { container } = render(<TrainerPage onLogout={vi.fn().mockResolvedValue(undefined)} />);
+    const { container } = render(<TrainerPage userId="user-1" />);
 
     await screen.findByText("Ответ 32");
 
@@ -301,5 +316,58 @@ describe("TrainerPage", () => {
     expect(trainerChatBody).toContainElement(chatWindow as HTMLElement);
     expect(trainerChatBody?.nextElementSibling).toBe(composer);
     expect(trainerChatPanel).toContainElement(trainerChatBody as HTMLElement);
+  });
+
+  it("does not show report button for active sessions", async () => {
+    localStorage.setItem(trainerStorageKey, activeSession.session_id);
+
+    apiMocks.getSession.mockResolvedValue({
+      session: activeSession,
+      turns: [],
+    });
+
+    render(<TrainerPage userId="user-1" />);
+
+    await screen.findByRole("button", { name: "Завершить" });
+    expect(screen.queryByRole("button", { name: "Открыть итоговый отчёт" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Итоговый отчёт" })).not.toBeInTheDocument();
+  });
+
+  it("shows config selector on start screen and passes selected config to createSession", async () => {
+    const user = userEvent.setup();
+
+    apiMocks.getTrainingConfigs.mockResolvedValue([
+      { id: "config-1", name: "B2B discovery", is_default: true },
+      { id: "config-2", name: "Objection practice", is_default: false },
+    ]);
+    apiMocks.createSession.mockResolvedValue({
+      session: {
+        ...activeSession,
+        session_id: "session-2",
+        training_config_id: "config-2",
+      },
+    });
+
+    render(<TrainerPage userId="user-1" />);
+
+    const select = await screen.findByRole("combobox", { name: /сценарий/i });
+    expect(select).toBeInTheDocument();
+    expect(screen.getByText("B2B discovery")).toBeInTheDocument();
+
+    await user.selectOptions(select, "config-2");
+    await user.click(screen.getByRole("button", { name: "Начать тренировку" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createSession).toHaveBeenCalledWith("config-2");
+    });
+  });
+
+  it("shows error and disables start button when training configs fail to load", async () => {
+    apiMocks.getTrainingConfigs.mockRejectedValue(new Error("Network error"));
+
+    render(<TrainerPage userId="user-1" />);
+
+    expect(await screen.findByText(/Настройки тренировки недоступны/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Начать тренировку" })).toBeDisabled();
   });
 });
