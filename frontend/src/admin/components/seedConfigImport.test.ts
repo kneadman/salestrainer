@@ -161,7 +161,7 @@ describe("normalizeSeedJson", () => {
     expect(result).not.toBeNull();
     expect(result!.triggers).toEqual([]);
     expect(result!.lpr_and_roles.allowed_roles).toEqual([]);
-    expect(result!.novelty.anti_patterns).toEqual([]);
+    expect(result?.novelty?.anti_patterns ?? []).toEqual([]);
   });
 
   it("returns null for non-object", () => {

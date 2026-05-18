@@ -146,11 +146,13 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
       const payload = configForm.use_seed
         ? {
             name: configForm.name,
+            persona_generation_context: "",
             seed_config: configForm.seed_config,
           }
         : {
             name: configForm.name,
             persona_generation_context: configForm.persona_generation_context,
+            seed_config: null,
           };
       if (configForm.id) {
         await updateTrainingConfig(configForm.id, payload);
