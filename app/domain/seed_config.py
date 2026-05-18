@@ -19,6 +19,7 @@ TrainingType = Literal[
 TargetAction = Literal[
     "request_product_presentation",
     "schedule_demo_meeting",
+    "schedule_meeting",
     "agree_to_proposal_review",
     "introduce_to_decision_maker",
     "agree_to_pilot_project",
@@ -38,6 +39,14 @@ Role = Literal[
     "chief_accountant",
     "operations_director",
     "sales_director",
+    "procurement_manager",
+    "technical_director",
+    "hr_director",
+    "marketing_director",
+    "branch_manager",
+    "project_manager",
+    "head_of_department",
+    "business_development_manager",
 ]
 
 ObjectionType = Literal[
@@ -47,6 +56,10 @@ ObjectionType = Literal[
     "price",
     "control",
     "risk",
+    "timing",
+    "competition",
+    "authority",
+    "no_need",
 ]
 
 

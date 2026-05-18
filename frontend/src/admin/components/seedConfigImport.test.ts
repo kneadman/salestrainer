@@ -81,22 +81,14 @@ describe("validateSeedJson", () => {
     expect(errors.map((e) => e.field)).toContain("starting_params");
   });
 
-  it("errors on invalid training_type", () => {
-    const seed = { ...validSeed, training_context: { ...validSeed.training_context, training_type: "invalid" } };
-    const errors = validateSeedJson(seed);
-    expect(errors).toContainEqual({
-      field: "training_context.training_type",
-      message: expect.stringContaining("cold_call_presentation"),
-    });
+  it("accepts any training_type string (no enum validation)", () => {
+    const seed = { ...validSeed, training_context: { ...validSeed.training_context, training_type: "custom_training_type" } };
+    expect(validateSeedJson(seed)).toEqual([]);
   });
 
-  it("errors on invalid target_action", () => {
-    const seed = { ...validSeed, training_context: { ...validSeed.training_context, target_action: "invalid" } };
-    const errors = validateSeedJson(seed);
-    expect(errors).toContainEqual({
-      field: "training_context.target_action",
-      message: expect.stringContaining("request_product_presentation"),
-    });
+  it("accepts any target_action string (no enum validation)", () => {
+    const seed = { ...validSeed, training_context: { ...validSeed.training_context, target_action: "custom_target_action" } };
+    expect(validateSeedJson(seed)).toEqual([]);
   });
 
   it("errors on starting_params min >= max", () => {
@@ -123,22 +115,14 @@ describe("validateSeedJson", () => {
     });
   });
 
-  it("errors on invalid role", () => {
-    const seed = { ...validSeed, lpr_and_roles: { ...validSeed.lpr_and_roles, allowed_roles: ["owner", "invalid_role"] } };
-    const errors = validateSeedJson(seed);
-    expect(errors).toContainEqual({
-      field: "lpr_and_roles.allowed_roles",
-      message: expect.stringContaining("invalid_role"),
-    });
+  it("accepts any role string (no enum validation)", () => {
+    const seed = { ...validSeed, lpr_and_roles: { ...validSeed.lpr_and_roles, allowed_roles: ["owner", "any_custom_role"] } };
+    expect(validateSeedJson(seed)).toEqual([]);
   });
 
-  it("errors on invalid objection type", () => {
-    const seed = { ...validSeed, objections: [{ text: "X", type: "invalid" }] };
-    const errors = validateSeedJson(seed);
-    expect(errors).toContainEqual({
-      field: "objections[0].type",
-      message: expect.stringContaining("anti_presentation"),
-    });
+  it("accepts any objection type string (no enum validation)", () => {
+    const seed = { ...validSeed, objections: [{ text: "X", type: "custom_type" }] };
+    expect(validateSeedJson(seed)).toEqual([]);
   });
 });
 
