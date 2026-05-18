@@ -196,7 +196,7 @@ class Turn(BaseModel):
 class StatePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    tone: ToneLiteral | None = None
+    tone: str | None = None
     trust_delta: int = Field(default=0, ge=-15, le=15)
     irritation_delta: int = Field(default=0, ge=-15, le=15)
     urgency_delta: int = Field(default=0, ge=-15, le=15)
@@ -212,11 +212,35 @@ class StatePatch(BaseModel):
     add_discovered_constraints: list[str] = Field(default_factory=list)
     add_discovered_current_process: list[str] = Field(default_factory=list)
 
+    @field_validator("tone")
+    @classmethod
+    def _normalize_tone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        allowed = {"cold", "skeptical", "neutral", "interested", "warm", "ready_next_step"}
+        normalized = value.lower().strip()
+        if normalized in allowed:
+            return normalized
+        # Fallback mapping for common hallucinations
+        if "cold" in normalized or "холод" in normalized:
+            return "cold"
+        if "skept" in normalized or "скепт" in normalized:
+            return "skeptical"
+        if "warm" in normalized or "тепл" in normalized:
+            return "warm"
+        if "interest" in normalized or "интерес" in normalized:
+            return "interested"
+        if "ready" in normalized or "готов" in normalized:
+            return "ready_next_step"
+        if "neutral" in normalized or "нейтр" in normalized:
+            return "neutral"
+        return "neutral"
+
 
 class LLMTurnResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    answer: str = Field(min_length=1, max_length=1000)
+    answer: str = Field(min_length=1)
     interest_delta: int = Field(ge=-15, le=15)
     state_patch: StatePatch
     revealed_facts: list[RevealedFactPatch] = Field(
@@ -224,7 +248,7 @@ class LLMTurnResponse(BaseModel):
         json_schema_extra={"default": []},
     )
     stage: str = Field(min_length=1)
-    internal_notes: str = Field(default="", max_length=1000)
+    internal_notes: str = Field(default="")
 
 
 class Scenario(BaseModel):
