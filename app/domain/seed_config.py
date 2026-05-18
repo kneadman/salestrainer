@@ -5,62 +5,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-TrainingType = Literal[
-    "cold_call_presentation",
-    "inbound_lead_qualification",
-    "follow_up_after_meeting",
-    "reactivation_call",
-    "objection_handling",
-    "upsell_existing_client",
-    "first_contact_after_event",
-    "referral_call",
-]
-
-TargetAction = Literal[
-    "request_product_presentation",
-    "schedule_demo_meeting",
-    "schedule_meeting",
-    "agree_to_proposal_review",
-    "introduce_to_decision_maker",
-    "agree_to_pilot_project",
-    "provide_documents_for_audit",
-    "schedule_second_call",
-    "agree_to_cost_estimate",
-]
-
-Role = Literal[
-    "owner",
-    "founder",
-    "ceo",
-    "general_director",
-    "managing_partner",
-    "commercial_director",
-    "cfo",
-    "chief_accountant",
-    "operations_director",
-    "sales_director",
-    "procurement_manager",
-    "technical_director",
-    "hr_director",
-    "marketing_director",
-    "branch_manager",
-    "project_manager",
-    "head_of_department",
-    "business_development_manager",
-]
-
-ObjectionType = Literal[
-    "anti_presentation",
-    "emotional",
-    "trust",
-    "price",
-    "control",
-    "risk",
-    "timing",
-    "competition",
-    "authority",
-    "no_need",
-]
+# Seed config accepts free-form strings for these fields;
+# strict enum validation is intentionally relaxed so the generator
+# can introduce new values without backend changes.
+TrainingType = str
+TargetAction = str
+Role = str
+ObjectionType = str
 
 
 class TrainingContextBlock(BaseModel):
