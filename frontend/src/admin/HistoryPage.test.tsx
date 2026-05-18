@@ -46,6 +46,7 @@ const trainingConfig: TrainingConfigDTO = {
   name: "B2B discovery",
   is_active: true,
   persona_generation_context: "Context",
+  seed_config: null,
   created_at: "2026-05-13T06:00:00Z",
   updated_at: "2026-05-13T06:00:00Z",
 };

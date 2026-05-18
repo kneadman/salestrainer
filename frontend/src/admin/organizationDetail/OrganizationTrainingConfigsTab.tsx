@@ -1,5 +1,6 @@
 import { FormEvent } from "react";
 import { Badge, EmptyState } from "../components/AdminPrimitives";
+import { SeedConfigForm } from "../components/SeedConfigForm";
 import type { TrainingConfigDTO } from "../types";
 import { statusLabel } from "../utils";
 
@@ -7,11 +8,15 @@ export type ConfigForm = {
   id?: string;
   name: string;
   persona_generation_context: string;
+  seed_config: import("../types").SeedConfig | null;
+  use_seed: boolean;
 };
 
 export const DEFAULT_CONFIG_FORM: ConfigForm = {
   name: "",
   persona_generation_context: "",
+  seed_config: null,
+  use_seed: true,
 };
 
 export function OrganizationTrainingConfigsTab(props: {
@@ -22,7 +27,7 @@ export function OrganizationTrainingConfigsTab(props: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggle: (config: TrainingConfigDTO) => void;
 }) {
-  /** Render simplified training config form and config list. */
+  /** Render training config form with seed/legacy toggle and config list. */
   return (
     <section className="admin-panel">
       <div className="admin-panel__header">
@@ -39,17 +44,36 @@ export function OrganizationTrainingConfigsTab(props: {
             />
           </label>
         </div>
-        <label>
-          <span>Контекст генерации личности</span>
-          <textarea
-            rows={8}
-            value={props.form.persona_generation_context}
-            onChange={(event) => props.setForm({ ...props.form, persona_generation_context: event.target.value })}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={props.form.use_seed}
+              onChange={(e) => props.setForm({ ...props.form, use_seed: e.target.checked })}
+            />
+            <span>Использовать Seed-конфигурацию</span>
+          </label>
+        </div>
+        {props.form.use_seed ? (
+          <SeedConfigForm
+            seedConfig={props.form.seed_config}
+            onChange={(seed) => props.setForm({ ...props.form, seed_config: seed })}
           />
-          <small className="admin-muted">
-            Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения.
-          </small>
-        </label>
+        ) : (
+          <label>
+            <span>Контекст генерации личности</span>
+            <textarea
+              rows={8}
+              value={props.form.persona_generation_context}
+              onChange={(event) =>
+                props.setForm({ ...props.form, persona_generation_context: event.target.value })
+              }
+            />
+            <small className="admin-muted">
+              Опишите продукт клиента, целевую аудиторию, типичные роли ЛПР, боли, возражения, критерии выбора и ограничения.
+            </small>
+          </label>
+        )}
         <button type="submit" className="admin-button admin-button--primary" disabled={props.busy}>
           {props.form.id ? "Обновить настройку" : "Создать настройку"}
         </button>
@@ -62,7 +86,7 @@ export function OrganizationTrainingConfigsTab(props: {
             <thead>
               <tr>
                 <th>Название</th>
-                <th>Контекст</th>
+                <th>Тип</th>
                 <th>Статус</th>
                 <th>Действия</th>
               </tr>
@@ -72,11 +96,11 @@ export function OrganizationTrainingConfigsTab(props: {
                 <tr key={config.id}>
                   <td>{config.name}</td>
                   <td>
-                    {config.persona_generation_context
-                      ? `${config.persona_generation_context.slice(0, 120)}${
-                          config.persona_generation_context.length > 120 ? "..." : ""
-                        }`
-                      : "—"}
+                    {config.seed_config ? (
+                      <Badge tone="good">Seed</Badge>
+                    ) : (
+                      <Badge tone="neutral">Legacy text</Badge>
+                    )}
                   </td>
                   <td>
                     <Badge tone={config.is_active ? "good" : "danger"}>{statusLabel(config.is_active)}</Badge>
@@ -91,6 +115,8 @@ export function OrganizationTrainingConfigsTab(props: {
                             id: config.id,
                             name: config.name,
                             persona_generation_context: config.persona_generation_context,
+                            seed_config: config.seed_config,
+                            use_seed: !!config.seed_config,
                           })
                         }
                       >

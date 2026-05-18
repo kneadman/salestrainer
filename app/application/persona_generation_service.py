@@ -11,6 +11,8 @@ from app.domain.errors import LLMProviderConfigurationError, PersonaGenerationEr
 from app.domain.models import PersonaGenerationInput, PersonaProfile
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.scenarios import get_scenario
+from app.domain.seed_config import PersonaSeedConfig
+from app.application.seed_prompt_renderer import SeedPromptRenderer
 from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.persona_generator_client import (
     FakePersonaGeneratorClient,
@@ -22,6 +24,8 @@ from app.infrastructure.persona_generator_client import (
 from app.infrastructure.llm_client import LLMClientError
 
 logger = logging.getLogger(__name__)
+
+_seed_prompt_renderer = SeedPromptRenderer()
 
 
 class PersonaGenerationService:
@@ -77,10 +81,11 @@ class PersonaGenerationService:
     ) -> PersonaGenerationInput:
         """Normalize training-config business context into the persona-generator contract."""
         resolved_scenario_id = scenario_id or self._settings.default_training_scenario_id
+        context = self._resolve_generation_context(training_config)
         return PersonaGenerationInput(
             scenario=get_scenario(resolved_scenario_id),
             training_config_name=training_config.name,
-            persona_generation_context=training_config.persona_generation_context.strip(),
+            persona_generation_context=context,
             persona_policy={},
             organization_context={},
             target_action=None,
@@ -90,6 +95,26 @@ class PersonaGenerationService:
             randomization_seed=None,
             constraints={},
         )
+
+    def _resolve_generation_context(self, training_config: RuntimeTrainingConfig) -> str:
+        """Prefer structured seed config; fall back to legacy free-text prompt."""
+        if training_config.seed_config:
+            try:
+                seed = PersonaSeedConfig.model_validate(training_config.seed_config)
+                rendered = _seed_prompt_renderer.render(seed)
+                logger.info(
+                    "seed_prompt_rendered training_config_id=%s prompt_length=%s",
+                    training_config.id,
+                    len(rendered),
+                )
+                return rendered
+            except (PydanticValidationError, FileNotFoundError, ValueError) as error:
+                logger.warning(
+                    "seed_prompt_render_failed training_config_id=%s error=%s falling_back_to_legacy",
+                    training_config.id,
+                    error,
+                )
+        return training_config.persona_generation_context.strip()
 
     def _build_client(
         self,

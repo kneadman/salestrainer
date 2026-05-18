@@ -463,6 +463,7 @@ def test_training_config_create_accepts_minimal_payload() -> None:
         "name",
         "is_active",
         "persona_generation_context",
+        "seed_config",
         "created_at",
         "updated_at",
     }
@@ -547,6 +548,107 @@ def test_training_config_update_rejects_legacy_fields() -> None:
     )
 
     assert response.status_code == 422
+    session.close()
+
+
+def test_training_config_create_with_seed_config() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+
+    seed_payload = {
+        "training_context": {
+            "product_area": "bukhgalterskiy autsorsing",
+            "target_segment": "rossiyskoe B2B, maliy biznes",
+            "training_type": "cold_call_presentation",
+            "target_action": "request_product_presentation",
+            "target_action_description": "prezentatsiyu autsorsinga",
+            "target_action_proper_name": "Predmetnaya prezentatsiya",
+            "call_goal": "ponyat potrebnosti klienta",
+        },
+        "product": {
+            "category": "Autsorsing",
+            "value_proposition": "Vneshnyaya komanda",
+            "what_manager_sells_now": "pokaz",
+            "full_product_name": "perekhod na autsorsing",
+            "product_area_short": "bukhgalteriya",
+        },
+        "lpr_and_roles": {
+            "allowed_roles": ["owner", "ceo"],
+            "role_requirements": "vladelets ili direktor",
+        },
+        "starting_params": {
+            "initial_openness": {"min": 12, "max": 35},
+            "starting_interest": {"min": 18, "max": 35},
+            "trust_baseline": {"min": 12, "max": 30},
+            "price_sensitivity": {"min": 35, "max": 75},
+            "urgency": {"min": 20, "max": 65},
+        },
+    }
+
+    response = client.post(
+        f"/api/internal/organizations/{organization['id']}/training-configs",
+        json={
+            "name": "Seed config",
+            "seed_config": seed_payload,
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["name"] == "Seed config"
+    assert payload["seed_config"] == seed_payload
+    assert payload["persona_generation_context"] == ""
+    stored = session.get(ClientTrainingConfig, UUID(str(payload["id"])))
+    assert stored is not None
+    assert stored.seed_config == seed_payload
+    session.close()
+
+
+def test_training_config_update_seed_config() -> None:
+    session = _create_session()
+    client = _admin_client(session)
+    organization = _create_org(client)
+    config = _create_training_config(client, str(organization["id"]))
+
+    seed_payload = {
+        "training_context": {
+            "product_area": "test",
+            "target_segment": "test",
+            "training_type": "cold_call_presentation",
+            "target_action": "request_product_presentation",
+            "target_action_description": "test",
+            "target_action_proper_name": "Test",
+            "call_goal": "test",
+        },
+        "product": {
+            "category": "Test",
+            "value_proposition": "Test",
+            "what_manager_sells_now": "Test",
+            "full_product_name": "Test",
+            "product_area_short": "test",
+        },
+        "lpr_and_roles": {"role_requirements": "test"},
+        "starting_params": {
+            "initial_openness": {"min": 10, "max": 20},
+            "starting_interest": {"min": 10, "max": 20},
+            "trust_baseline": {"min": 10, "max": 20},
+            "price_sensitivity": {"min": 10, "max": 20},
+            "urgency": {"min": 10, "max": 20},
+        },
+    }
+
+    response = client.patch(
+        f"/api/internal/training-configs/{config['id']}",
+        json={"seed_config": seed_payload},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["seed_config"] == seed_payload
+    stored = session.get(ClientTrainingConfig, UUID(str(config["id"])))
+    assert stored is not None
+    assert stored.seed_config == seed_payload
     session.close()
 
 

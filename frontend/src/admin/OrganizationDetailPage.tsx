@@ -42,6 +42,8 @@ type ConfigForm = {
   id?: string;
   name: string;
   persona_generation_context: string;
+  seed_config: import("./types").SeedConfig | null;
+  use_seed: boolean;
 };
 
 const TAB_LABELS: Record<OrganizationDetailTab, string> = {
@@ -141,17 +143,22 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
   const submitConfig = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await withBusy(async () => {
+      const payload = configForm.use_seed
+        ? {
+            name: configForm.name,
+            persona_generation_context: "",
+            seed_config: configForm.seed_config,
+          }
+        : {
+            name: configForm.name,
+            persona_generation_context: configForm.persona_generation_context,
+            seed_config: null,
+          };
       if (configForm.id) {
-        await updateTrainingConfig(configForm.id, {
-          name: configForm.name,
-          persona_generation_context: configForm.persona_generation_context,
-        });
+        await updateTrainingConfig(configForm.id, payload);
         setSuccess("Настройка тренировки обновлена.");
       } else {
-        await createTrainingConfig(organizationId, {
-          name: configForm.name,
-          persona_generation_context: configForm.persona_generation_context,
-        });
+        await createTrainingConfig(organizationId, payload);
         setSuccess("Настройка тренировки создана.");
       }
       setConfigForm(DEFAULT_CONFIG_FORM);

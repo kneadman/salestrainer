@@ -106,6 +106,7 @@ class TrainingConfigDTO(BaseModel):
     name: str
     is_active: bool
     persona_generation_context: str
+    seed_config: dict[str, object] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -115,6 +116,7 @@ class TrainingConfigCreateRequest(BaseModel):
 
     name: NameStr
     persona_generation_context: str = ""
+    seed_config: dict[str, object] | None = None
 
 
 class TrainingConfigUpdateRequest(BaseModel):
@@ -122,6 +124,7 @@ class TrainingConfigUpdateRequest(BaseModel):
 
     name: NameStr | None = None
     persona_generation_context: str | None = None
+    seed_config: dict[str, object] | None = None
 
 
 class UserTrainingConfigAssignmentDTO(BaseModel):

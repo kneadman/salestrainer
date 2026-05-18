@@ -93,6 +93,7 @@ class AccessRepository:
                 "client_account_id": training_config.client_account_id,
                 "name": training_config.name,
                 "persona_generation_context": training_config.persona_generation_context,
+                "seed_config": training_config.seed_config,
                 "is_active": training_config.is_active,
             }
         )
@@ -115,6 +116,7 @@ class AccessRepository:
         training_config_id: UUID,
         name: str | None = None,
         persona_generation_context: str | None = None,
+        seed_config: dict[str, object] | None = None,
     ) -> ClientTrainingConfig | None:
         training_config = self._session.get(ClientTrainingConfig, training_config_id)
         if training_config is None:
@@ -124,6 +126,8 @@ class AccessRepository:
             training_config.name = name
         if persona_generation_context is not None:
             training_config.persona_generation_context = persona_generation_context
+        if seed_config is not None:
+            training_config.seed_config = seed_config
 
         self._session.commit()
         self._session.refresh(training_config)
