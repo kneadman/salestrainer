@@ -227,7 +227,7 @@ function HistoryFilters(props: {
             ))}
           </select>
         </label>
-        <button type="button" className="client-button" onClick={props.onReset} disabled={!hasFilters}>
+        <button type="button" className="client-button client-form__reset" onClick={props.onReset} disabled={!hasFilters}>
           Сбросить фильтры
         </button>
       </div>
