@@ -36,6 +36,13 @@ Thumbs.db
 
 /landing-*.png
 
+# Playwright / design audit artifacts
+/test-results/
+/playwright-report/
+/playwright/.cache/
+*.cjs
+.design-audit-screenshots/
+
 # Local agent/internal repository documentation. Do not publish to GitHub.
 /AGENTS.md
 /AGENTS.override.md
