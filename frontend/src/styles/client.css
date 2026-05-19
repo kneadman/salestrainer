@@ -359,16 +359,32 @@ a.client-link-button {
 }
 @media (max-width: 420px) {
   .trainer-start__shell {
-    padding: 18px;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .trainer-start__content {
+    gap: 10px;
+  }
+
+  .trainer-start__content h1 {
+    font-size: clamp(1.5rem, 7vw, 2rem);
   }
 
   .trainer-start__features {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
   }
 
   .trainer-start__feature {
+    padding: 6px 8px;
+    font-size: 0.78rem;
     white-space: normal;
+  }
+
+  .trainer-start__preview {
+    display: none;
   }
 }
 
