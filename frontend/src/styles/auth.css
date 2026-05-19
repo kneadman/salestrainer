@@ -25,7 +25,7 @@
 }
 
 .field input:focus {
-  outline: 1px solid rgba(96, 165, 250, 0.8);
+  outline: 1px solid rgba(45, 212, 191, 0.8);
 }
 
 .welcome-card__actions {
@@ -39,18 +39,15 @@
 }
 
 .auth-error-strip {
-  position: fixed;
-  top: 16px;
-  left: 50%;
+  position: relative;
   width: min(420px, calc(100% - 32px));
-  transform: translateX(-50%);
-  z-index: 2;
+  margin: 16px auto;
 }
 
 .welcome-card__eyebrow {
   display: inline-block;
   margin-bottom: 12px;
-  color: #8fd8ff;
+  color: #5eead4;
 }
 
 .welcome-card p {

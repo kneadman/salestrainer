@@ -59,7 +59,7 @@
   place-items: center;
   border-radius: 10px;
   color: #07111f;
-  background: #7dd3fc;
+  background: #5eead4;
   font-weight: 900;
 }
 
@@ -101,7 +101,7 @@
 .client-nav__item--active,
 .client-button--primary {
   color: #06111f;
-  background: #7dd3fc;
+  background: #5eead4;
   font-weight: 800;
 }
 
@@ -142,6 +142,12 @@
   background: rgba(12, 21, 36, 0.94);
 }
 
+.client-topbar > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .client-content {
   flex: 1 1 auto;
   min-width: 0;
@@ -172,7 +178,7 @@
 }
 
 .client-kicker {
-  color: #7dd3fc;
+  color: #5eead4;
   font-size: 0.82rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -218,11 +224,11 @@
   gap: clamp(20px, 4vw, 44px);
   padding: clamp(24px, 4vw, 44px);
   overflow: hidden;
-  border: 1px solid rgba(125, 211, 252, 0.16);
+  border: 1px solid rgba(94, 234, 212, 0.16);
   border-radius: 28px;
   background:
-    radial-gradient(circle at 12% 0%, rgba(125, 211, 252, 0.16), transparent 36%),
-    radial-gradient(circle at 90% 20%, rgba(96, 165, 250, 0.12), transparent 34%),
+    radial-gradient(circle at 12% 0%, rgba(94, 234, 212, 0.16), transparent 36%),
+    radial-gradient(circle at 90% 20%, rgba(45, 212, 191, 0.12), transparent 34%),
     linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 13, 22, 0.96));
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(18px);
@@ -259,10 +265,10 @@
 
 .trainer-start__feature {
   padding: 8px 10px;
-  border: 1px solid rgba(125, 211, 252, 0.16);
+  border: 1px solid rgba(94, 234, 212, 0.16);
   border-radius: 999px;
   color: #dbeafe;
-  background: rgba(59, 130, 246, 0.10);
+  background: rgba(45, 212, 191, 0.10);
   font-size: 0.86rem;
   white-space: nowrap;
 }
@@ -379,9 +385,9 @@
 }
 
 .analytics-bento-card--accent {
-  border-color: rgba(125, 211, 252, 0.32);
+  border-color: rgba(94, 234, 212, 0.32);
   background:
-    radial-gradient(circle at top right, rgba(125, 211, 252, 0.14), transparent 36%),
+    radial-gradient(circle at top right, rgba(94, 234, 212, 0.14), transparent 36%),
     rgba(15, 23, 42, 0.92);
 }
 
@@ -414,7 +420,7 @@
 }
 
 .analytics-bento-card__trend--flat {
-  color: #80d8ff;
+  color: #5eead4;
 }
 
 .analytics-bento-card__trend--none {
@@ -536,7 +542,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #7dd3fc;
+  background: #5eead4;
 }
 
 .client-turn-list {
@@ -700,6 +706,8 @@
     overflow-x: auto;
     padding-bottom: 4px;
     scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
+    mask-image: linear-gradient(to right, black 90%, transparent 100%);
   }
 
   .client-nav::-webkit-scrollbar {
@@ -709,9 +717,10 @@
   .client-nav__item {
     flex: 0 0 auto;
     width: auto;
-    min-height: 36px;
-    padding: 0 12px;
+    min-height: 44px;
+    padding: 0 10px;
     white-space: nowrap;
+    font-size: 13px;
   }
 
   .client-main-shell {
@@ -733,7 +742,7 @@
   .client-topbar > div:first-child {
     min-width: 0;
     display: grid;
-    gap: 2px;
+    gap: 4px;
   }
 
   .client-topbar strong,
@@ -828,7 +837,14 @@
   }
 
   .client-table {
-    min-width: 560px;
+    min-width: auto;
+  }
+
+  .client-table th,
+  .client-table td {
+    padding: 8px 6px;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
   }
 }
 

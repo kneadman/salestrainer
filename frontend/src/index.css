@@ -116,3 +116,67 @@
   0% { transform: scale(1.05) translate(0, 0); }
   100% { transform: scale(1.12) translate(-1%, -1%); }
 }
+
+@media (max-width: 639px) {
+  .ghost-btn {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.25);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* GSAP fallback — visible by default for progressive enhancement */
+.hero-label,
+.hero-title,
+.hero-subtitle,
+.hero-buttons,
+.hero-trust,
+.hero-chat,
+.hiw-left,
+.hiw-right,
+.problem-left,
+.problem-card,
+.metrics-header,
+.managers-left,
+.insight-card,
+.scenarios-left,
+.scenario-tag,
+.pilot-header,
+.pilot-step,
+.pilot-cta,
+.demo-left,
+.demo-form-card,
+.faq-header,
+.faq-item {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-label,
+  .hero-title,
+  .hero-subtitle,
+  .hero-buttons,
+  .hero-trust,
+  .hero-chat,
+  .hiw-left,
+  .hiw-right,
+  .problem-left,
+  .problem-card,
+  .metrics-header,
+  .managers-left,
+  .insight-card,
+  .scenarios-left,
+  .scenario-tag,
+  .pilot-header,
+  .pilot-step,
+  .pilot-cta,
+  .demo-left,
+  .demo-form-card,
+  .faq-header,
+  .faq-item {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}

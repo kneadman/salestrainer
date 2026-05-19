@@ -20,9 +20,9 @@ export function AdminApp({ user, path, onNavigate, onLogout }: AdminAppProps) {
           <h1>Нет доступа</h1>
           <p>Внутренний кабинет доступен только администратору платформы.</p>
           <div className="admin-actions">
-            <button type="button" className="admin-button admin-button--primary" onClick={() => onNavigate("/app", true)}>
+            <a href="/app" className="admin-button admin-button--primary" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/app", true); }}>
               Перейти в тренажер
-            </button>
+            </a>
             <button type="button" className="admin-button" onClick={() => void onLogout()}>
               Выйти
             </button>

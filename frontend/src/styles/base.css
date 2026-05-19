@@ -15,7 +15,7 @@
   --color-warning: #fbbf24;
   --color-danger: #f87171;
   --color-info: #80d8ff;
-  --color-info-strong: #7dd3fc;
+  --color-info-strong: #5eead4;
   background:
     radial-gradient(circle at top, rgba(74, 144, 226, 0.22), transparent 32%),
     linear-gradient(180deg, #0d1320 0%, #121a2a 48%, #0b1220 100%);

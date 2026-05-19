@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, FormEvent } from 'react';
+import React, { useLayoutEffect, useRef, FormEvent } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import SectionLabel from '@/landing/components/SectionLabel';
@@ -23,7 +23,8 @@ const DemoFormSection: React.FC<DemoFormSectionProps> = ({
 }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(
         '.demo-left',

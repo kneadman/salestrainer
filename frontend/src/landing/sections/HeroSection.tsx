@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import GradientButton from '@/landing/components/GradientButton';
 import GhostButton from '@/landing/components/GhostButton';
@@ -26,7 +26,8 @@ interface HeroSectionProps {
 const HeroSection: React.FC<HeroSectionProps> = ({ onDemoClick, onMechanicsClick }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ delay: 0.3 });
 
@@ -63,7 +64,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onDemoClick, onMechanicsClick
               AI-ТРЕНАЖЁР ПРОДАЖ
             </span>
 
-            <h1 className="hero-title font-manrope font-bold text-[30px] sm:text-[38px] lg:text-[42px] text-text-primary leading-[1.15] mb-5">
+            <h1 className="hero-title font-manrope font-bold text-[24px] sm:text-[38px] lg:text-[42px] text-text-primary leading-[1.15] mb-5">
               Тренируйте сложные разговоры до встречи и заранее видьте, где менеджер теряет клиента.
             </h1>
 

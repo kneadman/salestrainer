@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import SectionLabel from '@/landing/components/SectionLabel';
@@ -27,7 +27,8 @@ const problems = [
 const ProblemSection: React.FC = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(
         '.problem-left',
