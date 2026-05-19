@@ -86,12 +86,17 @@
 
 .client-nav__item,
 .client-button,
-.client-link-button {
+.client-link-button,
+a.client-button,
+a.client-link-button {
+  display: inline-flex;
+  align-items: center;
   min-height: 38px;
   padding: 0 12px;
   border-radius: 8px;
   color: #dbeafe;
   background: rgba(148, 163, 184, 0.1);
+  text-decoration: none;
 }
 
 .client-nav__item {

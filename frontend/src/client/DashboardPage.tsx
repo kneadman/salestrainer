@@ -62,9 +62,9 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
           <h1>Обзор</h1>
           <p>Добро пожаловать, {user.email}</p>
         </div>
-        <button type="button" className="client-button client-button--primary" onClick={() => onNavigate("/app/trainer")}>
+        <a href="/app/trainer" className="client-button client-button--primary" onClick={(event) => { event.preventDefault(); onNavigate("/app/trainer"); }}>
           Начать тренировку
-        </button>
+        </a>
       </div>
       <section className="client-stats-grid">
         <ClientStat label="Всего тренировок" value={analyticsVm?.totalSessions ?? 0} />
@@ -84,7 +84,7 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
       <section className="client-panel">
         <div className="client-panel__header">
           <h2>Последние тренировки</h2>
-          <button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>Открыть историю</button>
+          <a href="/app/history" className="client-link-button" onClick={(event) => { event.preventDefault(); onNavigate("/app/history"); }}>Открыть историю</a>
         </div>
         {history.length === 0 ? (
           <ClientState title="Аналитика появится после первых завершенных тренировок." />
