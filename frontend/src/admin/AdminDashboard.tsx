@@ -96,7 +96,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         <StatCard label="Тренировочные конфиги" value={totals.trainingConfigs} />
         <StatCard label="Всего сессий" value={totals.totalSessions} detail={`${totals.finishedSessions} завершены`} />
         <StatCard label="Всего сообщений" value={totals.totalTurns} />
-        <StatCard label="Средний итоговый интерес" value={totals.avgInterest ?? "—"} detail="По организациям с данными" />
+        <StatCard label="Средний итоговый интерес" value={totals.avgInterest ?? <span className="admin-muted">Нет данных</span>} detail="По организациям с данными" />
       </section>
       <section className="admin-panel">
         <div className="admin-panel__header">
