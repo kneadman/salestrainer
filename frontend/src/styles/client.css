@@ -190,10 +190,12 @@ a.client-link-button {
 }
 
 .client-kicker {
+  display: block;
   color: #5eead4;
   font-size: 0.82rem;
   font-weight: 800;
   text-transform: uppercase;
+  margin-bottom: 6px;
 }
 
 .client-panel,
