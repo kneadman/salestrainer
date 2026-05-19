@@ -706,6 +706,8 @@
     overflow-x: auto;
     padding-bottom: 4px;
     scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
+    mask-image: linear-gradient(to right, black 90%, transparent 100%);
   }
 
   .client-nav::-webkit-scrollbar {
@@ -715,9 +717,10 @@
   .client-nav__item {
     flex: 0 0 auto;
     width: auto;
-    min-height: 36px;
-    padding: 0 12px;
+    min-height: 44px;
+    padding: 0 10px;
     white-space: nowrap;
+    font-size: 13px;
   }
 
   .client-main-shell {
