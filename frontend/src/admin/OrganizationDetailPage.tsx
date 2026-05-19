@@ -199,9 +199,9 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
     <div className="admin-page">
       <div className="admin-page__header">
         <div>
-          <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/organizations")}>
+          <a href="/admin/organizations" className="admin-link-button" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/admin/organizations"); }}>
             ← Организации
-          </button>
+          </a>
           <h1>{organization.name}</h1>
           <p className="admin-muted">
             {vm.slug} · создана {vm.createdAtLabel} · обновлена {vm.updatedAtLabel}

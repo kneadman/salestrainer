@@ -82,12 +82,12 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           <h1>Панель управления</h1>
         </div>
         <div className="admin-actions">
-          <button type="button" className="admin-button admin-button--primary" onClick={() => onNavigate("/admin/organizations")}>
+          <a href="/admin/organizations" className="admin-button admin-button--primary" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/admin/organizations"); }}>
             Создать организацию
-          </button>
-          <button type="button" className="admin-button" onClick={() => onNavigate("/admin/audit-log")}>
+          </a>
+          <a href="/admin/audit-log" className="admin-button" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/admin/audit-log"); }}>
             Журнал аудита
-          </button>
+          </a>
         </div>
       </div>
       <section className="admin-stats-grid">
@@ -101,9 +101,9 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       <section className="admin-panel">
         <div className="admin-panel__header">
           <h2>Последние события аудита</h2>
-          <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/audit-log")}>
+          <a href="/admin/audit-log" className="admin-link-button" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/admin/audit-log"); }}>
             Открыть все
-          </button>
+          </a>
         </div>
         {auditLog.length === 0 ? (
           <EmptyState title="Событий аудита нет" detail="Записи появятся после действий администратора." />

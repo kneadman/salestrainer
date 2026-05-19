@@ -46,13 +46,13 @@ export function AdminUserAnalyticsPage({ organizationId, userId, onNavigate }: A
     <div className="admin-page">
       <div className="admin-page__header">
         <div>
-          <button
-            type="button"
+          <a
+            href={`/admin/organizations/${organizationId}?tab=users`}
             className="admin-link-button"
-            onClick={() => onNavigate(`/admin/organizations/${organizationId}?tab=users`)}
+            onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate(`/admin/organizations/${organizationId}?tab=users`); }}
           >
             ← Пользователи
-          </button>
+          </a>
           <h1>{detail.user.email}</h1>
           <p className="admin-muted">
             {userVm.roleLabel}
@@ -189,13 +189,13 @@ function AdminHistoryTable({ vms, onNavigate }: { vms: ReturnType<typeof buildHi
               <td>{vm.turnCount}</td>
               <td>{vm.finalInterestScore}</td>
               <td>
-                <button
-                  type="button"
+                <a
+                  href={`/admin/history/sessions/${vm.sessionId}`}
                   className="admin-link-button"
-                  onClick={() => onNavigate(`/admin/history/sessions/${vm.sessionId}`)}
+                  onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate(`/admin/history/sessions/${vm.sessionId}`); }}
                 >
                   Открыть
-                </button>
+                </a>
               </td>
             </tr>
           ))}

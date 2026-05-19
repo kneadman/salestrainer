@@ -53,12 +53,12 @@ export function AdminLayout({ user, activePath, children, onNavigate, onLogout }
             <span>{roleLabel(user.role)}</span>
           </div>
           <div className="admin-topbar__actions">
-            <button type="button" className="admin-button admin-button--ghost" onClick={() => onNavigate("/app")}>
+            <a href="/app" className="admin-button admin-button--ghost" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/app"); }}>
               В кабинет
-            </button>
-            <button type="button" className="admin-button admin-button--ghost" onClick={() => onNavigate("/")}>
+            </a>
+            <a href="/" className="admin-button admin-button--ghost" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/"); }}>
               Лендинг
-            </button>
+            </a>
             <button type="button" className="admin-button" onClick={() => void onLogout()}>
               Выйти
             </button>

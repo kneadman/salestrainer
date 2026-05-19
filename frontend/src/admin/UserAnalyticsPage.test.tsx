@@ -112,7 +112,7 @@ describe("AdminUserAnalyticsPage", () => {
     expect(screen.getAllByText("Первичный контакт и разведка").length).toBeGreaterThan(0);
     expect(screen.queryByText("first_contact_discovery")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Открыть" }));
+    await user.click(screen.getByRole("link", { name: "Открыть" }));
     expect(onNavigate).toHaveBeenCalledWith("/admin/history/sessions/session-1");
   });
 
@@ -123,7 +123,7 @@ describe("AdminUserAnalyticsPage", () => {
 
     render(<AdminUserAnalyticsPage organizationId="org-1" userId="user-1" onNavigate={onNavigate} />);
 
-    await user.click(await screen.findByRole("button", { name: "← Пользователи" }));
+    await user.click(await screen.findByRole("link", { name: "← Пользователи" }));
 
     expect(onNavigate).toHaveBeenCalledWith("/admin/organizations/org-1?tab=users");
   });

@@ -175,13 +175,13 @@ function HistoryList({ onNavigate }: { onNavigate: (path: string) => void }) {
                     <td>{vm.turnCount}</td>
                     <td>{vm.finalInterestScore}</td>
                     <td>
-                      <button
-                        type="button"
+                      <a
+                        href={`/admin/history/sessions/${vm.sessionId}`}
                         className="admin-link-button"
-                        onClick={() => onNavigate(`/admin/history/sessions/${vm.sessionId}`)}
+                        onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate(`/admin/history/sessions/${vm.sessionId}`); }}
                       >
                         Открыть
-                      </button>
+                      </a>
                     </td>
                   </tr>
                 ))}
@@ -231,9 +231,9 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
     <div className="admin-page">
       <div className="admin-page__header">
         <div>
-          <button type="button" className="admin-link-button" onClick={() => onNavigate("/admin/history")}>
+          <a href="/admin/history" className="admin-link-button" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate("/admin/history"); }}>
             ← История
-          </button>
+          </a>
           <h1>Тренировка от {sessionVm.startedAtLabel}</h1>
           <p className="admin-muted">
             {detail.session.user_email} · {sessionVm.trainingConfigLabel}

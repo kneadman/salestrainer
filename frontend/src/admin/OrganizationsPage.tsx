@@ -176,9 +176,9 @@ export function OrganizationsPage({ onNavigate }: OrganizationsPageProps) {
                       <td>{vm.updatedAtLabel}</td>
                       <td>
                         <div className="admin-row-actions">
-                          <button type="button" className="admin-link-button" onClick={() => onNavigate(`/admin/organizations/${org.id}`)}>
+                          <a href={`/admin/organizations/${org.id}`} className="admin-link-button" onClick={(event) => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return; event.preventDefault(); onNavigate(`/admin/organizations/${org.id}`); }}>
                             Открыть
-                          </button>
+                          </a>
                           <button type="button" className="admin-link-button" onClick={() => setForm({ id: org.id, name: org.name, slug: org.slug })}>
                             Изменить
                           </button>
