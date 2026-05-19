@@ -834,7 +834,14 @@
   }
 
   .client-table {
-    min-width: 560px;
+    min-width: auto;
+  }
+
+  .client-table th,
+  .client-table td {
+    padding: 8px 6px;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
   }
 }
 
