@@ -1,9 +1,6 @@
-import React, { useLayoutEffect, useRef } from 'react';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import React, { useRef } from 'react';
+import { useScrollReveal } from '../hooks/useScrollReveal';
 import SectionLabel from '@/landing/components/SectionLabel';
-
-gsap.registerPlugin(ScrollTrigger);
 
 const problems = [
   {
@@ -27,45 +24,19 @@ const problems = [
 const ProblemSection: React.FC = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        '.problem-left',
-        { opacity: 0, y: 24 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: 'top 80%',
-            toggleActions: 'play none none none',
-          },
-        }
-      );
-
-      gsap.fromTo(
-        '.problem-card',
-        { opacity: 0, y: 32 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.5,
-          stagger: 0.1,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: '.problem-grid',
-            start: 'top 85%',
-            toggleActions: 'play none none none',
-          },
-        }
-      );
-    }, sectionRef);
-
-    return () => ctx.revert();
-  }, []);
+  useScrollReveal(sectionRef, [
+    {
+      targets: '.problem-left',
+      from: { opacity: 0, y: 24 },
+      to: { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
+    },
+    {
+      targets: '.problem-card',
+      from: { opacity: 0, y: 32 },
+      to: { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: 'power2.out' },
+      scrollTrigger: { trigger: '.problem-grid', start: 'top 85%' },
+    },
+  ]);
 
   return (
     <section

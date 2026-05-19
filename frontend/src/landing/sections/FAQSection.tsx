@@ -1,10 +1,7 @@
-import React, { useLayoutEffect, useRef } from 'react';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import React, { useRef } from 'react';
+import { useScrollReveal } from '../hooks/useScrollReveal';
 import SectionLabel from '@/landing/components/SectionLabel';
 import FAQItem from '@/landing/components/FAQItem';
-
-gsap.registerPlugin(ScrollTrigger);
 
 const faqData = [
   {
@@ -32,45 +29,19 @@ const faqData = [
 const FAQSection: React.FC = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        '.faq-header',
-        { opacity: 0, y: 24 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: 'top 80%',
-            toggleActions: 'play none none none',
-          },
-        }
-      );
-
-      gsap.fromTo(
-        '.faq-item',
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          stagger: 0.08,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: '.faq-list',
-            start: 'top 85%',
-            toggleActions: 'play none none none',
-          },
-        }
-      );
-    }, sectionRef);
-
-    return () => ctx.revert();
-  }, []);
+  useScrollReveal(sectionRef, [
+    {
+      targets: '.faq-header',
+      from: { opacity: 0, y: 24 },
+      to: { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
+    },
+    {
+      targets: '.faq-item',
+      from: { opacity: 0, y: 20 },
+      to: { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: 'power2.out' },
+      scrollTrigger: { trigger: '.faq-list', start: 'top 85%' },
+    },
+  ]);
 
   return (
     <section
