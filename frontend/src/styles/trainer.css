@@ -508,3 +508,10 @@ button:disabled {
   border-color: rgba(45, 212, 191, 0.5);
   box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.15);
 }
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 48px 16px;
+    align-items: flex-start;
+  }
+}
