@@ -116,6 +116,14 @@
   background: #5eead4;
 }
 
+.admin-button:focus-visible,
+.admin-link-button:focus-visible,
+.admin-nav__item:focus-visible,
+.admin-tab:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 2px;
+}
+
 .admin-main-shell {
   min-width: 0;
 }

@@ -53,6 +53,11 @@
     transform: translateY(-1px);
   }
 
+  .gradient-btn:focus-visible {
+    outline: 2px solid #5eead4;
+    outline-offset: 2px;
+  }
+
   .ghost-btn {
     background: transparent;
     color: #e2e8f0;
@@ -67,6 +72,11 @@
   .ghost-btn:hover {
     background: rgba(255, 255, 255, 0.06);
     border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .ghost-btn:focus-visible {
+    outline: 2px solid #5eead4;
+    outline-offset: 2px;
   }
 
   .glass-card {
