@@ -90,7 +90,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           </a>
         </div>
       </div>
-      <section className="admin-stats-grid">
+      <section className="admin-stats-grid admin-stats-grid--balanced">
         <StatCard label="Организации" value={totals.organizations} detail={`${totals.activeOrganizations} активны`} />
         <StatCard label="Пользователи" value={totals.users} detail="По всем организациям" />
         <StatCard label="Тренировочные конфиги" value={totals.trainingConfigs} />

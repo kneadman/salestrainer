@@ -214,6 +214,16 @@
   gap: 12px;
 }
 
+.admin-stats-grid--balanced {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .admin-stats-grid--balanced {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .admin-stat-card,
 .admin-state {
   padding: 16px;
