@@ -19,10 +19,7 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer }) => {
         <span className="font-inter font-medium text-[16px] text-text-primary pr-4">
           {question}
         </span>
-        <span
-          className="font-mono text-mint text-xl flex-shrink-0 transition-transform duration-300"
-          style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(0deg)' }}
-        >
+        <span className="font-mono text-mint text-xl flex-shrink-0">
           {isOpen ? '−' : '+'}
         </span>
       </button>
