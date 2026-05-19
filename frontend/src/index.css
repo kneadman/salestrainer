@@ -117,6 +117,14 @@
   100% { transform: scale(1.12) translate(-1%, -1%); }
 }
 
+@media (max-width: 639px) {
+  .ghost-btn {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.25);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+
 /* GSAP fallback — visible by default for progressive enhancement */
 .hero-label,
 .hero-title,

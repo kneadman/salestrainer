@@ -64,7 +64,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onDemoClick, onMechanicsClick
               AI-ТРЕНАЖЁР ПРОДАЖ
             </span>
 
-            <h1 className="hero-title font-manrope font-bold text-[30px] sm:text-[38px] lg:text-[42px] text-text-primary leading-[1.15] mb-5">
+            <h1 className="hero-title font-manrope font-bold text-[24px] sm:text-[38px] lg:text-[42px] text-text-primary leading-[1.15] mb-5">
               Тренируйте сложные разговоры до встречи и заранее видьте, где менеджер теряет клиента.
             </h1>
 
