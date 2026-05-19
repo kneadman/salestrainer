@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useLayoutEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import SectionLabel from '@/landing/components/SectionLabel';
@@ -46,7 +46,8 @@ const HowItWorksSection: React.FC = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(
         '.hiw-left',
@@ -84,7 +85,8 @@ const HowItWorksSection: React.FC = () => {
     return () => ctx.revert();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (contentRef.current) {
       gsap.fromTo(
         contentRef.current,

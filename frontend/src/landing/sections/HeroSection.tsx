@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import GradientButton from '@/landing/components/GradientButton';
 import GhostButton from '@/landing/components/GhostButton';
@@ -26,7 +26,8 @@ interface HeroSectionProps {
 const HeroSection: React.FC<HeroSectionProps> = ({ onDemoClick, onMechanicsClick }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ delay: 0.3 });
 
