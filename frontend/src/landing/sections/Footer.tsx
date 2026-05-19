@@ -8,10 +8,6 @@ const Footer: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const scrollTo = (href: string) => {
-    document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
     <footer className="relative bg-navy-900 border-t border-white/[0.04]">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
@@ -33,24 +29,24 @@ const Footer: React.FC = () => {
 
           {/* Nav links */}
           <div className="flex flex-col sm:flex-row md:flex-col gap-3 md:items-center">
-            <button
-              onClick={() => scrollTo('#how-it-works')}
+            <a
+              href="#how-it-works"
               className="font-inter text-[14px] text-text-secondary hover:text-text-primary transition-colors text-left md:text-center"
             >
               Как работает
-            </button>
-            <button
-              onClick={() => scrollTo('#scenarios')}
+            </a>
+            <a
+              href="#scenarios"
               className="font-inter text-[14px] text-text-secondary hover:text-text-primary transition-colors text-left md:text-center"
             >
               Сценарии
-            </button>
-            <button
-              onClick={() => scrollTo('#demo')}
+            </a>
+            <a
+              href="#demo"
               className="font-inter text-[14px] text-text-secondary hover:text-text-primary transition-colors text-left md:text-center"
             >
               Демо
-            </button>
+            </a>
           </div>
 
           {/* Back to top */}
