@@ -94,7 +94,7 @@ a.client-link-button {
   min-height: 38px;
   padding: 0 12px;
   border-radius: 8px;
-  color: #dbeafe;
+  color: #dce7f6;
   background: rgba(148, 163, 184, 0.1);
   text-decoration: none;
 }
@@ -464,7 +464,7 @@ a.client-link-button {
   padding: 2px 8px;
   align-items: center;
   border-radius: 999px;
-  color: #dbeafe;
+  color: #5eead4;
   background: rgba(148, 163, 184, 0.16);
   font-size: 0.78rem;
   font-weight: 800;
