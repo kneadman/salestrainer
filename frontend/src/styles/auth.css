@@ -39,12 +39,9 @@
 }
 
 .auth-error-strip {
-  position: fixed;
-  top: 16px;
-  left: 50%;
+  position: relative;
   width: min(420px, calc(100% - 32px));
-  transform: translateX(-50%);
-  z-index: 2;
+  margin: 16px auto;
 }
 
 .welcome-card__eyebrow {
