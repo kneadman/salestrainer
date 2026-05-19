@@ -131,6 +131,19 @@
   background: rgba(13, 20, 32, 0.92);
 }
 
+.admin-topbar > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-topbar strong,
+.admin-topbar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .admin-topbar__actions,
 .admin-actions,
 .admin-row-actions,

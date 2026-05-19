@@ -142,6 +142,12 @@
   background: rgba(12, 21, 36, 0.94);
 }
 
+.client-topbar > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .client-content {
   flex: 1 1 auto;
   min-width: 0;
@@ -733,7 +739,7 @@
   .client-topbar > div:first-child {
     min-width: 0;
     display: grid;
-    gap: 2px;
+    gap: 4px;
   }
 
   .client-topbar strong,
