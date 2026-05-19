@@ -69,10 +69,10 @@ def test_report_service_with_judgement_service_returns_report_payload() -> None:
     payload = service.generate_report_payload(session_id)
 
     assert payload is not None
-    assert payload["schema_version"] == 1
-    assert "overall_score" in payload
-    assert payload["bento_blocks"]
-    assert payload["skill_scores"]
+    assert payload.value["schema_version"] == 1
+    assert "overall_score" in payload.value
+    assert payload.value["bento_blocks"]
+    assert payload.value["skill_scores"]
 
 
 class CrashingJudgementService:

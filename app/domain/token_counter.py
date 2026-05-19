@@ -2,11 +2,23 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
 
 import tiktoken
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class TokenCountedResult(Generic[T]):
+    """Wraps an LLM result with independently counted input/output tokens."""
+
+    value: T
+    input_tokens: int
+    output_tokens: int
 
 
 class TokenCounterService:

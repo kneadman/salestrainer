@@ -148,36 +148,36 @@ def test_fake_judge_client_returns_judge_session_output() -> None:
     """Fake judge client should return the strict domain output model."""
     result = FakeJudgeClient().judge_session(_build_payload())
 
-    assert isinstance(result, JudgeSessionOutput)
+    assert isinstance(result.value, JudgeSessionOutput)
 
 
 def test_fake_judge_client_keeps_overall_score_in_range() -> None:
     """Overall fake score should stay within the normalized 0..100 range."""
     result = FakeJudgeClient().judge_session(_build_payload())
 
-    assert 0 <= result.overall_score <= 100
+    assert 0 <= result.value.overall_score <= 100
 
 
 def test_fake_judge_client_maps_grade_from_score() -> None:
     """Overall grade should match the configured score bands."""
     result = FakeJudgeClient().judge_session(_build_payload(heuristic=False))
 
-    assert result.overall_score == 38
-    assert result.overall_grade == "weak"
+    assert result.value.overall_score == 38
+    assert result.value.overall_grade == "weak"
 
 
 def test_fake_judge_client_returns_non_empty_bento_blocks() -> None:
     """Fake judge client should always emit the minimum bento block set."""
     result = FakeJudgeClient().judge_session(_build_payload())
 
-    assert result.bento_blocks
+    assert result.value.bento_blocks
 
 
 def test_fake_judge_client_returns_skill_scores_when_heuristics_exist() -> None:
     """Skill scores should be derived from heuristic evaluations when present."""
     result = FakeJudgeClient().judge_session(_build_payload())
 
-    assert result.skill_scores
+    assert result.value.skill_scores
 
 
 def test_fake_judge_client_uses_one_based_evidence_indexes() -> None:
@@ -185,7 +185,7 @@ def test_fake_judge_client_uses_one_based_evidence_indexes() -> None:
     result = FakeJudgeClient().judge_session(_build_payload())
 
     existing_indexes = {1, 2}
-    for block in result.bento_blocks:
+    for block in result.value.bento_blocks:
         assert all(index >= 1 for index in block.evidence_turn_indexes)
         assert set(block.evidence_turn_indexes).issubset(existing_indexes)
 
@@ -196,18 +196,18 @@ def test_fake_judge_client_uses_russian_user_facing_text() -> None:
 
     combined_text = " ".join(
         [
-            result.outcome,
-            result.executive_summary,
-            result.final_verdict,
-            *[block.title for block in result.bento_blocks],
-            *[block.short_text for block in result.bento_blocks],
-            *[block.detail for block in result.bento_blocks],
+            result.value.outcome,
+            result.value.executive_summary,
+            result.value.final_verdict,
+            *[block.title for block in result.value.bento_blocks],
+            *[block.short_text for block in result.value.bento_blocks],
+            *[block.detail for block in result.value.bento_blocks],
         ]
     ).lower()
 
-    assert result.bento_blocks[0].title == "Итог сессии"
-    assert "Сессия завершилась" in result.outcome
-    assert "Итоговая оценка" in result.final_verdict
+    assert result.value.bento_blocks[0].title == "Итог сессии"
+    assert "Сессия завершилась" in result.value.outcome
+    assert "Итоговая оценка" in result.value.final_verdict
     assert "fake judge" not in combined_text
     assert "fake" not in combined_text
     assert "заглуш" not in combined_text
@@ -286,8 +286,8 @@ def test_structured_judge_client_returns_output_on_successful_transport() -> Non
 
     result = client.judge_session(_build_payload())
 
-    assert isinstance(result, JudgeSessionOutput)
-    assert result.overall_grade == "strong"
+    assert isinstance(result.value, JudgeSessionOutput)
+    assert result.value.overall_grade == "strong"
 
 
 def test_structured_judge_client_retries_with_retry_instruction() -> None:
@@ -325,7 +325,7 @@ def test_structured_judge_client_retries_with_retry_instruction() -> None:
     result = client.judge_session(_build_payload())
 
     second_input = json.loads(captured_requests[1]["input"])
-    assert result.overall_score == 63
+    assert result.value.overall_score == 63
     assert "retry_instruction" in second_input
 
 
@@ -344,8 +344,8 @@ def test_structured_judge_client_falls_back_to_fake_after_invalid_provider_outpu
 
     result = client.judge_session(_build_payload())
 
-    assert isinstance(result, JudgeSessionOutput)
-    assert 0 <= result.overall_score <= 100
+    assert isinstance(result.value, JudgeSessionOutput)
+    assert 0 <= result.value.overall_score <= 100
 
 
 def test_build_judge_client_uses_judge_specific_folder_and_agent_ids() -> None:
@@ -439,7 +439,7 @@ def test_structured_judge_client_retries_on_invalid_evidence_indexes() -> None:
 
     result = client.judge_session(_build_payload())
 
-    assert result.overall_score == 66
+    assert result.value.overall_score == 66
 
 
 def test_build_judge_client_falls_back_to_legacy_folder_and_agent_ids() -> None:

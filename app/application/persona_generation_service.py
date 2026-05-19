@@ -12,6 +12,7 @@ from app.domain.models import PersonaGenerationInput, PersonaProfile
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.scenarios import get_scenario
 from app.domain.seed_config import PersonaSeedConfig
+from app.domain.token_counter import TokenCountedResult
 from app.application.seed_prompt_renderer import SeedPromptRenderer
 from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.persona_generator_client import (
@@ -48,14 +49,14 @@ class PersonaGenerationService:
         *,
         training_config: RuntimeTrainingConfig,
         scenario_id: str | None = None,
-    ) -> PersonaProfile:
+    ) -> TokenCountedResult[PersonaProfile]:
         """Generate a hidden PersonaProfile from training-config business context."""
         del self._session
         input_payload = self.build_input(training_config=training_config, scenario_id=scenario_id)
         client = self._build_client(training_config=training_config, input_payload=input_payload)
         try:
-            output = client.generate_persona(input_payload)
-            persona = validate_generated_persona(output, input_payload)
+            result = client.generate_persona(input_payload)
+            persona = validate_generated_persona(result.value, input_payload)
         except (
             JSONDecodeError,
             LLMClientError,
@@ -65,13 +66,15 @@ class PersonaGenerationService:
         ) as error:
             raise PersonaGenerationError("Persona generator failed to produce a valid profile.") from error
         logger.info(
-            "persona_generated training_config_id=%s client_account_id=%s provider=%s persona_id=%s",
+            "persona_generated training_config_id=%s client_account_id=%s provider=%s persona_id=%s input_tokens=%s output_tokens=%s",
             training_config.id,
             training_config.client_account_id,
             self._provider_label(client),
             persona.id,
+            result.input_tokens,
+            result.output_tokens,
         )
-        return persona
+        return TokenCountedResult(value=persona, input_tokens=result.input_tokens, output_tokens=result.output_tokens)
 
     def build_input(
         self,
