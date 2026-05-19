@@ -89,6 +89,37 @@ class TrainingTurnRecord(Base):
     )
 
 
+class TokenUsageRecord(Base):
+    __tablename__ = "token_usage_records"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    client_account_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("client_accounts.id"),
+        nullable=True,
+    )
+    user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    session_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_token_usage_client_account_created", "client_account_id", desc("created_at")),
+        Index("ix_token_usage_user_created", "user_id", desc("created_at")),
+        Index("ix_token_usage_session_id", "session_id"),
+    )
+
+
 class TrainingReportRecord(Base):
     __tablename__ = "training_reports"
 
