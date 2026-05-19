@@ -13,6 +13,7 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer }) => {
     <div className="bg-navy-700 rounded-2xl border border-white/[0.04] overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         className="w-full flex items-center justify-between p-6 text-left transition-colors hover:bg-navy-500/20"
       >
         <span className="font-inter font-medium text-[16px] text-text-primary pr-4">
