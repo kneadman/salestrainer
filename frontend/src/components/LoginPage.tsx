@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { ApiError, login } from "../api";
 import { PRODUCT_NAME } from "../branding";
+import { BrandLogo } from "./BrandLogo";
 import type { AuthUser } from "../types";
 
 type LoginPageProps = {
@@ -52,7 +53,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   return (
     <div className="app-shell">
       <form className="login-card" onSubmit={handleSubmit}>
-        <span className="welcome-card__eyebrow">{PRODUCT_NAME}</span>
+        <BrandLogo title={PRODUCT_NAME} className="welcome-card__eyebrow" />
         <h1>Вход</h1>
         <label className="field">
           <span>Email</span>
