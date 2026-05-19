@@ -519,6 +519,13 @@ a.admin-link-button {
     flex-direction: column;
   }
 
+  .admin-topbar__actions {
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .admin-content {
     padding: 16px;
   }
