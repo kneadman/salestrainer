@@ -860,6 +860,10 @@ a.client-link-button {
     font-size: 0.85rem;
     overflow-wrap: anywhere;
   }
+
+  .client-table th {
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 420px) {
