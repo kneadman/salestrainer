@@ -20,6 +20,8 @@ from app.history.schemas import (
     HistoryReportDTO,
     HistorySessionDetailDTO,
     HistorySessionSummaryDTO,
+    PerUserTokenUsageDTO,
+    TokenUsageSummaryDTO,
     UsageSummaryDTO,
 )
 from app.identity.roles import UserRole, normalize_role
@@ -632,6 +634,17 @@ class HistoryService:
         """Return basic organization usage metrics as an API DTO."""
         self.expire_inactive_sessions(client_account_id=client_account_id)
         return UsageSummaryDTO.model_validate(self._repository.usage_summary(client_account_id))
+
+    def get_token_usage_summary(self, *, client_account_id: UUID) -> TokenUsageSummaryDTO:
+        """Return aggregated token usage for an organization as an API DTO."""
+        summary = self._repository.token_usage_summary(client_account_id=client_account_id)
+        per_user = self._repository.token_usage_per_user(client_account_id=client_account_id)
+        return TokenUsageSummaryDTO(
+            total_input_tokens=summary["total_input_tokens"],
+            total_output_tokens=summary["total_output_tokens"],
+            total_tokens=summary["total_tokens"],
+            per_user=[PerUserTokenUsageDTO.model_validate(row) for row in per_user],
+        )
 
     def _require_access(
         self,

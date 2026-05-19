@@ -3,6 +3,7 @@ from app.application.summary_compressor import FakeSummaryCompressor
 from app.application.turn_service import TurnService
 from app.domain.errors import StateVersionConflictError
 from app.domain.models import LLMTurnResponse, RevealedFactPatch, StatePatch
+from app.domain.token_counter import TokenCountedResult
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
 
@@ -32,7 +33,7 @@ def test_turn_service_updates_session_and_recent_turns() -> None:
 
 class AggressiveSuccessLLMClient:
     def generate_client_turn(self, payload):
-        return LLMTurnResponse(
+        response = LLMTurnResponse(
             answer="Let's move forward.",
             interest_delta=2,
             state_patch=StatePatch(
@@ -45,6 +46,7 @@ class AggressiveSuccessLLMClient:
             stage="finished_success",
             internal_notes="Provider jumped too far.",
         )
+        return TokenCountedResult(value=response, input_tokens=10, output_tokens=5)
 
 
 class RevealedFactsLLMClient:
@@ -54,7 +56,7 @@ class RevealedFactsLLMClient:
 
     def generate_client_turn(self, payload):
         self.seen_revealed_facts = payload.current_state["revealed_facts"]
-        return LLMTurnResponse(
+        response = LLMTurnResponse(
             answer="I am the financial director.",
             interest_delta=1,
             state_patch=StatePatch(),
@@ -62,6 +64,7 @@ class RevealedFactsLLMClient:
             stage="role_discovery",
             internal_notes="Revealed facts test.",
         )
+        return TokenCountedResult(value=response, input_tokens=10, output_tokens=5)
 
 
 def test_turn_service_merges_revealed_facts_with_turn_index_and_payload_context() -> None:
@@ -123,7 +126,7 @@ def test_turn_service_rejects_invalid_finished_success_transition() -> None:
 
 class AliasStageLLMClient:
     def generate_client_turn(self, payload):
-        return LLMTurnResponse(
+        response = LLMTurnResponse(
             answer="Привет. Я сейчас занят, если что-то конкретное — пишите.",
             interest_delta=-5,
             state_patch=StatePatch(
@@ -137,6 +140,7 @@ class AliasStageLLMClient:
             stage="initial_contact",
             internal_notes="Provider returned alias stage.",
         )
+        return TokenCountedResult(value=response, input_tokens=10, output_tokens=5)
 
 
 def test_turn_service_normalizes_provider_stage_aliases() -> None:

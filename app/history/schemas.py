@@ -88,3 +88,18 @@ class UsageSummaryDTO(BaseModel):
     sessions_by_scenario: dict[str, int]
     sessions_by_training_config: dict[str, int]
     usage_events_count: int
+
+
+class PerUserTokenUsageDTO(BaseModel):
+    user_id: UUID
+    email: str
+    total_input: int
+    total_output: int
+    total: int
+
+
+class TokenUsageSummaryDTO(BaseModel):
+    total_input_tokens: int
+    total_output_tokens: int
+    total_tokens: int
+    per_user: list[PerUserTokenUsageDTO]
