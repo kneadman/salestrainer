@@ -8,6 +8,13 @@ const Footer: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const scrollTo = (href: string) => {
+    const el = document.querySelector(href);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <footer className="relative bg-navy-900 border-t border-white/[0.04]">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
@@ -31,18 +38,21 @@ const Footer: React.FC = () => {
           <div className="flex flex-col sm:flex-row md:flex-col gap-3 md:items-center">
             <a
               href="#how-it-works"
+              onClick={(event) => { event.preventDefault(); scrollTo('#how-it-works'); }}
               className="font-inter text-[14px] text-text-secondary hover:text-text-primary transition-colors text-left md:text-center"
             >
               Как работает
             </a>
             <a
               href="#scenarios"
+              onClick={(event) => { event.preventDefault(); scrollTo('#scenarios'); }}
               className="font-inter text-[14px] text-text-secondary hover:text-text-primary transition-colors text-left md:text-center"
             >
               Сценарии
             </a>
             <a
               href="#demo"
+              onClick={(event) => { event.preventDefault(); scrollTo('#demo'); }}
               className="font-inter text-[14px] text-text-secondary hover:text-text-primary transition-colors text-left md:text-center"
             >
               Демо

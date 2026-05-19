@@ -99,6 +99,8 @@
 .admin-button,
 .admin-link-button,
 .admin-tab {
+  display: inline-flex;
+  align-items: center;
   border-radius: 8px;
   color: #dce7f6;
   background: rgba(148, 163, 184, 0.1);
@@ -522,7 +524,12 @@ a.admin-link-button {
     font-size: 13px;
   }
 
-  .admin-topbar,
+  .admin-topbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
   .admin-page__header,
   .admin-panel__header {
     align-items: stretch;
