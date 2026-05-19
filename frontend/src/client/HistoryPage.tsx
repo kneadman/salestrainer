@@ -168,9 +168,9 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
     <div className="client-page">
       <div className="client-page__header">
         <div>
-          <button type="button" className="client-link-button" onClick={() => onNavigate("/app/history")}>
+          <a href="/app/history" className="client-link-button" onClick={(event) => { event.preventDefault(); onNavigate("/app/history"); }}>
             ← История
-          </button>
+          </a>
           <h1>{sessionVm.startedAtLabel === "—" ? "Тренировка" : `Тренировка ${sessionVm.startedAtLabel}`}</h1>
         </div>
         <ClientBadge>{sessionVm.statusLabel}</ClientBadge>
@@ -227,7 +227,7 @@ function HistoryFilters(props: {
             ))}
           </select>
         </label>
-        <button type="button" className="client-button" onClick={props.onReset} disabled={!hasFilters}>
+        <button type="button" className="client-button client-form__reset" onClick={props.onReset} disabled={!hasFilters}>
           Сбросить фильтры
         </button>
       </div>
@@ -261,9 +261,9 @@ function HistoryTable({ vms, onNavigate }: { vms: ReturnType<typeof buildClientH
               <td>{vm.turnCount}</td>
               <td>{vm.finalInterestScore}</td>
               <td>
-                <button type="button" className="client-link-button" onClick={() => onNavigate(`/app/history/${vm.sessionId}`)}>
+                <a href={`/app/history/${vm.sessionId}`} className="client-link-button" onClick={(event) => { event.preventDefault(); onNavigate(`/app/history/${vm.sessionId}`); }}>
                   Открыть
-                </button>
+                </a>
               </td>
             </tr>
           ))}

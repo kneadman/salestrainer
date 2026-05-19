@@ -1,9 +1,7 @@
 import React, { useState, useLayoutEffect, useRef } from 'react';
 import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useScrollReveal } from '../hooks/useScrollReveal';
 import SectionLabel from '@/landing/components/SectionLabel';
-
-gsap.registerPlugin(ScrollTrigger);
 
 const tabs = [
   {
@@ -46,44 +44,19 @@ const HowItWorksSection: React.FC = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        '.hiw-left',
-        { opacity: 0, y: 24 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: 'top 80%',
-            toggleActions: 'play none none none',
-          },
-        }
-      );
-
-      gsap.fromTo(
-        '.hiw-right',
-        { opacity: 0, y: 32 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: 'top 75%',
-            toggleActions: 'play none none none',
-          },
-        }
-      );
-    }, sectionRef);
-
-    return () => ctx.revert();
-  }, []);
+  useScrollReveal(sectionRef, [
+    {
+      targets: '.hiw-left',
+      from: { opacity: 0, y: 24 },
+      to: { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
+    },
+    {
+      targets: '.hiw-right',
+      from: { opacity: 0, y: 32 },
+      to: { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
+      scrollTrigger: { trigger: sectionRef.current, start: 'top 75%' },
+    },
+  ]);
 
   useLayoutEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;

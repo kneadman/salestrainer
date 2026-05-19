@@ -90,13 +90,13 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           </a>
         </div>
       </div>
-      <section className="admin-stats-grid">
+      <section className="admin-stats-grid admin-stats-grid--balanced">
         <StatCard label="Организации" value={totals.organizations} detail={`${totals.activeOrganizations} активны`} />
         <StatCard label="Пользователи" value={totals.users} detail="По всем организациям" />
         <StatCard label="Тренировочные конфиги" value={totals.trainingConfigs} />
         <StatCard label="Всего сессий" value={totals.totalSessions} detail={`${totals.finishedSessions} завершены`} />
         <StatCard label="Всего сообщений" value={totals.totalTurns} />
-        <StatCard label="Средний итоговый интерес" value={totals.avgInterest ?? "—"} detail="По организациям с данными" />
+        <StatCard label="Средний итоговый интерес" value={totals.avgInterest ?? <span className="admin-muted">Нет данных</span>} detail="По организациям с данными" />
       </section>
       <section className="admin-panel">
         <div className="admin-panel__header">

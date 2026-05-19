@@ -116,6 +116,14 @@
   background: #5eead4;
 }
 
+.admin-button:focus-visible,
+.admin-link-button:focus-visible,
+.admin-nav__item:focus-visible,
+.admin-tab:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 2px;
+}
+
 .admin-main-shell {
   min-width: 0;
 }
@@ -170,7 +178,7 @@
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .admin-page h1,
@@ -180,10 +188,12 @@
 }
 
 .admin-kicker {
+  display: block;
   color: #5eead4;
   font-size: 0.82rem;
   font-weight: 800;
   text-transform: uppercase;
+  margin-bottom: 6px;
 }
 
 .admin-panel,
@@ -202,6 +212,16 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+}
+
+.admin-stats-grid--balanced {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .admin-stats-grid--balanced {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .admin-stat-card,
@@ -507,6 +527,13 @@ a.admin-link-button {
   .admin-panel__header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-topbar__actions {
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .admin-content {

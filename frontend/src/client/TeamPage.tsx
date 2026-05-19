@@ -84,7 +84,7 @@ function TeamUserDetail({ userId, onNavigate }: { userId: string; onNavigate: (p
     <div className="client-page">
       <div className="client-page__header">
         <div>
-          <button type="button" className="client-link-button" onClick={() => onNavigate("/app/team")}>← Команда</button>
+          <a href="/app/team" className="client-link-button" onClick={(event) => { event.preventDefault(); onNavigate("/app/team"); }}>← Команда</a>
           <h1>{detail.user.email}</h1>
           <p>{userVm.roleLabel}</p>
         </div>
@@ -129,9 +129,9 @@ function TeamUsersTable({ users, onNavigate }: { users: TeamUserDTO[]; onNavigat
               <td>{users[index].avg_final_interest_score?.toFixed(1) ?? "—"}</td>
               <td>{users[index].last_activity_at ? new Date(users[index].last_activity_at).toLocaleDateString("ru-RU") : "—"}</td>
               <td>
-                <button type="button" className="client-link-button" onClick={() => onNavigate(`/app/team/${vm.id}`)}>
+                <a href={`/app/team/${vm.id}`} className="client-link-button" onClick={(event) => { event.preventDefault(); onNavigate(`/app/team/${vm.id}`); }}>
                   Открыть
-                </button>
+                </a>
               </td>
             </tr>
           ))}

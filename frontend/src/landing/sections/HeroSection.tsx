@@ -139,12 +139,6 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onDemoClick, onMechanicsClick
         </svg>
       </div>
 
-      <style>{`
-        @keyframes kenburns {
-          0% { transform: scale(1.05) translate(0, 0); }
-          100% { transform: scale(1.12) translate(-1%, -1%); }
-        }
-      `}</style>
     </section>
   );
 };

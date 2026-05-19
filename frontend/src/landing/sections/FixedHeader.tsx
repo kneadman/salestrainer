@@ -33,13 +33,7 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
     return () => trigger.kill();
   }, []);
 
-  const scrollTo = useCallback((href: string) => {
-    const el = document.querySelector(href);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-      setMobileOpen(false);
-    }
-  }, []);
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   return (
     <>
@@ -73,13 +67,13 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => (
-              <button
+              <a
                 key={link.href}
-                onClick={() => scrollTo(link.href)}
+                href={link.href}
                 className="font-inter text-[14px] text-text-secondary hover:text-text-primary px-3 py-2 rounded-lg transition-colors duration-200"
               >
                 {link.label}
-              </button>
+              </a>
             ))}
           </nav>
 
@@ -122,13 +116,14 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
       >
         <div className="flex flex-col items-center justify-center h-full gap-6 pt-16">
           {navLinks.map((link) => (
-            <button
+            <a
               key={link.href}
-              onClick={() => scrollTo(link.href)}
+              href={link.href}
+              onClick={closeMobile}
               className="font-inter text-[18px] text-text-secondary hover:text-text-primary transition-colors"
             >
               {link.label}
-            </button>
+            </a>
           ))}
           <div className="flex flex-col gap-3 mt-4 w-64">
             <button className="ghost-btn w-full" onClick={onLoginClick}>

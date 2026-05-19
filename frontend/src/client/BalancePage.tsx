@@ -7,9 +7,9 @@ export function BalancePage({ user: _user, onNavigate }: { user: AuthUser; onNav
     <div className="client-page">
       <section className="client-panel">
         <ClientState title="Раздел использования временно скрыт." detail="Вернитесь в обзор кабинета." />
-        <button type="button" className="client-button client-button--primary" onClick={() => onNavigate?.("/app", true)}>
+        <a href="/app" className="client-button client-button--primary" onClick={(event) => { event.preventDefault(); onNavigate?.("/app", true); }}>
           Перейти в обзор
-        </button>
+        </a>
       </section>
     </div>
   );

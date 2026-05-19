@@ -322,7 +322,7 @@ button:disabled {
 
 .message-bubble--manager {
   background: linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%);
-  color: #eff7ff;
+  color: #08101c;
   border-bottom-right-radius: 6px;
 }
 
@@ -507,4 +507,11 @@ button:disabled {
   outline: none;
   border-color: rgba(45, 212, 191, 0.5);
   box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.15);
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 48px 16px;
+    align-items: flex-start;
+  }
 }

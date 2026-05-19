@@ -16,7 +16,7 @@ export function ChatWindow({ turns, loading, publicBrief }: ChatWindowProps) {
   }, [turns, loading]);
 
   return (
-    <div className="chat-window">
+    <div className="chat-window" aria-live="polite" aria-atomic="false">
       {publicBrief ? <div className="chat-brief">{publicBrief}</div> : null}
 
       {turns.length === 0 ? (

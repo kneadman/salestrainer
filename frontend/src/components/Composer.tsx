@@ -113,6 +113,7 @@ export function Composer({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Введите сообщение клиенту"
+        aria-label="Сообщение клиенту"
         rows={1}
         disabled={composerDisabled}
       />

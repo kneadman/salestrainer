@@ -79,12 +79,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
   }, [authenticated]);
 
   useEffect(() => {
-    /** Set landing-specific body background; restore on unmount. */
-    const prevBodyBackground = document.body.style.backgroundColor;
-    document.body.style.backgroundColor = "#0f1729";
-    return () => {
-      document.body.style.backgroundColor = prevBodyBackground;
-    };
+    // Landing page uses shared base background from base.css
   }, []);
 
   const handleLoginClick = () => {
