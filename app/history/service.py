@@ -20,6 +20,8 @@ from app.history.schemas import (
     HistoryReportDTO,
     HistorySessionDetailDTO,
     HistorySessionSummaryDTO,
+    PerUserTokenUsageDTO,
+    TokenUsageSummaryDTO,
     UsageSummaryDTO,
 )
 from app.identity.roles import UserRole, normalize_role
@@ -158,6 +160,14 @@ class HistoryService:
                     "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
                 },
             ),
+            token_usage_kwargs={
+                "event_type": "dialogue",
+                "client_account_id": client_account_id,
+                "user_id": user_id,
+                "session_id": session.session_id,
+                "input_tokens": turn_result.input_tokens,
+                "output_tokens": turn_result.output_tokens,
+            },
         )
 
     def reconcile_turn_processed(
@@ -228,6 +238,14 @@ class HistoryService:
                     "dialogue_prompt_version": DIALOGUE_PROMPT_VERSION,
                 },
             ),
+            token_usage_kwargs={
+                "event_type": "dialogue",
+                "client_account_id": client_account_id,
+                "user_id": user_id,
+                "session_id": session.session_id,
+                "input_tokens": 0,
+                "output_tokens": 0,
+            },
         )
         return True
 
@@ -315,6 +333,26 @@ class HistoryService:
             training_config_id=training_config_id,
             session_id=session_id,
             event_payload=event_payload or {},
+        )
+
+    def record_token_usage(
+        self,
+        *,
+        event_type: str,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+        session_id: UUID | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> None:
+        """Record one token usage row for billing analytics."""
+        self._repository.create_token_usage_record(
+            event_type=event_type,
+            client_account_id=client_account_id,
+            user_id=user_id,
+            session_id=session_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     def record_session_finished_with_report(
@@ -596,6 +634,17 @@ class HistoryService:
         """Return basic organization usage metrics as an API DTO."""
         self.expire_inactive_sessions(client_account_id=client_account_id)
         return UsageSummaryDTO.model_validate(self._repository.usage_summary(client_account_id))
+
+    def get_token_usage_summary(self, *, client_account_id: UUID) -> TokenUsageSummaryDTO:
+        """Return aggregated token usage for an organization as an API DTO."""
+        summary = self._repository.token_usage_summary(client_account_id=client_account_id)
+        per_user = self._repository.token_usage_per_user(client_account_id=client_account_id)
+        return TokenUsageSummaryDTO(
+            total_input_tokens=summary["total_input_tokens"],
+            total_output_tokens=summary["total_output_tokens"],
+            total_tokens=summary["total_tokens"],
+            per_user=[PerUserTokenUsageDTO.model_validate(row) for row in per_user],
+        )
 
     def _require_access(
         self,

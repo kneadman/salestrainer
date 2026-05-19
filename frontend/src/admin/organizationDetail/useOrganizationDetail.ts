@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  getTokenUsage,
   getUsageSummary,
   listAuditLog,
   listOrganizationHistory,
@@ -11,6 +12,7 @@ import type {
   AuditLogDTO,
   HistorySessionSummaryDTO,
   OrganizationDTO,
+  TokenUsageSummaryDTO,
   TrainingConfigDTO,
   UsageSummaryDTO,
   UserDTO,
@@ -23,6 +25,7 @@ export type UseOrganizationDetailResult = {
   configs: TrainingConfigDTO[];
   history: HistorySessionSummaryDTO[];
   usage: UsageSummaryDTO | null;
+  tokenUsage: TokenUsageSummaryDTO | null;
   audit: AuditLogDTO[];
   loading: boolean;
   error: string | null;
@@ -36,6 +39,7 @@ export function useOrganizationDetail(organizationId: string): UseOrganizationDe
   const [configs, setConfigs] = useState<TrainingConfigDTO[]>([]);
   const [history, setHistory] = useState<HistorySessionSummaryDTO[]>([]);
   const [usage, setUsage] = useState<UsageSummaryDTO | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageSummaryDTO | null>(null);
   const [audit, setAudit] = useState<AuditLogDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,17 +54,19 @@ export function useOrganizationDetail(organizationId: string): UseOrganizationDe
       if (!selectedOrg) {
         throw new Error("Организация не найдена.");
       }
-      const [loadedUsers, loadedConfigs, loadedHistory, loadedUsage, loadedAudit] = await Promise.all([
+      const [loadedUsers, loadedConfigs, loadedHistory, loadedUsage, loadedTokenUsage, loadedAudit] = await Promise.all([
         listUsers(organizationId),
         listTrainingConfigs(organizationId),
         listOrganizationHistory(organizationId, { limit: 50, offset: 0 }).catch(() => [] as HistorySessionSummaryDTO[]),
         getUsageSummary(organizationId).catch(() => null),
+        getTokenUsage(organizationId).catch(() => null),
         listAuditLog({ organization_id: organizationId, limit: 50, offset: 0 }).catch(() => [] as AuditLogDTO[]),
       ]);
       setUsers(loadedUsers);
       setConfigs(loadedConfigs);
       setHistory(loadedHistory);
       setUsage(loadedUsage);
+      setTokenUsage(loadedTokenUsage);
       setAudit(loadedAudit);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
@@ -79,6 +85,7 @@ export function useOrganizationDetail(organizationId: string): UseOrganizationDe
     configs,
     history,
     usage,
+    tokenUsage,
     audit,
     loading,
     error,

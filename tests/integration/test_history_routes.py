@@ -16,7 +16,7 @@ from app.application.report_service import ReportService
 from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, ReportRecommendation, SkillScore
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
 from tests.unit._persona_fixtures import valid_minimal_persona
-from app.history.models import TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
+from app.history.models import TokenUsageRecord, TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
 from app.history.repository import HistoryRepository
 from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
@@ -631,4 +631,76 @@ def test_history_report_response_exposes_saved_report_payload() -> None:
     assert history_report_response.status_code == 200
     assert "report_payload" in history_report_response.json()
     assert history_report_response.json()["report_payload"] == report_record.report_payload
+    db_session.close()
+
+
+def test_token_usage_persists_after_turn_and_judge() -> None:
+    """Verify token usage records are created with token_count > 0 after LLM calls."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    _seed_account_with_users(
+        db_session,
+        slug="token-corp",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+
+    session_id = _start_turn_finish(client)
+
+    token_records = list(db_session.scalars(select(TokenUsageRecord).where(TokenUsageRecord.session_id == UUID(session_id))))
+    assert len(token_records) >= 2, "Expected at least dialogue and judge token records"
+    for record in token_records:
+        assert record.input_tokens > 0, f"Expected positive input_tokens for {record.event_type}"
+        assert record.output_tokens > 0, f"Expected positive output_tokens for {record.event_type}"
+
+    db_session.close()
+
+
+def test_token_usage_api_returns_aggregates_for_admin() -> None:
+    """Verify admin token-usage endpoint returns aggregated data."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    account, _, _ = _seed_account_with_users(
+        db_session,
+        slug="token-admin",
+        users=[
+            ("manager@example.com", "client_manager"),
+            ("admin@example.com", "internal_admin"),
+        ],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+
+    _start_turn_finish(client)
+
+    _login(client, "admin@example.com")
+    response = client.get(f"/api/internal/organizations/{account.id}/token-usage")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_tokens"] > 0
+    assert data["total_input_tokens"] > 0
+    assert data["total_output_tokens"] > 0
+    assert len(data["per_user"]) >= 1
+    assert "email" in data["per_user"][0]
+    assert "total" in data["per_user"][0]
+
+    db_session.close()
+
+
+def test_token_usage_api_returns_403_for_non_admin() -> None:
+    """Verify non-admin users cannot access token-usage endpoint."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    account, _, _ = _seed_account_with_users(
+        db_session,
+        slug="token-forbidden",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+
+    response = client.get(f"/api/internal/organizations/{account.id}/token-usage")
+    assert response.status_code == 403
+
     db_session.close()

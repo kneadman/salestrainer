@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import LLMTurnInput, LLMTurnResponse
+from app.domain.token_counter import TokenCountedResult, TokenCounterService
 from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.fake_llm_client import FakeLLMClient
 from app.prompts.schemas import llm_turn_response_schema_json
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class LLMClient(Protocol):
-    def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
+    def generate_client_turn(self, payload: LLMTurnInput) -> TokenCountedResult[LLMTurnResponse]:
         ...
 
 
@@ -196,6 +197,7 @@ class YandexCompatibleLLMClient:
         fallback_client: LLMClient | None = None,
         transport: Transport | None = None,
         debug_payload_logging: bool = False,
+        token_counter: TokenCounterService | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -206,8 +208,9 @@ class YandexCompatibleLLMClient:
         self._fallback_client = fallback_client
         self._transport = transport or self._default_transport
         self._debug_payload_logging = debug_payload_logging
+        self._token_counter = token_counter or TokenCounterService()
 
-    def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
+    def generate_client_turn(self, payload: LLMTurnInput) -> TokenCountedResult[LLMTurnResponse]:
         last_error: Exception | None = None
         for attempt in range(self._max_retries + 1):
             retry_instruction = ""
@@ -231,7 +234,10 @@ class YandexCompatibleLLMClient:
                 logger.debug("yandex_llm_request_payload %s", request_payload)
             try:
                 raw_response = _response_to_payload(self._transport(request_payload))
-                return parse_llm_turn_response(raw_response)
+                response = parse_llm_turn_response(raw_response)
+                input_tokens = self._token_counter.count_string(request_payload.get("input", ""))
+                output_tokens = self._token_counter.count_json(response.model_dump(mode="json"))
+                return TokenCountedResult(value=response, input_tokens=input_tokens, output_tokens=output_tokens)
             except (LLMClientError, ValidationError, JSONDecodeError, TimeoutError) as error:
                 last_error = error
                 logger.warning("yandex_llm_request_failed attempt=%s error=%s", attempt + 1, error)

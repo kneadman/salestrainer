@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.application.judgement_service import JudgementService
 from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, SkillScore, build_judge_input_from_session
+from app.domain.token_counter import TokenCountedResult
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState, Turn, TurnEvaluation
 from tests.unit._persona_fixtures import valid_minimal_persona
 
@@ -15,7 +16,7 @@ class SpyJudgeClient:
     def judge_session(self, payload):
         """Capture the payload and return a deterministic output model."""
         self.last_payload = payload
-        return JudgeSessionOutput(
+        output = JudgeSessionOutput(
             overall_score=72,
             overall_grade="good",
             outcome="Solid result.",
@@ -43,6 +44,7 @@ class SpyJudgeClient:
             ],
             final_verdict="Stable test verdict.",
         )
+        return TokenCountedResult(value=output, input_tokens=100, output_tokens=50)
 
 
 def _build_session_state() -> TrainingSessionState:
@@ -108,8 +110,8 @@ def test_judgement_service_calls_client_and_returns_output() -> None:
 
     result = service.judge_session(_build_session_state())
 
-    assert isinstance(result, JudgeSessionOutput)
-    assert result.overall_score == 72
+    assert isinstance(result.value, JudgeSessionOutput)
+    assert result.value.overall_score == 72
     assert spy_client.last_payload is not None
 
 

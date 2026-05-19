@@ -22,6 +22,7 @@ from app.domain.public_facts import append_revealed_facts
 from app.domain.scenarios import get_scenario
 from app.domain.stages import resolve_next_stage
 from app.domain.state_update import apply_state_patch
+from app.domain.token_counter import TokenCounterService
 from app.infrastructure.llm_client import LLMClient
 from app.infrastructure.session_repository import SessionRepository
 
@@ -43,6 +44,8 @@ class TurnResult(BaseModel):
     response_payload: dict[str, Any] | None = None
     llm_payload: dict[str, Any] | None = None
     llm_response: dict[str, Any] | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class TurnService:
@@ -53,12 +56,14 @@ class TurnService:
         recent_turn_limit: int = 6,
         debug_mode: bool = False,
         summary_compressor: SummaryCompressor | None = None,
+        token_counter: TokenCounterService | None = None,
     ) -> None:
         self._repository = repository
         self._llm_client = llm_client
         self._recent_turn_limit = recent_turn_limit
         self._debug_mode = debug_mode
         self._summary_compressor = summary_compressor or FakeSummaryCompressor()
+        self._token_counter = token_counter or TokenCounterService()
 
     def process_message(
         self,
@@ -101,7 +106,8 @@ class TurnService:
             manager_message=manager_message,
         )
         payload_dump = llm_input.model_dump(mode="json")
-        llm_response = self._llm_client.generate_client_turn(llm_input)
+        llm_result = self._llm_client.generate_client_turn(llm_input)
+        llm_response = llm_result.value
         response_dump = llm_response.model_dump(mode="json")
         updated_client_state = apply_state_patch(session.client_state, llm_response.state_patch)
         updated_client_state.revealed_facts = append_revealed_facts(
@@ -181,14 +187,18 @@ class TurnService:
                     "Please retry this action instead of resending the last message."
                 ) from error
             raise
+        input_tokens = llm_result.input_tokens
+        output_tokens = llm_result.output_tokens
         logger.info(
-            "turn_processed session_id=%s turn_index=%s interest_before=%s interest_after=%s stage_before=%s stage_after=%s",
+            "turn_processed session_id=%s turn_index=%s interest_before=%s interest_after=%s stage_before=%s stage_after=%s input_tokens=%s output_tokens=%s",
             session.session_id,
             turn.index,
             interest_before,
             interest_after,
             stage_before,
             session.stage,
+            input_tokens,
+            output_tokens,
         )
         return TurnResult(
             session_id=str(session.session_id),
@@ -205,6 +215,8 @@ class TurnService:
             response_payload=response_payload,
             llm_payload=payload_dump if self._debug_mode else None,
             llm_response=response_dump if self._debug_mode else None,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     def _require_active_session(self, session_id: str) -> TrainingSessionState:

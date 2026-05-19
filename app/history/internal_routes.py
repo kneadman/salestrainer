@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.history.dependencies import get_history_service
 from app.history.repository import SessionListFilters
-from app.history.schemas import HistorySessionSummaryDTO, UsageSummaryDTO
+from app.history.schemas import HistorySessionSummaryDTO, TokenUsageSummaryDTO, UsageSummaryDTO
 from app.history.service import HistoryService
 from app.identity.service import CurrentSession
 from app.internal_admin.dependencies import require_internal_admin_session
@@ -48,6 +48,16 @@ def get_organization_usage_summary(
 ) -> UsageSummaryDTO:
     """Return basic aggregated usage metrics for an organization."""
     return service.get_client_usage_summary(client_account_id=organization_id)
+
+
+@router.get("/organizations/{organization_id}/token-usage", response_model=TokenUsageSummaryDTO)
+def get_organization_token_usage(
+    organization_id: UUID,
+    service: HistoryService = Depends(get_history_service),
+    _: CurrentSession = Depends(require_internal_admin_session),
+) -> TokenUsageSummaryDTO:
+    """Return token usage aggregates for an organization (admin only)."""
+    return service.get_token_usage_summary(client_account_id=organization_id)
 
 
 @router.get("/users/{user_id}/history/sessions", response_model=list[HistorySessionSummaryDTO])

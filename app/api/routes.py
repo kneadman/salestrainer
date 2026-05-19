@@ -306,16 +306,19 @@ def create_session(
             user_id=current_session.user.id,
         )
         session = None
+        persona_tokens = None
         if is_internal_admin(user_role) and request.persona_id is not None:
             session = session_service.start_session(
                 scenario_id=request.scenario_id,
                 persona_id=request.persona_id,
             )
         else:
-            persona = persona_generation_service.generate_for_training_config(
+            persona_result = persona_generation_service.generate_for_training_config(
                 training_config=training_config,
                 scenario_id=request.scenario_id,
             )
+            persona = persona_result.value
+            persona_tokens = persona_result
             session = session_service.start_session(
                 scenario_id=request.scenario_id,
                 training_config=training_config,
@@ -334,6 +337,15 @@ def create_session(
                 user_id=current_session.user.id,
                 training_config_id=training_config.id,
             )
+            if persona_tokens is not None:
+                history_service.record_token_usage(
+                    event_type="persona_generation",
+                    client_account_id=training_config.client_account_id,
+                    user_id=current_session.user.id,
+                    session_id=session.session_id,
+                    input_tokens=persona_tokens.input_tokens,
+                    output_tokens=persona_tokens.output_tokens,
+                )
         except Exception:
             logger.critical("history_session_start_failed session_id=%s", session.session_id, exc_info=True)
             access_service.delete_session_ownership(session.session_id)
@@ -536,7 +548,17 @@ def finish_session(
         raise not_found("Session not found after finish.")
     report_session = history_service.hydrate_session_with_durable_turns(session)
     report_text = report_service.generate_report_for_session(report_session)
-    report_payload = report_service.generate_report_payload_safely_for_session(report_session)
+    report_payload_result = report_service.generate_report_payload_safely_for_session(report_session)
+    report_payload = report_payload_result.value if report_payload_result is not None else None
+    if report_payload_result is not None:
+        history_service.record_token_usage(
+            event_type="judge",
+            client_account_id=ownership.client_account_id,
+            user_id=current_session.user.id,
+            session_id=session.session_id,
+            input_tokens=report_payload_result.input_tokens,
+            output_tokens=report_payload_result.output_tokens,
+        )
     history_service.record_session_finished_with_report(
         session=report_session,
         report_text=report_text,

@@ -17,6 +17,7 @@ from app.api.dependencies import get_persona_generation_service
 from app.api.main import create_app
 from app.application.projections import build_session_public_dto, build_turn_public_dto
 from app.domain.models import PersonaProfile
+from app.domain.token_counter import TokenCountedResult
 from app.history.dependencies import get_history_service
 from app.history.models import TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
 from app.history.repository import HistoryRepository
@@ -768,41 +769,45 @@ def test_api_message_idempotency_first_and_cached_responses_use_public_safe_proj
     class StubPersonaGenerationService:
         def generate_for_training_config(self, *, training_config, scenario_id):
             """Return a persona with a non-public display name to verify response sanitization."""
-            return PersonaProfile(
-                id="llm_generated_hidden_cfo",
-                display_name=hidden_display_name,
-                role="cfo",
-                industry="distribution",
-                company_size="30-100",
-                authority_level="final_decider",
-                behavior_model="analytical_and_cautious",
-                target_action="book_diagnostic_call",
-                current_business_context="Company is growing but cash planning is unclear.",
-                business_facts=["Several legal entities.", "Revenue growing 20 % YoY."],
-                cares_about=["cash flow", "control", "speed"],
-                current_solution="Excel + manual cash planning",
-                alternative_solutions=[
-                    "статус-кво: продолжать как сейчас",
-                    "hire a CFO in-house",
-                    "buy forecasting software",
-                ],
-                information_gaps=[
-                    "Thinks forecasting tools require months of setup.",
-                    "Does not know about one-week pilot options.",
-                ],
-                latent_pains=["Cash gaps are hard to forecast.", "Planning takes too much time."],
-                buying_motivation=["Improve financial transparency.", "Reduce firefighting."],
-                decision_criteria=["clear methodology", "similar cases", "fast implementation"],
-                hidden_constraints=["Bad experience with consultants."],
-                typical_objections=["We already track this in spreadsheets.", "No time for change."],
-                proof_sensitivity=["cases", "quick pilot"],
-                call_scoring_criteria=["discovery", "objection handling", "next step clarity"],
-                communication_style="short and analytical",
-                initial_openness=30,
-                starting_interest=31,
-                price_sensitivity=55,
-                urgency=60,
-                trust_baseline=28,
+            return TokenCountedResult(
+                value=PersonaProfile(
+                    id="llm_generated_hidden_cfo",
+                    display_name=hidden_display_name,
+                    role="cfo",
+                    industry="distribution",
+                    company_size="30-100",
+                    authority_level="final_decider",
+                    behavior_model="analytical_and_cautious",
+                    target_action="book_diagnostic_call",
+                    current_business_context="Company is growing but cash planning is unclear.",
+                    business_facts=["Several legal entities.", "Revenue growing 20 % YoY."],
+                    cares_about=["cash flow", "control", "speed"],
+                    current_solution="Excel + manual cash planning",
+                    alternative_solutions=[
+                        "статус-кво: продолжать как сейчас",
+                        "hire a CFO in-house",
+                        "buy forecasting software",
+                    ],
+                    information_gaps=[
+                        "Thinks forecasting tools require months of setup.",
+                        "Does not know about one-week pilot options.",
+                    ],
+                    latent_pains=["Cash gaps are hard to forecast.", "Planning takes too much time."],
+                    buying_motivation=["Improve financial transparency.", "Reduce firefighting."],
+                    decision_criteria=["clear methodology", "similar cases", "fast implementation"],
+                    hidden_constraints=["Bad experience with consultants."],
+                    typical_objections=["We already track this in spreadsheets.", "No time for change."],
+                    proof_sensitivity=["cases", "quick pilot"],
+                    call_scoring_criteria=["discovery", "objection handling", "next step clarity"],
+                    communication_style="short and analytical",
+                    initial_openness=30,
+                    starting_interest=31,
+                    price_sensitivity=55,
+                    urgency=60,
+                    trust_baseline=28,
+                ),
+                input_tokens=150,
+                output_tokens=80,
             )
 
     def override_get_db_session() -> Generator[Session, None, None]:
@@ -1034,41 +1039,45 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
             """Return a known generated persona so the API wiring is observable."""
             captured["persona_generation_context"] = training_config.persona_generation_context
             captured["scenario_id"] = scenario_id
-            return PersonaProfile(
-                id="llm_generated_cfo_cash_gap",
-                display_name="Unknown B2B contact",
-                role="cfo",
-                industry="distribution",
-                company_size="30-100",
-                authority_level="final_decider",
-                behavior_model="analytical_and_cautious",
-                target_action="book_diagnostic_call",
-                current_business_context="Company is growing but cash planning is unclear.",
-                business_facts=["Several legal entities.", "Revenue growing 20 % YoY."],
-                cares_about=["cash flow", "control", "speed"],
-                current_solution="Excel + manual cash planning",
-                alternative_solutions=[
-                    "статус-кво: продолжать как сейчас",
-                    "hire a CFO in-house",
-                    "buy forecasting software",
-                ],
-                information_gaps=[
-                    "Thinks forecasting tools require months of setup.",
-                    "Does not know about one-week pilot options.",
-                ],
-                latent_pains=["Cash gaps are hard to forecast.", "Planning takes too much time."],
-                buying_motivation=["Improve financial transparency.", "Reduce firefighting."],
-                decision_criteria=["clear methodology", "similar cases", "fast implementation"],
-                hidden_constraints=["Bad experience with consultants."],
-                typical_objections=["We already track this in spreadsheets.", "No time for change."],
-                proof_sensitivity=["cases", "quick pilot"],
-                call_scoring_criteria=["discovery", "objection handling", "next step clarity"],
-                communication_style="short and analytical",
-                initial_openness=30,
-                starting_interest=31,
-                price_sensitivity=55,
-                urgency=60,
-                trust_baseline=28,
+            return TokenCountedResult(
+                value=PersonaProfile(
+                    id="llm_generated_cfo_cash_gap",
+                    display_name="Unknown B2B contact",
+                    role="cfo",
+                    industry="distribution",
+                    company_size="30-100",
+                    authority_level="final_decider",
+                    behavior_model="analytical_and_cautious",
+                    target_action="book_diagnostic_call",
+                    current_business_context="Company is growing but cash planning is unclear.",
+                    business_facts=["Several legal entities.", "Revenue growing 20 % YoY."],
+                    cares_about=["cash flow", "control", "speed"],
+                    current_solution="Excel + manual cash planning",
+                    alternative_solutions=[
+                        "статус-кво: продолжать как сейчас",
+                        "hire a CFO in-house",
+                        "buy forecasting software",
+                    ],
+                    information_gaps=[
+                        "Thinks forecasting tools require months of setup.",
+                        "Does not know about one-week pilot options.",
+                    ],
+                    latent_pains=["Cash gaps are hard to forecast.", "Planning takes too much time."],
+                    buying_motivation=["Improve financial transparency.", "Reduce firefighting."],
+                    decision_criteria=["clear methodology", "similar cases", "fast implementation"],
+                    hidden_constraints=["Bad experience with consultants."],
+                    typical_objections=["We already track this in spreadsheets.", "No time for change."],
+                    proof_sensitivity=["cases", "quick pilot"],
+                    call_scoring_criteria=["discovery", "objection handling", "next step clarity"],
+                    communication_style="short and analytical",
+                    initial_openness=30,
+                    starting_interest=31,
+                    price_sensitivity=55,
+                    urgency=60,
+                    trust_baseline=28,
+                ),
+                input_tokens=150,
+                output_tokens=80,
             )
 
     def override_get_db_session() -> Generator[Session, None, None]:

@@ -171,7 +171,7 @@ def test_yandex_compatible_client_builds_expected_request_and_retries_then_succe
     )
 
     response = client.generate_client_turn(sample_payload())
-    assert response.interest_delta == 4
+    assert response.value.interest_delta == 4
     assert len(calls) == 2
     request_payload = calls[0]
     assert request_payload["prompt"]["id"] == "agent-id"
@@ -204,8 +204,8 @@ def test_yandex_compatible_client_falls_back_to_fake_client() -> None:
     )
 
     response = client.generate_client_turn(sample_payload())
-    assert response.answer
-    assert -15 <= response.interest_delta <= 15
+    assert response.value.answer
+    assert -15 <= response.value.interest_delta <= 15
 
 
 def test_llm_client_exports_single_active_fake_client() -> None:
@@ -219,8 +219,8 @@ def test_fake_llm_client_discovers_current_process_from_russian_accounting_quest
 
     response = FakeLLMClient().generate_client_turn(payload)
 
-    discovered_process = response.state_patch.add_discovered_current_process
-    assert response.revealed_facts
+    discovered_process = response.value.state_patch.add_discovered_current_process
+    assert response.value.revealed_facts
     assert discovered_process
     combined_process = " ".join(discovered_process)
     assert any(
@@ -243,10 +243,10 @@ def test_fake_llm_client_reveals_decision_criterion_only_when_answer_says_it() -
 
     response = FakeLLMClient().generate_client_turn(payload)
 
-    criteria = [fact for fact in response.revealed_facts if fact.category == "decision_criterion"]
-    assert criteria == [response.revealed_facts[-1]]
+    criteria = [fact for fact in response.value.revealed_facts if fact.category == "decision_criterion"]
+    assert criteria == [response.value.revealed_facts[-1]]
     assert len(criteria) == 1
-    assert criteria[0].text in response.answer
+    assert criteria[0].text in response.value.answer
 
 
 def test_fake_llm_client_reveals_constraint_only_when_answer_says_it() -> None:
@@ -256,10 +256,10 @@ def test_fake_llm_client_reveals_constraint_only_when_answer_says_it() -> None:
 
     response = FakeLLMClient().generate_client_turn(payload)
 
-    constraints = [fact for fact in response.revealed_facts if fact.category == "constraint"]
-    pains = [fact for fact in response.revealed_facts if fact.category == "pain"]
+    constraints = [fact for fact in response.value.revealed_facts if fact.category == "constraint"]
+    pains = [fact for fact in response.value.revealed_facts if fact.category == "pain"]
     assert constraints
-    assert constraints[0].text in response.answer
+    assert constraints[0].text in response.value.answer
     assert pains == []
 
 
@@ -269,7 +269,7 @@ def test_fake_llm_client_revealed_facts_do_not_contain_technical_values() -> Non
     )
 
     response = FakeLLMClient().generate_client_turn(payload)
-    combined = " ".join(fact.text for fact in response.revealed_facts)
+    combined = " ".join(fact.text for fact in response.value.revealed_facts)
 
     assert "cfo" not in combined
     assert "final_decider" not in combined
@@ -284,8 +284,8 @@ def test_fake_llm_client_revealed_facts_follow_answer_branch_priority() -> None:
 
     response = FakeLLMClient().generate_client_turn(payload)
 
-    assert [fact.category for fact in response.revealed_facts] == ["role"]
-    assert response.revealed_facts[0].text in response.answer
+    assert [fact.category for fact in response.value.revealed_facts] == ["role"]
+    assert response.value.revealed_facts[0].text in response.value.answer
 
 
 def test_fake_llm_client_revealed_fact_logic_has_no_mojibake_tokens() -> None:

@@ -89,8 +89,8 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
 
     persona = service.generate_for_training_config(training_config=_training_config(prompt=""))
 
-    assert persona.id.startswith("generated_first_contact_discovery_")
-    assert persona.role in {
+    assert persona.value.id.startswith("generated_first_contact_discovery_")
+    assert persona.value.role in {
         "owner",
         "founder",
         "ceo",
@@ -103,7 +103,7 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_in_local_
         "sales_director",
         "purchase_manager",
     }
-    assert persona.authority_level == "final_decider"
+    assert persona.value.authority_level == "final_decider"
 
 
 def test_persona_generation_service_falls_back_to_local_without_prompt_for_explicit_fake_backend() -> None:
@@ -115,7 +115,7 @@ def test_persona_generation_service_falls_back_to_local_without_prompt_for_expli
 
     persona = service.generate_for_training_config(training_config=_training_config(prompt=""))
 
-    assert persona.id.startswith("generated_first_contact_discovery_")
+    assert persona.value.id.startswith("generated_first_contact_discovery_")
 
 
 def test_persona_generation_service_rejects_empty_prompt_without_fallback() -> None:

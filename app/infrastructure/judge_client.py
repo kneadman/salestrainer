@@ -19,6 +19,7 @@ from app.domain.judgement_models import (
     SkillScore,
 )
 from app.domain.models import TurnEvaluation
+from app.domain.token_counter import TokenCountedResult, TokenCounterService
 from app.infrastructure.config import Settings
 from app.infrastructure.llm_client import (
     LLMClientError,
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class JudgeClient(Protocol):
-    def judge_session(self, payload: JudgeSessionInput) -> JudgeSessionOutput:
+    def judge_session(self, payload: JudgeSessionInput) -> TokenCountedResult[JudgeSessionOutput]:
         ...
 
 
@@ -83,7 +84,10 @@ def _validate_evidence_indexes(indexes: list[int], valid_turn_indexes: set[int],
 
 
 class FakeJudgeClient:
-    def judge_session(self, payload: JudgeSessionInput) -> JudgeSessionOutput:
+    def __init__(self, token_counter: TokenCounterService | None = None) -> None:
+        self._token_counter = token_counter or TokenCounterService()
+
+    def judge_session(self, payload: JudgeSessionInput) -> TokenCountedResult[JudgeSessionOutput]:
         """Return a deterministic judgement result without any external LLM dependency."""
         overall_score = self._build_overall_score(payload)
         overall_grade = self._grade_for_score(overall_score)
@@ -118,7 +122,10 @@ class FakeJudgeClient:
             final_verdict=self._build_final_verdict(payload, overall_score, overall_grade),
             risk_flags=self._build_risk_flags(payload, skill_scores),
         )
-        return validate_judge_output(output, payload)
+        result = validate_judge_output(output, payload)
+        input_tokens = self._token_counter.count_json(payload.model_dump(mode="json"))
+        output_tokens = self._token_counter.count_json(result.model_dump(mode="json"))
+        return TokenCountedResult(value=result, input_tokens=input_tokens, output_tokens=output_tokens)
 
     def _build_overall_score(self, payload: JudgeSessionInput) -> int:
         """Average heuristic scores when available, otherwise fall back to final interest."""
@@ -502,6 +509,7 @@ class StructuredJudgeClient:
         fallback_client: JudgeClient | None = None,
         transport: Transport | None = None,
         debug_payload_logging: bool = False,
+        token_counter: TokenCounterService | None = None,
     ) -> None:
         """Configure an OpenAI/Yandex-compatible structured judge client."""
         self._provider = provider
@@ -515,8 +523,9 @@ class StructuredJudgeClient:
         self._fallback_client = fallback_client
         self._transport = transport or self._default_transport
         self._debug_payload_logging = debug_payload_logging
+        self._token_counter = token_counter or TokenCounterService()
 
-    def judge_session(self, payload: JudgeSessionInput) -> JudgeSessionOutput:
+    def judge_session(self, payload: JudgeSessionInput) -> TokenCountedResult[JudgeSessionOutput]:
         """Call the provider and validate its response as JudgeSessionOutput."""
         last_error: Exception | None = None
         for attempt in range(self._max_retries + 1):
@@ -534,7 +543,10 @@ class StructuredJudgeClient:
             try:
                 raw_response = _response_to_payload(self._transport(request_payload))
                 output = parse_judge_session_output(raw_response)
-                return validate_judge_output(output, payload)
+                result = validate_judge_output(output, payload)
+                input_tokens = self._token_counter.count_string(request_payload.get("input", ""))
+                output_tokens = self._token_counter.count_json(result.model_dump(mode="json"))
+                return TokenCountedResult(value=result, input_tokens=input_tokens, output_tokens=output_tokens)
             except (JudgeOutputValidationError, LLMClientError, ValidationError, JSONDecodeError, TimeoutError) as error:
                 last_error = error
                 logger.warning("judge_request_failed attempt=%s error=%s", attempt + 1, error)

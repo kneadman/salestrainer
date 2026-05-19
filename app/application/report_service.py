@@ -7,6 +7,7 @@ from app.application.judgement_service import JudgementService
 from app.application.report_formatter import build_human_report
 from app.domain.errors import SessionNotFoundError
 from app.domain.models import TrainingSessionState
+from app.domain.token_counter import TokenCountedResult
 from app.infrastructure.session_repository import SessionRepository
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ class ReportService:
         """Return a human-readable report for an already loaded session snapshot."""
         return build_human_report(session)
 
-    def generate_report_payload(self, session_id: str) -> dict[str, object] | None:
+    def generate_report_payload(self, session_id: str) -> TokenCountedResult[dict[str, object]] | None:
         """Return an optional structured judge payload for persistence or future consumers."""
         if self._judgement_service is None:
             return None
@@ -61,14 +62,21 @@ class ReportService:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")
         return self.generate_report_payload_for_session(session)
 
-    def generate_report_payload_for_session(self, session: TrainingSessionState) -> dict[str, object] | None:
+    def generate_report_payload_for_session(
+        self,
+        session: TrainingSessionState,
+    ) -> TokenCountedResult[dict[str, object]] | None:
         """Return structured judge payload for an already loaded session snapshot."""
         if self._judgement_service is None:
             return None
         judgement = self._judgement_service.judge_session(session)
-        return judgement.model_dump(mode="json")
+        return TokenCountedResult(
+            value=judgement.value.model_dump(mode="json"),
+            input_tokens=judgement.input_tokens,
+            output_tokens=judgement.output_tokens,
+        )
 
-    def generate_report_payload_safely(self, session_id: str) -> dict[str, object] | None:
+    def generate_report_payload_safely(self, session_id: str) -> TokenCountedResult[dict[str, object]] | None:
         """Generate optional judge payload without breaking the core finish/report flow on provider errors."""
         try:
             return self.generate_report_payload(session_id)
@@ -76,7 +84,7 @@ class ReportService:
             logger.warning("judge_payload_generation_failed session_id=%s", session_id, exc_info=True)
             return None
 
-    def generate_report_payload_safely_for_session(self, session: TrainingSessionState) -> dict[str, object] | None:
+    def generate_report_payload_safely_for_session(self, session: TrainingSessionState) -> TokenCountedResult[dict[str, object]] | None:
         """Generate optional judge payload from a provided snapshot without breaking finish flow."""
         try:
             return self.generate_report_payload_for_session(session)

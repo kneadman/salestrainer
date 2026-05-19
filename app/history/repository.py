@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.contract_versions import JUDGE_PROMPT_VERSION, JUDGE_SCHEMA_VERSION
 from app.history.models import (
+    TokenUsageRecord,
     TrainingReportRecord,
     TrainingSessionRecord,
     TrainingTurnRecord,
@@ -271,6 +272,30 @@ class HistoryRepository:
         self._session.refresh(record)
         return record
 
+    def create_token_usage_record(
+        self,
+        *,
+        event_type: str,
+        client_account_id: UUID | None = None,
+        user_id: UUID | None = None,
+        session_id: UUID | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> TokenUsageRecord:
+        """Insert one token usage record for billing analytics."""
+        record = TokenUsageRecord(
+            client_account_id=client_account_id,
+            user_id=user_id,
+            session_id=session_id,
+            event_type=event_type,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        self._session.add(record)
+        self._session.commit()
+        self._session.refresh(record)
+        return record
+
     def create_session_with_event(
         self,
         *,
@@ -296,6 +321,7 @@ class HistoryRepository:
         session_id: UUID,
         rollup: dict[str, object],
         event_kwargs: dict[str, object],
+        token_usage_kwargs: dict[str, object] | None = None,
     ) -> TrainingTurnRecord:
         """Append a turn, update session rollup, and write usage in one commit."""
         session_record = self.get_session(session_id)
@@ -305,7 +331,10 @@ class HistoryRepository:
         for field, value in rollup.items():
             setattr(session_record, field, value)
         event = UsageEventRecord(**event_kwargs)
-        self._session.add_all([turn, event])
+        to_add: list[object] = [turn, event]
+        if token_usage_kwargs is not None:
+            to_add.append(TokenUsageRecord(**token_usage_kwargs))
+        self._session.add_all(to_add)
         try:
             self._session.commit()
         except Exception:
@@ -463,6 +492,55 @@ class HistoryRepository:
             "sessions_by_training_config": self._group_counts(TrainingSessionRecord.training_config_id, session_filter),
             "usage_events_count": events_count,
         }
+
+    def token_usage_summary(
+        self,
+        *,
+        client_account_id: UUID,
+    ) -> dict[str, int]:
+        """Aggregate total input/output tokens for one organization."""
+        statement = (
+            select(
+                func.coalesce(func.sum(TokenUsageRecord.input_tokens), 0),
+                func.coalesce(func.sum(TokenUsageRecord.output_tokens), 0),
+            )
+            .where(TokenUsageRecord.client_account_id == client_account_id)
+        )
+        row = self._session.execute(statement).one()
+        return {
+            "total_input_tokens": int(row[0]),
+            "total_output_tokens": int(row[1]),
+            "total_tokens": int(row[0]) + int(row[1]),
+        }
+
+    def token_usage_per_user(
+        self,
+        *,
+        client_account_id: UUID,
+    ) -> list[dict[str, object]]:
+        """Break down token usage by user within one organization."""
+        statement = (
+            select(
+                TokenUsageRecord.user_id,
+                User.email,
+                func.coalesce(func.sum(TokenUsageRecord.input_tokens), 0),
+                func.coalesce(func.sum(TokenUsageRecord.output_tokens), 0),
+            )
+            .join(User, User.id == TokenUsageRecord.user_id)
+            .where(TokenUsageRecord.client_account_id == client_account_id)
+            .group_by(TokenUsageRecord.user_id, User.email)
+            .order_by(desc(func.coalesce(func.sum(TokenUsageRecord.input_tokens), 0) + func.coalesce(func.sum(TokenUsageRecord.output_tokens), 0)))
+        )
+        return [
+            {
+                "user_id": row[0],
+                "email": row[1],
+                "total_input": int(row[2]),
+                "total_output": int(row[3]),
+                "total": int(row[2]) + int(row[3]),
+            }
+            for row in self._session.execute(statement)
+        ]
 
     def _base_list_statement(self) -> Select[tuple[TrainingSessionRecord, str]]:
         """Build the shared session listing query with user email joined in."""

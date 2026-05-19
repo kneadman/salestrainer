@@ -4,6 +4,7 @@ from typing import Any
 
 from app.domain.interest import interest_band
 from app.domain.models import LLMTurnInput, LLMTurnResponse, RevealedFactPatch, StatePatch
+from app.domain.token_counter import TokenCountedResult, TokenCounterService
 
 
 class FakeLLMClient:
@@ -50,7 +51,10 @@ class FakeLLMClient:
     def _contains_any(message_lower: str, tokens: list[str]) -> bool:
         return any(token in message_lower for token in tokens)
 
-    def generate_client_turn(self, payload: LLMTurnInput) -> LLMTurnResponse:
+    def __init__(self, token_counter: TokenCounterService | None = None) -> None:
+        self._token_counter = token_counter or TokenCounterService()
+
+    def generate_client_turn(self, payload: LLMTurnInput) -> TokenCountedResult[LLMTurnResponse]:
         message = payload.manager_message.strip()
         message_lower = message.lower()
         profile = payload.hidden_profile
@@ -69,7 +73,7 @@ class FakeLLMClient:
         patch = self._build_patch(message_lower, band, profile)
         revealed_facts = self._build_revealed_facts(message_lower, profile)
         notes = self._build_notes(delta, band, message)
-        return LLMTurnResponse(
+        response = LLMTurnResponse(
             answer=answer,
             interest_delta=delta,
             state_patch=patch,
@@ -77,6 +81,9 @@ class FakeLLMClient:
             stage=stage,
             internal_notes=notes,
         )
+        input_tokens = self._token_counter.count_json(payload.model_dump(mode="json"))
+        output_tokens = self._token_counter.count_json(response.model_dump(mode="json"))
+        return TokenCountedResult(value=response, input_tokens=input_tokens, output_tokens=output_tokens)
 
     def _score_message(self, message_lower: str, profile: Any) -> int:
         score = 0
