@@ -40,14 +40,18 @@ export function ClientLayout({ user, path, children, onNavigate, onLogout }: Cli
         <BrandLogo className="client-brand" imageClassName="client-brand__mark" textClassName="client-brand__text" title={PRODUCT_NAME} subtitle={user.client_account.name} />
         <nav className="client-nav" aria-label="Навигация клиентского кабинета">
           {nav.map((item) => (
-            <button
+            <a
               key={item.path}
-              type="button"
+              href={item.path}
               className={path === item.path ? "client-nav__item client-nav__item--active" : "client-nav__item"}
-              onClick={() => onNavigate(item.path)}
+              onClick={(event) => {
+                if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return;
+                event.preventDefault();
+                onNavigate(item.path);
+              }}
             >
               {item.label}
-            </button>
+            </a>
           ))}
         </nav>
       </aside>

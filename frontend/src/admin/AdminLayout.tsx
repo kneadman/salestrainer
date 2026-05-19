@@ -31,14 +31,18 @@ export function AdminLayout({ user, activePath, children, onNavigate, onLogout }
         <BrandLogo className="admin-sidebar__brand" imageClassName="admin-sidebar__brand-mark" textClassName="admin-sidebar__brand-text" title={PRODUCT_NAME} subtitle="Администрирование" />
         <nav className="admin-nav" aria-label="Навигация администратора">
           {NAV_ITEMS.map((item) => (
-            <button
+            <a
               key={`${item.label}-${item.path}`}
-              type="button"
+              href={item.path}
               className={isActiveNavItem(activePath, item.path) ? "admin-nav__item admin-nav__item--active" : "admin-nav__item"}
-              onClick={() => onNavigate(item.path)}
+              onClick={(event) => {
+                if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return;
+                event.preventDefault();
+                onNavigate(item.path);
+              }}
             >
               {item.label}
-            </button>
+            </a>
           ))}
         </nav>
       </aside>
