@@ -33,7 +33,13 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
     return () => trigger.kill();
   }, []);
 
-  const closeMobile = useCallback(() => setMobileOpen(false), []);
+  const handleNavClick = useCallback((href: string) => {
+    setMobileOpen(false);
+    const el = document.querySelector(href);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
 
   return (
     <>
@@ -70,6 +76,7 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
               <a
                 key={link.href}
                 href={link.href}
+                onClick={(event) => { event.preventDefault(); handleNavClick(link.href); }}
                 className="font-inter text-[14px] text-text-secondary hover:text-text-primary px-3 py-2 rounded-lg transition-colors duration-200"
               >
                 {link.label}
@@ -119,7 +126,7 @@ const FixedHeader: React.FC<FixedHeaderProps> = ({ authenticated, onLoginClick, 
             <a
               key={link.href}
               href={link.href}
-              onClick={closeMobile}
+              onClick={(event) => { event.preventDefault(); handleNavClick(link.href); }}
               className="font-inter text-[18px] text-text-secondary hover:text-text-primary transition-colors"
             >
               {link.label}
