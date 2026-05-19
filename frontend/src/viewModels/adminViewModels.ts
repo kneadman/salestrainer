@@ -12,6 +12,7 @@ import type {
   HistorySessionSummaryDTO,
   HistoryTurnDTO,
   OrganizationDTO,
+  TokenUsageSummaryDTO,
   TrainingConfigDTO,
   UsageSummaryDTO,
   UserDTO,
@@ -204,5 +205,39 @@ export function buildUsageSummaryViewModel(dto: UsageSummaryDTO): UsageSummaryVi
         value,
       })),
     },
+  };
+}
+
+export type PerUserTokenUsageViewModel = {
+  userId: string;
+  email: string;
+  totalInput: string;
+  totalOutput: string;
+  total: string;
+};
+
+export type TokenUsageViewModel = {
+  totalTokens: string;
+  totalInput: string;
+  totalOutput: string;
+  perUser: PerUserTokenUsageViewModel[];
+};
+
+function formatKTokens(tokens: number): string {
+  return `${(tokens / 1000).toFixed(1)} K`;
+}
+
+export function buildTokenUsageViewModel(dto: TokenUsageSummaryDTO): TokenUsageViewModel {
+  return {
+    totalTokens: formatKTokens(dto.total_tokens),
+    totalInput: formatKTokens(dto.total_input_tokens),
+    totalOutput: formatKTokens(dto.total_output_tokens),
+    perUser: dto.per_user.map((row) => ({
+      userId: row.user_id,
+      email: row.email,
+      totalInput: formatKTokens(row.total_input),
+      totalOutput: formatKTokens(row.total_output),
+      total: formatKTokens(row.total),
+    })),
   };
 }

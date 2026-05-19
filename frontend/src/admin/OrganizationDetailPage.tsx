@@ -58,7 +58,7 @@ const TAB_LABELS: Record<OrganizationDetailTab, string> = {
 export function OrganizationDetailPage({ organizationId, initialTab, onNavigate }: OrganizationDetailPageProps) {
   /** Render one organization workspace with users, training configs, history, usage, and audit sections. */
   const [activeTab, setActiveTab] = useState<OrganizationDetailTab>(initialTab ?? "overview");
-  const { organization, users, configs, history, usage, audit, loading, error, reload } =
+  const { organization, users, configs, history, usage, tokenUsage, audit, loading, error, reload } =
     useOrganizationDetail(organizationId);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -252,7 +252,7 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
         />
       ) : null}
       {activeTab === "history" ? <OrganizationHistoryTab history={history} onNavigate={onNavigate} /> : null}
-      {activeTab === "usage" ? <OrganizationUsageTab usage={usage} /> : null}
+      {activeTab === "usage" ? <OrganizationUsageTab usage={usage} tokenUsage={tokenUsage} /> : null}
       {activeTab === "audit" ? <OrganizationAuditTab audit={audit} /> : null}
     </div>
   );

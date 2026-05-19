@@ -1,9 +1,15 @@
 import { EmptyState, StatCard } from "../components/AdminPrimitives";
-import { buildUsageSummaryViewModel } from "../../viewModels";
-import type { UsageSummaryDTO } from "../types";
+import { buildTokenUsageViewModel, buildUsageSummaryViewModel } from "../../viewModels";
+import type { TokenUsageSummaryDTO, UsageSummaryDTO } from "../types";
 
-export function OrganizationUsageTab({ usage }: { usage: UsageSummaryDTO | null }) {
-  /** Render basic usage analytics from the persistent history summary endpoint. */
+export function OrganizationUsageTab({
+  usage,
+  tokenUsage,
+}: {
+  usage: UsageSummaryDTO | null;
+  tokenUsage: TokenUsageSummaryDTO | null;
+}) {
+  /** Render basic usage analytics and token usage from the persistent history summary endpoint. */
   if (!usage) {
     return (
       <EmptyState
@@ -13,6 +19,7 @@ export function OrganizationUsageTab({ usage }: { usage: UsageSummaryDTO | null 
     );
   }
   const vm = buildUsageSummaryViewModel(usage);
+  const tokenVm = tokenUsage ? buildTokenUsageViewModel(tokenUsage) : null;
   return (
     <section className="admin-panel">
       <div className="admin-panel__header">
@@ -33,6 +40,43 @@ export function OrganizationUsageTab({ usage }: { usage: UsageSummaryDTO | null 
         <UsageBreakdown vm={vm.statusBreakdown} />
         <UsageBreakdown vm={vm.scenarioBreakdown} />
       </div>
+      {tokenVm && (
+        <div className="admin-panel__section">
+          <div className="admin-panel__header">
+            <h3>Использование токенов (приближённые)</h3>
+          </div>
+          <div className="admin-stats-grid">
+            <StatCard label="Всего токенов" value={tokenVm.totalTokens} />
+            <StatCard label="Input" value={tokenVm.totalInput} />
+            <StatCard label="Output" value={tokenVm.totalOutput} />
+          </div>
+          {tokenVm.perUser.length > 0 && (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <caption>По пользователям</caption>
+                <thead>
+                  <tr>
+                    <th>Пользователь</th>
+                    <th>Input (K)</th>
+                    <th>Output (K)</th>
+                    <th>Всего (K)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokenVm.perUser.map((row) => (
+                    <tr key={row.userId}>
+                      <td>{row.email}</td>
+                      <td>{row.totalInput}</td>
+                      <td>{row.totalOutput}</td>
+                      <td>{row.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

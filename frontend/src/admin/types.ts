@@ -234,3 +234,18 @@ export type UsageSummaryDTO = {
   sessions_by_training_config: Record<string, number>;
   usage_events_count: number;
 };
+
+export type PerUserTokenUsageDTO = {
+  user_id: string;
+  email: string;
+  total_input: number;
+  total_output: number;
+  total: number;
+};
+
+export type TokenUsageSummaryDTO = {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  per_user: PerUserTokenUsageDTO[];
+};
