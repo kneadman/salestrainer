@@ -6,6 +6,7 @@ import type {
   HistorySessionSummaryDTO,
   OrganizationDTO,
   OrganizationPayload,
+  TokenUsageSnapshotDTO,
   TokenUsageSummaryDTO,
   TrainingConfigDTO,
   TrainingConfigPayload,
@@ -169,6 +170,14 @@ export function getUsageSummary(organizationId: string): Promise<UsageSummaryDTO
 export function getTokenUsage(organizationId: string): Promise<TokenUsageSummaryDTO> {
   /** Load token usage aggregates for one organization. */
   return request<TokenUsageSummaryDTO>(`/api/internal/organizations/${organizationId}/token-usage`);
+}
+
+export function getTokenUsageSnapshots(
+  organizationId: string,
+  params: { from_date?: string; to_date?: string },
+): Promise<TokenUsageSnapshotDTO[]> {
+  /** Load daily token usage snapshots for one organization. */
+  return request<TokenUsageSnapshotDTO[]>(`/api/internal/organizations/${organizationId}/token-usage-snapshots${queryString(params)}`);
 }
 
 export function listAuditLog(params: Record<string, string | number | null | undefined>): Promise<AuditLogDTO[]> {

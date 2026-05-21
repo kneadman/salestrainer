@@ -252,7 +252,7 @@ export function OrganizationDetailPage({ organizationId, initialTab, onNavigate 
         />
       ) : null}
       {activeTab === "history" ? <OrganizationHistoryTab history={history} onNavigate={onNavigate} /> : null}
-      {activeTab === "usage" ? <OrganizationUsageTab usage={usage} tokenUsage={tokenUsage} /> : null}
+      {activeTab === "usage" ? <OrganizationUsageTab organizationId={organizationId} usage={usage} tokenUsage={tokenUsage} /> : null}
       {activeTab === "audit" ? <OrganizationAuditTab audit={audit} /> : null}
     </div>
   );

@@ -21,6 +21,7 @@ from app.history.schemas import (
     HistorySessionDetailDTO,
     HistorySessionSummaryDTO,
     PerUserTokenUsageDTO,
+    TokenUsageSnapshotDTO,
     TokenUsageSummaryDTO,
     UsageSummaryDTO,
 )
@@ -645,6 +646,51 @@ class HistoryService:
             total_tokens=summary["total_tokens"],
             per_user=[PerUserTokenUsageDTO.model_validate(row) for row in per_user],
         )
+
+    def create_token_usage_snapshot(
+        self,
+        *,
+        client_account_id: UUID,
+        snapshot_date: datetime,
+    ) -> None:
+        """Create a daily token usage snapshot for one organization."""
+        start = snapshot_date
+        end = snapshot_date + timedelta(days=1)
+        delta = self._repository.daily_token_usage_delta(
+            client_account_id=client_account_id,
+            start=start,
+            end=end,
+        )
+        self._repository.create_token_usage_snapshot(
+            client_account_id=client_account_id,
+            snapshot_date=snapshot_date,
+            total_tokens=delta["total_tokens"],
+            input_tokens=delta["input_tokens"],
+            output_tokens=delta["output_tokens"],
+        )
+
+    def list_token_usage_snapshots(
+        self,
+        *,
+        client_account_id: UUID,
+        from_date: datetime,
+        to_date: datetime,
+    ) -> list[TokenUsageSnapshotDTO]:
+        """Return daily token usage snapshots for an organization within a date range."""
+        records = self._repository.list_token_usage_snapshots(
+            client_account_id=client_account_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        return [
+            TokenUsageSnapshotDTO(
+                snapshot_date=record.snapshot_date,
+                total_tokens=record.total_tokens,
+                input_tokens=record.input_tokens,
+                output_tokens=record.output_tokens,
+            )
+            for record in records
+        ]
 
     def _require_access(
         self,

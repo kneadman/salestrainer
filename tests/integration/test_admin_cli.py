@@ -329,3 +329,118 @@ def test_cleanup_expired_sessions_deletes_only_expired_sessions() -> None:
     remaining_sessions = list(session.scalars(select(LoginSession)))
     assert [login_session.token_hash for login_session in remaining_sessions] == [active_session.token_hash]
     session.close()
+
+
+def test_snapshot_token_usage_creates_daily_snapshot() -> None:
+    """Verify snapshot-token-usage CLI creates a TokenUsageSnapshot from TokenUsageRecord rows."""
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from app.admin.cli import _snapshot_token_usage
+    from app.history.models import TokenUsageRecord, TokenUsageSnapshot
+    from app.history.repository import HistoryRepository
+    from app.history.service import HistoryService
+    from app.identity.repository import IdentityRepository
+
+    session = _create_session()
+    identity_repository = IdentityRepository(session)
+    client = identity_repository.create_client_account(name="Snapshot Corp", slug="snapshot-corp")
+    user = identity_repository.create_user(
+        client_account_id=client.id,
+        email="manager@snapshot.test",
+        password_hash=hash_password("password"),
+        role="client_manager",
+    )
+
+    # Seed token usage records for yesterday
+    yesterday = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    session.add_all([
+        TokenUsageRecord(
+            id=uuid4(),
+            client_account_id=client.id,
+            user_id=user.id,
+            session_id=uuid4(),
+            event_type="dialogue",
+            input_tokens=100,
+            output_tokens=50,
+            created_at=yesterday + timedelta(hours=10),
+        ),
+        TokenUsageRecord(
+            id=uuid4(),
+            client_account_id=client.id,
+            user_id=user.id,
+            session_id=uuid4(),
+            event_type="judge",
+            input_tokens=200,
+            output_tokens=100,
+            created_at=yesterday + timedelta(hours=11),
+        ),
+    ])
+    session.commit()
+
+    history_repository = HistoryRepository(session)
+    history_service = HistoryService(history_repository)
+
+    date_str = yesterday.strftime("%Y-%m-%d")
+    message = _snapshot_token_usage(
+        history_service=history_service,
+        date_str=date_str,
+    )
+
+    assert "created" in message
+    snapshot = session.scalar(select(TokenUsageSnapshot).where(TokenUsageSnapshot.client_account_id == client.id))
+    assert snapshot is not None
+    assert snapshot.input_tokens == 300
+    assert snapshot.output_tokens == 150
+    assert snapshot.total_tokens == 450
+    assert snapshot.snapshot_date.date() == yesterday.date()
+
+    session.close()
+
+
+def test_snapshot_token_usage_is_idempotent() -> None:
+    """Verify running snapshot-token-usage twice for the same date does not raise."""
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from app.admin.cli import _snapshot_token_usage
+    from app.history.models import TokenUsageRecord
+    from app.history.repository import HistoryRepository
+    from app.history.service import HistoryService
+    from app.identity.repository import IdentityRepository
+
+    session = _create_session()
+    identity_repository = IdentityRepository(session)
+    client = identity_repository.create_client_account(name="Idempotent Corp", slug="idempotent-corp")
+    user = identity_repository.create_user(
+        client_account_id=client.id,
+        email="manager@idempotent.test",
+        password_hash=hash_password("password"),
+        role="client_manager",
+    )
+
+    yesterday = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    session.add(
+        TokenUsageRecord(
+            id=uuid4(),
+            client_account_id=client.id,
+            user_id=user.id,
+            session_id=uuid4(),
+            event_type="dialogue",
+            input_tokens=50,
+            output_tokens=25,
+            created_at=yesterday + timedelta(hours=10),
+        )
+    )
+    session.commit()
+
+    history_repository = HistoryRepository(session)
+    history_service = HistoryService(history_repository)
+    date_str = yesterday.strftime("%Y-%m-%d")
+
+    _snapshot_token_usage(history_service=history_service, date_str=date_str)
+    # Second run should not raise (upsert/unique constraint handled gracefully)
+    message = _snapshot_token_usage(history_service=history_service, date_str=date_str)
+    assert "created" in message or "0 organizations" in message
+
+    session.close()
