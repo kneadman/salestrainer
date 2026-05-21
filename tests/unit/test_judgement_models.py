@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from app.domain.judgement_models import (
     BentoReportBlock,
     JudgeSessionOutput,
+    ReportRecommendation,
     SkillScore,
     build_judge_input_from_session,
 )
@@ -180,6 +181,48 @@ def test_output_schema_version_rejects_unknown_version() -> None:
             skill_scores=[_minimal_skill_score()],
             final_verdict="Good session overall.",
         )
+
+
+def test_outcome_longer_than_max_length_is_truncated() -> None:
+    """Judge output should silently truncate strings that exceed max_length."""
+    long_outcome = "а" * 300
+    output = JudgeSessionOutput(
+        overall_score=82,
+        overall_grade="good",
+        outcome=long_outcome,
+        executive_summary="Summary",
+        bento_blocks=[_minimal_block()],
+        skill_scores=[_minimal_skill_score()],
+        final_verdict="Verdict",
+    )
+    assert len(output.outcome) == 240
+
+
+def test_bento_block_short_text_truncated() -> None:
+    """Bento block short_text should be clamped to its max_length."""
+    long_text = "б" * 400
+    block = BentoReportBlock(
+        id="summary",
+        title="Итог",
+        type="summary",
+        severity="neutral",
+        short_text=long_text,
+        detail="Подробный итог.",
+        evidence_turn_indexes=[1],
+    )
+    assert len(block.short_text) == 280
+
+
+def test_recommendation_example_phrase_truncated() -> None:
+    """Recommendation example_phrase should be clamped to its max_length."""
+    long_phrase = "в" * 700
+    rec = ReportRecommendation(
+        title="Уточнить",
+        description="Описание",
+        example_phrase=long_phrase,
+        priority="medium",
+    )
+    assert len(rec.example_phrase) == 500
 
 
 def _minimal_block() -> BentoReportBlock:

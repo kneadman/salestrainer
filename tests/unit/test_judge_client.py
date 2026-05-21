@@ -506,3 +506,12 @@ def test_structured_judge_client_metadata_masks_api_key() -> None:
 
     assert metadata["api_key"] != "secret-key-value"
     assert "secret-key-value" not in json.dumps(metadata)
+
+
+def test_parse_judge_session_output_truncates_long_outcome() -> None:
+    """Parser should accept an LLM response with an overly long outcome and truncate it."""
+    long_outcome = "о" * 300
+    raw = json.dumps({**_valid_output_dict(), "outcome": long_outcome})
+    result = parse_judge_session_output({"output_text": raw})
+    assert isinstance(result, JudgeSessionOutput)
+    assert len(result.outcome) == 240

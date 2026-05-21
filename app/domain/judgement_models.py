@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+import annotated_types
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.domain.models import ClientState, PersonaProfile, Scenario, TrainingSessionState, TurnEvaluation
 from app.domain.scenarios import get_scenario
@@ -52,7 +53,22 @@ class JudgeSessionInput(BaseModel):
     turn_count: int = Field(ge=0)
 
 
-class BentoReportBlock(BaseModel):
+class _TruncateMixin:
+    @field_validator("*", mode="before")
+    @classmethod
+    def _truncate_string_fields(cls, v: Any, info: ValidationInfo) -> Any:
+        if not isinstance(v, str):
+            return v
+        field = cls.model_fields.get(info.field_name)
+        if field is None:
+            return v
+        for meta in field.metadata:
+            if isinstance(meta, annotated_types.MaxLen):
+                return v[:meta.max_length]
+        return v
+
+
+class BentoReportBlock(_TruncateMixin, BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(min_length=1, max_length=80)
@@ -65,7 +81,7 @@ class BentoReportBlock(BaseModel):
     evidence_turn_indexes: list[int] = Field(default_factory=list)
 
 
-class SkillScore(BaseModel):
+class SkillScore(_TruncateMixin, BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(min_length=1, max_length=80)
@@ -76,7 +92,7 @@ class SkillScore(BaseModel):
     evidence_turn_indexes: list[int] = Field(default_factory=list)
 
 
-class ReportFinding(BaseModel):
+class ReportFinding(_TruncateMixin, BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(min_length=1, max_length=160)
@@ -85,7 +101,7 @@ class ReportFinding(BaseModel):
     impact: FindingImpact
 
 
-class ReportRecommendation(BaseModel):
+class ReportRecommendation(_TruncateMixin, BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(min_length=1, max_length=160)
@@ -94,7 +110,7 @@ class ReportRecommendation(BaseModel):
     priority: FindingImpact
 
 
-class JudgeSessionOutput(BaseModel):
+class JudgeSessionOutput(_TruncateMixin, BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal[1] = 1
