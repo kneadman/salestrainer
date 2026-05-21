@@ -51,6 +51,24 @@ services:
     profiles:
       - "snapshot"
 
+  snapshot-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sales_trainer_scheduler
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/sales_trainer
+      TZ: Europe/Moscow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "/app/deploy/snapshot_scheduler.py"]
+    restart: unless-stopped
+
   frontend:
     build:
       context: .

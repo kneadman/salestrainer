@@ -49,6 +49,7 @@ COPY pyproject.toml README.md ./
 COPY alembic.ini ./
 COPY app ./app
 COPY migrations ./migrations
+COPY deploy/snapshot_scheduler.py ./deploy/snapshot_scheduler.py
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
