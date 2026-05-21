@@ -10,6 +10,8 @@ from app.access.repository import AccessRepository
 from app.identity.repository import IdentityRepository
 from app.identity.roles import UserRole
 from app.identity.security import hash_password, PasswordValidationError, validate_permanent_password
+from app.history.repository import HistoryRepository
+from app.history.service import HistoryService
 from app.infrastructure.config import get_settings
 from app.infrastructure.db import get_session_factory
 
@@ -278,6 +280,41 @@ def _cleanup_expired_sessions(*, identity_repository: IdentityRepository) -> str
     return f"cleaned up expired login sessions: {deleted_count}"
 
 
+def _snapshot_token_usage(
+    *,
+    history_service: HistoryService,
+    date_str: str | None = None,
+) -> str:
+    from datetime import UTC, datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    msk = ZoneInfo("Europe/Moscow")
+    if date_str:
+        snapshot_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=msk)
+    else:
+        snapshot_date = datetime.now(tz=msk).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+
+    # Snapshot all organizations. In a real deployment this would iterate over all client accounts.
+    # For MVP, we snapshot all organizations that have token usage records.
+    from app.identity.models import ClientAccount
+    from sqlalchemy import select
+
+    session = history_service._repository._session
+    orgs = session.scalars(select(ClientAccount.id)).all()
+    created = 0
+    for org_id in orgs:
+        try:
+            history_service.create_token_usage_snapshot(
+                client_account_id=org_id,
+                snapshot_date=snapshot_date,
+            )
+            created += 1
+        except Exception:
+            session.rollback()
+            raise
+    return f"created {created} snapshots for date {snapshot_date.date()}"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m app.admin.cli",
@@ -322,6 +359,9 @@ def _build_parser() -> argparse.ArgumentParser:
     disable_user_parser.add_argument("--email", required=True)
 
     subparsers.add_parser("cleanup-expired-sessions")
+
+    snapshot_parser = subparsers.add_parser("snapshot-token-usage")
+    snapshot_parser.add_argument("--date", help="YYYY-MM-DD (default: yesterday)")
 
     return parser
 
@@ -395,6 +435,13 @@ def run_cli(argv: list[str] | None = None) -> int:
                     identity_repository=identity_repository,
                     access_repository=access_repository,
                     email=args.email,
+                )
+            elif args.command == "snapshot-token-usage":
+                history_repository = HistoryRepository(session)
+                history_service = HistoryService(history_repository)
+                message = _snapshot_token_usage(
+                    history_service=history_service,
+                    date_str=args.date,
                 )
             else:
                 message = _cleanup_expired_sessions(identity_repository=identity_repository)

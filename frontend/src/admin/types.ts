@@ -249,3 +249,10 @@ export type TokenUsageSummaryDTO = {
   total_tokens: number;
   per_user: PerUserTokenUsageDTO[];
 };
+
+export type TokenUsageSnapshotDTO = {
+  snapshot_date: string;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+};

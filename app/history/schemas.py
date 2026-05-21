@@ -103,3 +103,10 @@ class TokenUsageSummaryDTO(BaseModel):
     total_output_tokens: int
     total_tokens: int
     per_user: list[PerUserTokenUsageDTO]
+
+
+class TokenUsageSnapshotDTO(BaseModel):
+    snapshot_date: datetime
+    total_tokens: int
+    input_tokens: int
+    output_tokens: int

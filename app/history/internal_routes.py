@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.history.dependencies import get_history_service
 from app.history.repository import SessionListFilters
-from app.history.schemas import HistorySessionSummaryDTO, TokenUsageSummaryDTO, UsageSummaryDTO
+from app.history.schemas import HistorySessionSummaryDTO, TokenUsageSnapshotDTO, TokenUsageSummaryDTO, UsageSummaryDTO
 from app.history.service import HistoryService
 from app.identity.service import CurrentSession
 from app.internal_admin.dependencies import require_internal_admin_session
@@ -58,6 +58,28 @@ def get_organization_token_usage(
 ) -> TokenUsageSummaryDTO:
     """Return token usage aggregates for an organization (admin only)."""
     return service.get_token_usage_summary(client_account_id=organization_id)
+
+
+@router.get("/organizations/{organization_id}/token-usage-snapshots", response_model=list[TokenUsageSnapshotDTO])
+def get_organization_token_usage_snapshots(
+    organization_id: UUID,
+    from_date: str | None = Query(default=None, description="YYYY-MM-DD"),
+    to_date: str | None = Query(default=None, description="YYYY-MM-DD"),
+    service: HistoryService = Depends(get_history_service),
+    _: CurrentSession = Depends(require_internal_admin_session),
+) -> list[TokenUsageSnapshotDTO]:
+    """Return daily token usage snapshots for an organization within a date range."""
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(tz=UTC)
+    default_from = now - timedelta(days=30)
+    parsed_from = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=UTC) if from_date else default_from
+    parsed_to = datetime.strptime(to_date, "%Y-%m-%d").replace(tzinfo=UTC, hour=23, minute=59, second=59) if to_date else now
+    return service.list_token_usage_snapshots(
+        client_account_id=organization_id,
+        from_date=parsed_from,
+        to_date=parsed_to,
+    )
 
 
 @router.get("/users/{user_id}/history/sessions", response_model=list[HistorySessionSummaryDTO])

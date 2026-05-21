@@ -1,15 +1,41 @@
+import { useEffect, useState } from "react";
 import { EmptyState, StatCard } from "../components/AdminPrimitives";
+import { TokenUsageChart, TokenUsageLegend, buildDateRange, type DateRangePreset } from "../components/TokenUsageChart";
 import { buildTokenUsageViewModel, buildUsageSummaryViewModel } from "../../viewModels";
-import type { TokenUsageSummaryDTO, UsageSummaryDTO } from "../types";
+import { getTokenUsageSnapshots } from "../api";
+import type { TokenUsageSnapshotDTO, TokenUsageSummaryDTO, UsageSummaryDTO } from "../types";
 
 export function OrganizationUsageTab({
+  organizationId,
   usage,
   tokenUsage,
 }: {
+  organizationId: string;
   usage: UsageSummaryDTO | null;
   tokenUsage: TokenUsageSummaryDTO | null;
 }) {
-  /** Render basic usage analytics and token usage from the persistent history summary endpoint. */
+  const [snapshots, setSnapshots] = useState<TokenUsageSnapshotDTO[]>([]);
+  const [preset, setPreset] = useState<DateRangePreset>("week");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const range = buildDateRange(preset, customFrom, customTo);
+        const data = await getTokenUsageSnapshots(organizationId, range);
+        setSnapshots(data);
+      } catch {
+        setSnapshots([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [organizationId, preset, customFrom, customTo]);
+
   if (!usage) {
     return (
       <EmptyState
@@ -18,8 +44,14 @@ export function OrganizationUsageTab({
       />
     );
   }
+
   const vm = buildUsageSummaryViewModel(usage);
   const tokenVm = tokenUsage ? buildTokenUsageViewModel(tokenUsage) : null;
+
+  const sumInput = snapshots.reduce((sum, s) => sum + s.input_tokens, 0);
+  const sumOutput = snapshots.reduce((sum, s) => sum + s.output_tokens, 0);
+  const sumTotal = snapshots.reduce((sum, s) => sum + s.total_tokens, 0);
+
   return (
     <section className="admin-panel">
       <div className="admin-panel__header">
@@ -77,12 +109,70 @@ export function OrganizationUsageTab({
           )}
         </div>
       )}
+
+      <div className="admin-panel__section">
+        <div className="admin-panel__header">
+          <h3>Динамика использования токенов</h3>
+        </div>
+        <div className="token-range-tabs" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+          {(["today", "yesterday", "week", "custom"] as DateRangePreset[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={preset === p ? "admin-tab admin-tab--active" : "admin-tab"}
+              onClick={() => setPreset(p)}
+            >
+              {p === "today" && "Сегодня"}
+              {p === "yesterday" && "Вчера"}
+              {p === "week" && "Последняя неделя"}
+              {p === "custom" && "Кастомный"}
+            </button>
+          ))}
+        </div>
+        {preset === "custom" && (
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="admin-input"
+            />
+            <span style={{ color: "#94a3b8" }}>—</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="admin-input"
+            />
+            <button
+              type="button"
+              className="admin-btn admin-btn--primary"
+              onClick={() => setPreset("custom")}
+              disabled={!customFrom || !customTo}
+            >
+              Применить
+            </button>
+          </div>
+        )}
+        {loading ? (
+          <p style={{ color: "#94a3b8" }}>Загрузка...</p>
+        ) : (
+          <>
+            <TokenUsageChart snapshots={snapshots} />
+            <TokenUsageLegend />
+            {snapshots.length > 0 && (
+              <div style={{ marginTop: "0.75rem", fontSize: "0.875rem", color: "#cbd5e1" }}>
+                Сумма за период: Всего токенов: {(sumTotal / 1000).toFixed(1)} K · Input: {(sumInput / 1000).toFixed(1)} K · Output: {(sumOutput / 1000).toFixed(1)} K
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </section>
   );
 }
 
 function UsageBreakdown({ vm }: { vm: { title: string; rows: { key: string; label: string; value: number }[] } }) {
-  /** Render aggregate usage values as readable rows instead of raw JSON maps. */
   if (vm.rows.length === 0) {
     return null;
   }

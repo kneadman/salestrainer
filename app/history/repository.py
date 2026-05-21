@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.domain.contract_versions import JUDGE_PROMPT_VERSION, JUDGE_SCHEMA_VERSION
 from app.history.models import (
     TokenUsageRecord,
+    TokenUsageSnapshot,
     TrainingReportRecord,
     TrainingSessionRecord,
     TrainingTurnRecord,
@@ -541,6 +542,75 @@ class HistoryRepository:
             }
             for row in self._session.execute(statement)
         ]
+
+    def create_token_usage_snapshot(
+        self,
+        *,
+        client_account_id: UUID,
+        snapshot_date: datetime,
+        total_tokens: int,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> TokenUsageSnapshot:
+        """Insert one daily token usage snapshot."""
+        record = TokenUsageSnapshot(
+            client_account_id=client_account_id,
+            snapshot_date=snapshot_date,
+            total_tokens=total_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        self._session.add(record)
+        self._session.commit()
+        self._session.refresh(record)
+        return record
+
+    def list_token_usage_snapshots(
+        self,
+        *,
+        client_account_id: UUID,
+        from_date: datetime,
+        to_date: datetime,
+    ) -> list[TokenUsageSnapshot]:
+        """Return snapshots for an organization within a date range, ordered by date."""
+        statement = (
+            select(TokenUsageSnapshot)
+            .where(
+                TokenUsageSnapshot.client_account_id == client_account_id,
+                TokenUsageSnapshot.snapshot_date >= from_date,
+                TokenUsageSnapshot.snapshot_date <= to_date,
+            )
+            .order_by(TokenUsageSnapshot.snapshot_date.asc())
+        )
+        return list(self._session.scalars(statement))
+
+    def daily_token_usage_delta(
+        self,
+        *,
+        client_account_id: UUID,
+        start: datetime,
+        end: datetime,
+    ) -> dict[str, int]:
+        """Aggregate input/output tokens for an org within a time window."""
+        statement = (
+            select(
+                func.coalesce(func.sum(TokenUsageRecord.input_tokens), 0),
+                func.coalesce(func.sum(TokenUsageRecord.output_tokens), 0),
+            )
+            .where(
+                TokenUsageRecord.client_account_id == client_account_id,
+                TokenUsageRecord.created_at >= start,
+                TokenUsageRecord.created_at < end,
+            )
+        )
+        row = self._session.execute(statement).one()
+        total_input = int(row[0])
+        total_output = int(row[1])
+        return {
+            "input_tokens": total_input,
+            "output_tokens": total_output,
+            "total_tokens": total_input + total_output,
+        }
 
     def _base_list_statement(self) -> Select[tuple[TrainingSessionRecord, str]]:
         """Build the shared session listing query with user email joined in."""

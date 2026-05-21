@@ -1,105 +1,166 @@
-# BACKLOG.md — Sales Trainer
+# Backlog
 
-> Рабочий локальный бэклог. Держим коротким: только актуальные задачи и последние закрытые блоки. Секреты, raw LLM payloads и agent notes сюда не добавлять.
->
-> **Правило**: любая новая задача по проекту сначала проверяется здесь. Если её нет — декомпозировать (problem / what to do / acceptance criteria / files / suggested PR) и записать в «Актуальный бэклог» до начала работы.
+> Правило: если задача касается проекта и её нет в этого файле — сначала напиши полноценное ТЗ, потом код.
+> Формат ТЗ: Problem → Context → Scope → AC → Decomposition → Risks → Files → DoD.
 
-## Актуальный бэклог
+---
 
-*(пусто)*
+### Фича: отправка заявок из лендинга в Telegram
 
-## Последние закрытые
-
-- 2026-05-19: Epic — Внутренний tokenizer для биллинга клиентов. Добавлен `tiktoken` (cl100k_base), `TokenCounterService`, `TokenCountedResult` DTO. Интегрирован подсчёт токенов во все 3 LLM клиента (`YandexCompatibleLLMClient`, `StructuredPersonaGeneratorClient`, `StructuredJudgeClient`). Создана таблица `token_usage_records` с миграцией Alembic. `HistoryService` сохраняет токены для dialogue, persona generation и judge. Backend API `GET /api/internal/organizations/{id}/token-usage` с агрегацией по пользователям (только admin, 403 для остальных). Frontend: `OrganizationUsageTab` отображает токены в K (тысячах) с таблицей по пользователям. Unit + integration тесты green. Frontend билдится (`npm run build`).
-
-**Problem**: Администратор платформы не видит реального расхода токенов LLM по организациям и пользователям. Сейчас в `usage_events` хранятся только счётчики событий (сессии, ходы), но нет данных о токенах. Это не позволяет прогнозировать стоимость, выставлять счета клиентам и выявлять аномалии потребления.
+**Problem**: Заявки с демо-формы лендинга (`POST /api/leads`) сохраняются в БД, но команда не получает мгновенного уведомления о новом лиде. Приходится периодически проверять таблицу `landing_leads` вручную или через админку, которой пока нет. Из-за этого ответ на заявку может задерживаться.
 
 **Context & Constraints**:
-- `usage_events` таблица с JSON `event_payload` уже существует (`app/history/models.py`) — расширяем `event_payload` или создаём отдельную таблицу `token_usage_records`
-- LLM вызовы идут через `YandexCompatibleLLMClient.generate_client_turn()`, `StructuredPersonaGeneratorClient.generate_persona()`, `JudgeClient.judge_session()`
-- `HistoryService` уже пишет usage events (`record_turn_processed`, `record_session_started`, `record_session_finished`, `record_report_generated`) — идеальное место для прикрепления токенов
-- Админка уже имеет `OrganizationUsageTab` и `GET /api/internal/organizations/{id}/usage-summary`
-- Токенизация выполняется на стороне приложения (internal tokenizer), без опоры на провайдера
+- Лендинг: `frontend/src/landing/sections/DemoFormSection.tsx` — форма с полями: имя, email, телефон, компания, роль, размер команды, комментарий, согласия.
+- Backend endpoint: `POST /api/leads` в `app/api/routes.py` — сохраняет `LandingLead` в БД, применяет rate-limit, проверяет `consent_personal_data === true`, возвращает `202 Accepted`.
+- Таблица: `landing_leads` (`app/access/models.py`) уже содержит все нужные поля.
+- В проекте **нет** существующей инфраструктуры уведомлений (ни Telegram, ни email, ни webhook).
+- В `pyproject.toml` уже есть зависимость `httpx>=0.27,<1.0`.
+- Polling бота не требуется — нужен только односторонний push (fire-and-forget) при создании лида.
+- Отправка в Telegram **не должна блокировать** HTTP-ответ пользователю и **не должна ломать** приём заявки при сбое доставки.
 
 **Scope Boundaries**:
 - **IN scope**:
-  - Внутренний tokenizer сервис (tiktoken cl100k_base) для подсчёта input/output токенов
-  - Интеграция подсчёта во все 3 LLM клиента (dialogue, persona generation, judge)
-  - Хранение токенов в БД (новая таблица `token_usage_records` или расширение `usage_events`)
-  - Backend API: агрегация токенов по пользователю и по организации (только для admin)
-  - Frontend: отображение в `OrganizationUsageTab` в тысячах токенов (K tokens)
+  - Сервис отправки сообщений в Telegram через Bot API (`sendMessage`) с использованием `httpx`.
+  - Интеграция вызова сервиса в `submit_landing_lead` после успешного `db_session.commit()`.
+  - Env-переменные: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_LEAD_CHAT_ID`.
+  - Формат сообщения: краткая сводка по заявке (имя, контакт, компания, комментарий, UTM).
+  - Graceful degradation: ошибка отправки логируется, но пользователю всё равно возвращается `202 Accepted`.
 - **OUT of scope**:
-  - Лимиты/квоты/блокировки по превышению
-  - Тарификация и цены
-  - Экспорт в CSV/PDF
-  - Токенизация на уровне отдельного сообщения (только агрегаты по ходу/сессии/пользователю)
+  - Polling / webhook / long-polling бота (входящие сообщения, команды).
+  - Обратная связь из Telegram в приложение.
+  - Очередь задач (Celery, RQ, etc.) — пока простой синхронный или фоновый HTTP-вызов в рамках request lifecycle.
+  - HTML-разметка или кнопки в сообщении Telegram.
+  - Админка для просмотра заявок.
 
 **Acceptance Criteria**:
-1. После каждого LLM вызова в БД сохраняются `input_tokens` и `output_tokens`
-2. Админ endpoint `GET /api/internal/organizations/{id}/token-usage` возвращает:
-   - `total_input_tokens`, `total_output_tokens`, `total_tokens` (sum)
-   - `per_user` breakdown: `user_id`, `email`, `total_input`, `total_output`, `total`
-3. Только пользователи с `role=admin` имеют доступ к endpoint; 403 для остальных
-4. `OrganizationUsageTab` отображает:
-   - "Всего токенов: X.Y K" (округление до 1 десятичного знака)
-   - "Input: X.Y K"
-   - "Output: X.Y K"
-   - Таблица "По пользователям" с колонками: Пользователь, Input (K), Output (K), Всего (K)
-5. Для диалога токены считаются для полного payload (system prompt + persona + history + user message)
-6. Для persona generation и judge — для их respective payloads
-7. Unit тест на tokenizer сервис: известная строка даёт ожидаемое количество токенов
-8. Интеграционный тест: после прохождения хода в БД появляется запись с `token_count > 0`
+1. При валидной заявке через `/api/leads` после сохранения в БД в указанный Telegram-чат приходит сообщение с данными заявки.
+2. Формат сообщения читаемый (многострочный текст), содержит: имя, email, телефон, компания, роль, размер команды, комментарий (если есть), UTM-метки (если есть), timestamp.
+3. Если `TELEGRAM_BOT_TOKEN` или `TELEGRAM_LEAD_CHAT_ID` не заданы — отправка молча пропускается, логируется на уровне `INFO` или `WARNING`.
+4. Если Telegram API возвращает ошибку (невалидный токен, недоступность сети) — заявка в БД всё равно сохранена, пользователю возвращается `202`, ошибка логируется на уровне `ERROR`.
+5. Rate-limit на `/api/leads` продолжает работать: ошибка 429 возвращается до создания записи в БД и до попытки отправки в Telegram.
+6. В `.env.example` добавлены новые переменные с пустыми значениями и комментариями.
+7. В `Settings` (`app/infrastructure/config.py`) добавлены типизированные поля для новых env-переменных.
 
 **Decomposition**:
-1. Выбрать и внедрить tokenizer библиотеку (`tiktoken`) в зависимости — S
-2. Создать `TokenCounterService` с методами `count_messages()`, `count_string()` — S
-3. Расширить LLM клиенты для возврата токенов (обернуть вызовы через DTO) — M
-   - `YandexCompatibleLLMClient` (dialogue)
-   - `StructuredPersonaGeneratorClient`
-   - `JudgeClient`
-4. Добавить хранение токенов в БД (миграция: новая таблица `token_usage_records`) — M
-5. Обновить `HistoryService` для сохранения токенов вместе с событиями — S
-6. Backend API: `GET /api/internal/organizations/{id}/token-usage` с агрегацией SQLAlchemy — M
-7. Frontend: обновить `admin/api.ts`, `adminViewModels.ts`, `OrganizationUsageTab` — M
-8. Тесты: unit tokenizer + integration token persistence + API authz — M
+1. Добавить `telegram_bot_token`, `telegram_lead_chat_id` в `Settings` и `.env.example` — S
+2. Создать `app/infrastructure/telegram_client.py`: протокол + реализация на `httpx`, fake-реализация для local/test — M
+3. Интегрировать вызов Telegram-клиента в `submit_landing_lead` (`app/api/routes.py`) после `db_session.commit()` — S
+4. Написать unit-тесты на `telegram_client` (mock transport) и на хендлер (mock client) — M
+5. Ручная проверка: отправить заявку из формы / curl → убедиться что сообщение пришло в чат — S
 
 **Risks & Mitigations**:
-- Риск: tiktoken (cl100k_base) приближённо считает токены для YandexGPT. Митигация: использовать как internal estimate, в UI показывать пометку "приближённые токены"
-- Риск: подсчёт токенов для больших payload замедляет ответ LLM. Митигация: кэшировать `Encoding` объект сервиса, измерить latency на 95th percentile
-- Риск: таблица `token_usage_records` быстро растёт. Митигация: индексы по `(client_account_id, user_id, created_at)`, в будущем — партиционирование или TTL
-- Риск: изменение сигнатуры LLM клиентов сломает моки в тестах. Митигация: возвращать NamedTuple/DTO вместо bare tuple
+- **Риск**: задержка HTTP-запроса к Telegram API замедлит ответ пользователю. **Митигация**: использовать `httpx` с коротким таймаутом (5–7 секунд) и оборачивать вызов в `try/except`; в будущем можно вынести в background task или очередь.
+- **Риск**: токен или chat_id попадут в логи. **Митигация**: никогда не логировать `TELEGRAM_BOT_TOKEN`; при ошибке логировать только HTTP status и response body без тела запроса.
+- **Риск**: спам-заявки (honeypot) тоже будут отправляться в Telegram. **Митигация**: проверять `is_spam` перед отправкой; спам-заявки не отправлять.
 
-**Affected Files** (предварительно):
-- `pyproject.toml` / `uv.lock` — добавить `tiktoken`
-- `app/domain/token_counter.py` — новый сервис
-- `app/infrastructure/llm_client.py` — интеграция подсчёта
-- `app/infrastructure/persona_generator_client.py` — интеграция подсчёта
-- `app/infrastructure/judge_client.py` — интеграция подсчёта
-- `app/history/models.py` — новая модель `TokenUsageRecord`
-- `app/history/service.py` — сохранение токенов
-- `app/history/internal_routes.py` — endpoint `token-usage`
-- `app/history/schemas.py` — DTOs `TokenUsageSummaryDTO`, `PerUserTokenUsageDTO`
-- `frontend/src/admin/api.ts` — `getTokenUsage()`
-- `frontend/src/viewModels/adminViewModels.ts` — `buildTokenUsageViewModel()`
-- `frontend/src/admin/organizationDetail/OrganizationUsageTab.tsx` — UI
-- Alembic миграция
+**Affected Files**:
+- `app/infrastructure/config.py` — добавить `telegram_bot_token`, `telegram_lead_chat_id`
+- `.env.example` — добавить новые переменные
+- `app/infrastructure/telegram_client.py` — новый файл: протокол + реализация
+- `app/api/routes.py` — вызов telegram-клиента в `submit_landing_lead`
+- `tests/unit/infrastructure/test_telegram_client.py` — новый файл (mock transport)
+- `tests/integration/test_lead_routes.py` — добавить тест на взаимодействие с mock telegram client
 
 **Definition of Done**:
-- Код написан, backend типизация проходит, frontend билдится (`npm run build`)
-- Unit + integration тесты на новые пути написаны и проходят
-- Ручная проверка: прохождение тренировки → проверка в БД, что `token_usage > 0` → открытие админки → корректные цифры в K
-- `BACKLOG.md` обновлён
-- Нет секретов, токенов, захардкоженных credentials в коде
+- Код написан, типизация проходит (`mypy` / `pyright` если применяется)
+- Unit/integration тесты написаны и проходят (`pytest`)
+- Ручная проверка: заявка через curl → сообщение в Telegram (или в логах при отключённом токене)
+- `.env.example` и `BACKLOG.md` обновлены
+- Нет захардкоженных токенов / chat_id в коде
+- Branch: `feature/telegram-lead-notifications`
 
-**PR Naming & Rollback**:
-- Branch: `feature/internal-tokenizer-billing`
-- PR title: `feat(billing): add internal tokenizer and org-level token usage metrics`
-- Rollback: revert мерж-коммита + откат миграции Alembic
+---
+
+### Фича: ежедневные снапшоты метрик токенизатора и график в админке
+
+**Problem**: Администратор не может отслеживать динамику использования токенов во времени. Сейчас во вкладке "Использование" организации видны только текущие агрегированные значения (всего, input, output), но невозможно понять, как менялась нагрузка вчера vs позавчера или на прошлой неделе. Без исторических daily-delta данных сложно отлаживать токенайзер, выявлять пики потребления и планировать лимиты.
+
+**Context & Constraints**:
+- В prod-версии уже работает токенайзер (tiktoken-подобный), который считает input/output токены для LLM-запросов и выводит агрегаты во вкладке "Использование" организации в админке.
+- В проекте **нет** фонового планировщика задач (Celery, APScheduler, cron).
+- Админский фронтенд использует React 18 + TypeScript + Tailwind CSS, кастомные CSS-графики (`AdminBars`), внешние chart-библиотеки отсутствуют.
+- Бэкенд: FastAPI, Pydantic v2, SQLAlchemy 2.0, Alembic, PostgreSQL.
+- Таймзона для снапшотов — Europe/Moscow (MSK, UTC+3).
+- Существующий usage summary endpoint (`GET /api/internal/organizations/{id}/usage-summary`) возвращает агрегаты по сессиям, но не по токенам.
+
+**Scope Boundaries**:
+- **IN scope**:
+  - SQLAlchemy-модель `TokenUsageSnapshot` для ежедневных снапшотов: `organization_id`, `snapshot_date`, `total_tokens`, `input_tokens`, `output_tokens` (daily delta).
+  - Alembic-миграция.
+  - Механизм сбора снапшотов — CLI-команда (`python -m app.admin.cli snapshot-token-usage`) для запуска в 00:00 MSK (через cron / docker-compose wrapper / APScheduler — минимально-инвазивный вариант).
+  - Backend API `GET /api/internal/organizations/{organization_id}/token-usage-snapshots` с query-параметрами `from_date`, `to_date`.
+  - Frontend: линейный график daily delta в `OrganizationUsageTab` с переключателем диапазона.
+  - Диапазоны: "Сегодня", "Вчера", "Последняя неделя", "Кастомный" (два input date + кнопка "Применить").
+  - Сумма за выбранный период (total / input / output) под графиком.
+- **OUT of scope**:
+  - Реализация самого токенизатора (уже есть в проде).
+  - Агрегация по отдельным пользователям/сценариям в рамках этого ТЗ (только organization-level daily totals).
+  - Экспорт в CSV/Excel.
+  - Алерты/уведомления при превышении лимитов.
+  - Мобильная адаптация графика.
+
+**Acceptance Criteria**:
+1. В 00:00 MSK каждый день для каждой организации создаётся ровно один снапшот с daily-delta значениями `total_tokens`, `input_tokens`, `output_tokens` за прошедшие сутки (00:00–23:59 MSK предыдущего дня).
+2. Если за сутки токенов не было (нет LLM-вызовов), снапшот создаётся с нулями — не пропускается.
+3. API `GET /api/internal/organizations/{id}/token-usage-snapshots?from_date=YYYY-MM-DD&to_date=YYYY-MM-DD` возвращает список снапшотов по возрастанию даты, HTTP 200. Если даты не указаны — последние 30 дней по умолчанию.
+4. Во вкладке "Использование" организации под текущим блоком токенов отображается линейный график (CSS/SVG) с тремя сериями: total, input, output.
+5. График поддерживает переключение диапазона без перезагрузки страницы:
+   - "Сегодня" — показывает снапшот за текущие сутки (если уже создан) или пустое состояние.
+   - "Вчера" — снапшот за вчера.
+   - "Последняя неделя" — последние 7 полных дней (не включая сегодня, если снапшот ещё не создан).
+   - "Кастомный" — два `input type="date"`, кнопка "Применить". Максимальный диапазон — 90 дней.
+6. При выборе диапазона под графиком отображается сумма за период: "Всего токенов: X · Input: Y · Output: Z".
+7. Если за выбранный период нет снапшотов — отображается `EmptyState` с текстом "Нет данных за выбранный период".
+8. Даты в UI отображаются в формате DD.MM.YYYY, timezone Europe/Moscow.
+9. Существующий блок "Использование токенов (приближённые)" и остальная вкладка "Использование" продолжают работать без изменений.
+10. Запрос к API при смене диапазона занимает <300 мс (сетевой round-trip) при диапазоне до 90 дней.
+
+**Decomposition**:
+1. Создать модель `TokenUsageSnapshot` и Alembic-миграцию — S
+2. Добавить repository-методы для чтения/записи снапшотов в `app/history/repository.py` — S
+3. Добавить service-метод для расчёта daily delta и записи снапшота в `app/history/service.py` — M
+4. Добавить CLI-команду `snapshot-token-usage` в `app/admin/cli.py` — S
+5. Добавить API endpoint `GET /api/internal/organizations/{id}/token-usage-snapshots` в `app/history/internal_routes.py` — S
+6. Добавить тип `TokenUsageSnapshotDTO` в `app/history/schemas.py` — S
+7. Обновить `frontend/src/admin/api.ts` — `getTokenUsageSnapshots` — S
+8. Обновить `frontend/src/admin/types.ts` — добавить DTO тип — S
+9. Создать компонент `TokenUsageChart` (SVG line chart, 3 series) — M
+10. Обновить `OrganizationUsageTab` — интегрировать график, переключатель диапазона, сумму за период — M
+11. Написать unit-тесты на service/repository + интеграционный тест на endpoint — M
+12. Ручная проверка: симулировать снапшоты через CLI → проверить отображение в админке — S
+
+**Risks & Mitigations**:
+- **Риск**: токенайзер отсутствует в локальном `main`, интеграция затруднена. **Митигация**: создать протокол `TokenUsageProvider` с методом `get_daily_usage(organization_id, date) -> TokenUsageDelta`; для local/dev предоставить `FakeTokenUsageProvider` (возвращает нули или фиксированные тестовые значения), а реальную реализацию под prod-ветку вынести отдельным PR.
+- **Риск**: нет существующего планировщика; добавление APScheduler — новая зависимость в стек. **Митигация**: не внедрять APScheduler в основное приложение. Использовать отдельную CLI-команду и вызывать её через `docker-compose` healthcheck wrapper или системный cron. Это минимально инвазивно.
+- **Риск**: дублирование снапшотов при повторном запуске. **Митигация**: unique constraint `(organization_id, snapshot_date)` в БД; при конфликте — `ON CONFLICT DO NOTHING` или перезапись.
+- **Риск**: накопление строк в `token_usage_snapshots`. **Митигация**: индекс `(organization_id, snapshot_date)`, композитный primary key по желанию; retention policy (>1 года) — out of scope.
+- **Риск**: timezone MSK — переход на летнее/зимнее время. **Митигация**: `zoneinfo.ZoneInfo("Europe/Moscow")` (Python 3.9+), `pytz` не нужен.
+
+**Affected Files**:
+- `app/history/models.py` — `TokenUsageSnapshot`
+- `migrations/versions/` — alembic revision
+- `app/history/repository.py` — CRUD снапшотов
+- `app/history/service.py` — агрегация daily delta
+- `app/history/schemas.py` — `TokenUsageSnapshotDTO`
+- `app/history/internal_routes.py` — endpoint
+- `app/admin/cli.py` — CLI-команда
+- `frontend/src/admin/api.ts` — `getTokenUsageSnapshots`
+- `frontend/src/admin/types.ts` — типы
+- `frontend/src/admin/organizationDetail/OrganizationUsageTab.tsx` — интеграция
+- `frontend/src/admin/components/TokenUsageChart.tsx` — новый компонент
+- `frontend/src/viewModels/adminViewModels.ts` — возможно, viewModel для графика
+
+**Definition of Done**:
+- Код написан, типизация проходит (`npm run build`, `pytest`, `python -m compileall`)
+- Alembic миграция применяется без ошибок
+- Unit/integration тесты на endpoint и сервис написаны и проходят
+- Ручная проверка: CLI создаёт снапшоты → админка отображает график за "Последнюю неделю" → сумма под графиком совпадает с ожидаемой
+- `BACKLOG.md` обновлён
+- Нет захардкоженных credentials или токенов в коде
+- Branch: `feature/token-usage-snapshots`
+
+---
 
 ## Последние закрытые
 
-- 2026-05-18: Epic 12 закрыт — Seed-Oriented Persona Generation. Добавлена структурированная seed-конфигурация для генерации персон: 16 блоков (training_context, product, lpr_and_roles, orientation lists, novelty, starting_params). Универсальный prompt-шаблон `app/prompts/persona_seed_template.md` рендерится через Jinja2. Master instruction хранится на стороне LLM (Yandex agent). Backend: `seed_config` JSON колонка в `client_training_configs`, Pydantic модель `PersonaSeedConfig`, `SeedPromptRenderer`, backward compatibility с legacy free-text. Admin API DTOs обновлены. Frontend: toggle seed/legacy, tag-like inputs через `;`, `SeedConfigForm` с fieldset-группировкой, badge Seed/Legacy в таблице. Unit + integration tests green.
-- 2026-05-16: Epic 9 закрыт — добавлены frontend regression tests (90 tests), backend contract tests (LLM/judge fallback, persona generation, report read path, public projection boundaries, startup validation), CI smoke guards (`timeout-minutes` для всех jobs, `docker compose config` проверка синтаксиса).
-- 2026-05-15: Epic 8.1 закрыт — legacy persona normalization сохранена как compatibility-loader для старых Redis/PostgreSQL session JSON; новые personas остаются universal v3.1 без legacy accounting field names.
-- 2026-05-16: Epic 7 закрыт — `OrganizationDetailPage.tsx` разделён на таб-компоненты (`OrganizationUsersTab`, `OrganizationTrainingConfigsTab`, `OrganizationHistoryTab`, `OrganizationUsageTab`, `OrganizationAuditTab`) с shared hook `useOrganizationDetail`; frontend форматтеры вынесены в `frontend/src/viewModels/` (adminViewModels + clientViewModels) — компоненты получают готовые view-models вместо raw backend values.
-- 2026-05-15: Epic 8.2 закрыт — fake judge/dialogue user-facing copy очищены от `fake judge`, stub/deterministic wording и legacy persona field names.
+- **2026-05-19**: Epic — Внутренний tokenizer для биллинга клиентов. Добавлен `tiktoken` (cl100k_base), `TokenCounterService`, `TokenCountedResult` DTO. Интегрирован подсчёт токенов во все 3 LLM клиента (`YandexCompatibleLLMClient`, `StructuredPersonaGeneratorClient`, `StructuredJudgeClient`). Создана таблица `token_usage_records` с миграцией Alembic. `HistoryService` сохраняет токены для dialogue, persona generation и judge. Backend API `GET /api/internal/organizations/{id}/token-usage` с агрегацией по пользователям (только admin, 403 для остальных). Frontend: `OrganizationUsageTab` отображает токены в K (тысячах) с таблицей по пользователям. Unit + integration тесты green. Frontend билдится (`npm run build`).

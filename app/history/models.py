@@ -120,6 +120,31 @@ class TokenUsageRecord(Base):
     )
 
 
+class TokenUsageSnapshot(Base):
+    __tablename__ = "token_usage_snapshots"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    client_account_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("client_accounts.id"),
+        nullable=False,
+    )
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint("client_account_id", "snapshot_date", name="uq_token_usage_snapshots_org_date"),
+        Index("ix_token_usage_snapshots_client_account_date", "client_account_id", desc("snapshot_date")),
+    )
+
+
 class TrainingReportRecord(Base):
     __tablename__ = "training_reports"
 
