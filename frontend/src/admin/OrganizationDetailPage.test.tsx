@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { OrganizationDetailPage } from "./OrganizationDetailPage";
 import {
+  getTokenUsageSnapshots,
   getUsageSummary,
   listAuditLog,
   listOrganizationHistory,
@@ -16,6 +17,7 @@ vi.mock("./api", async () => {
   const actual = await vi.importActual<typeof import("./api")>("./api");
   return {
     ...actual,
+    getTokenUsageSnapshots: vi.fn().mockResolvedValue([]),
     getUsageSummary: vi.fn(),
     listAuditLog: vi.fn(),
     listOrganizationHistory: vi.fn(),
@@ -252,5 +254,29 @@ describe("OrganizationDetailPage training configs", () => {
 
     const table = await screen.findByRole("table");
     expect(table.textContent).toContain("—");
+  });
+
+  it("renders token usage chart with range tabs and period sum", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getUsageSummary).mockResolvedValue(usageSummary);
+    vi.mocked(getTokenUsageSnapshots).mockResolvedValue([
+      { snapshot_date: "2026-05-15", total_tokens: 1200, input_tokens: 700, output_tokens: 500 },
+      { snapshot_date: "2026-05-16", total_tokens: 1500, input_tokens: 800, output_tokens: 700 },
+    ]);
+
+    render(<OrganizationDetailPage organizationId="org-1" onNavigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "Использование" }));
+
+    expect(await screen.findByText("Динамика использования токенов")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сегодня" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Вчера" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Последняя неделя" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Кастомный" })).toBeInTheDocument();
+    expect(document.querySelector("svg.admin-svg-chart")).toBeInTheDocument();
+    expect(screen.getAllByText(/Всего/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Input/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Output/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Сумма за период/i)).toBeInTheDocument();
   });
 });

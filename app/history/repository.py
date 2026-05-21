@@ -552,7 +552,20 @@ class HistoryRepository:
         input_tokens: int,
         output_tokens: int,
     ) -> TokenUsageSnapshot:
-        """Insert one daily token usage snapshot."""
+        """Insert or update one daily token usage snapshot (idempotent)."""
+        existing = self._session.scalar(
+            select(TokenUsageSnapshot).where(
+                TokenUsageSnapshot.client_account_id == client_account_id,
+                TokenUsageSnapshot.snapshot_date == snapshot_date,
+            )
+        )
+        if existing is not None:
+            existing.total_tokens = total_tokens
+            existing.input_tokens = input_tokens
+            existing.output_tokens = output_tokens
+            self._session.commit()
+            self._session.refresh(existing)
+            return existing
         record = TokenUsageSnapshot(
             client_account_id=client_account_id,
             snapshot_date=snapshot_date,

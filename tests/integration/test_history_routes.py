@@ -16,7 +16,7 @@ from app.application.report_service import ReportService
 from app.domain.judgement_models import BentoReportBlock, JudgeSessionOutput, ReportRecommendation, SkillScore
 from app.domain.models import ClientState, PersonaProfile, TrainingSessionState
 from tests.unit._persona_fixtures import valid_minimal_persona
-from app.history.models import TokenUsageRecord, TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
+from app.history.models import TokenUsageRecord, TokenUsageSnapshot, TrainingReportRecord, TrainingSessionRecord, TrainingTurnRecord, UsageEventRecord
 from app.history.repository import HistoryRepository
 from app.history.service import HistoryService
 from app.identity.dependencies import get_db_session
@@ -702,5 +702,116 @@ def test_token_usage_api_returns_403_for_non_admin() -> None:
 
     response = client.get(f"/api/internal/organizations/{account.id}/token-usage")
     assert response.status_code == 403
+
+    db_session.close()
+
+
+def test_token_usage_snapshots_api_returns_daily_data_for_admin() -> None:
+    """Verify admin token-usage-snapshots endpoint returns daily aggregated data."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    account, _, _ = _seed_account_with_users(
+        db_session,
+        slug="snapshot-admin",
+        users=[
+            ("manager@example.com", "client_manager"),
+            ("admin@example.com", "internal_admin"),
+        ],
+    )
+    history_repository = HistoryRepository(db_session)
+    history_repository.create_token_usage_snapshot(
+        client_account_id=account.id,
+        snapshot_date=datetime(2026, 5, 15, tzinfo=UTC),
+        total_tokens=1200,
+        input_tokens=700,
+        output_tokens=500,
+    )
+    history_repository.create_token_usage_snapshot(
+        client_account_id=account.id,
+        snapshot_date=datetime(2026, 5, 16, tzinfo=UTC),
+        total_tokens=1500,
+        input_tokens=800,
+        output_tokens=700,
+    )
+
+    client = _create_client(db_session, repository)
+    _login(client, "admin@example.com")
+    response = client.get(
+        f"/api/internal/organizations/{account.id}/token-usage-snapshots?from_date=2026-05-15&to_date=2026-05-16"
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["snapshot_date"].startswith("2026-05-15T00:00:00")
+    assert data[0]["total_tokens"] == 1200
+    assert data[0]["input_tokens"] == 700
+    assert data[0]["output_tokens"] == 500
+    assert data[1]["snapshot_date"].startswith("2026-05-16T00:00:00")
+    assert data[1]["total_tokens"] == 1500
+
+    db_session.close()
+
+
+def test_token_usage_snapshots_api_returns_403_for_non_admin() -> None:
+    """Verify non-admin users cannot access token-usage-snapshots endpoint."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    account, _, _ = _seed_account_with_users(
+        db_session,
+        slug="snapshot-forbidden",
+        users=[("manager@example.com", "client_manager")],
+    )
+    client = _create_client(db_session, repository)
+    _login(client, "manager@example.com")
+
+    response = client.get(f"/api/internal/organizations/{account.id}/token-usage-snapshots")
+    assert response.status_code == 403
+
+    db_session.close()
+
+
+def test_token_usage_snapshots_api_filters_by_date_range() -> None:
+    """Verify snapshots endpoint only returns data within requested date range."""
+    db_session = _create_db_session()
+    repository = InMemorySessionRepository()
+    account, _, _ = _seed_account_with_users(
+        db_session,
+        slug="snapshot-range",
+        users=[("admin@example.com", "internal_admin")],
+    )
+    history_repository = HistoryRepository(db_session)
+    history_repository.create_token_usage_snapshot(
+        client_account_id=account.id,
+        snapshot_date=datetime(2026, 5, 10, tzinfo=UTC),
+        total_tokens=500,
+        input_tokens=300,
+        output_tokens=200,
+    )
+    history_repository.create_token_usage_snapshot(
+        client_account_id=account.id,
+        snapshot_date=datetime(2026, 5, 15, tzinfo=UTC),
+        total_tokens=1200,
+        input_tokens=700,
+        output_tokens=500,
+    )
+    history_repository.create_token_usage_snapshot(
+        client_account_id=account.id,
+        snapshot_date=datetime(2026, 5, 20, tzinfo=UTC),
+        total_tokens=800,
+        input_tokens=400,
+        output_tokens=400,
+    )
+
+    client = _create_client(db_session, repository)
+    _login(client, "admin@example.com")
+    response = client.get(
+        f"/api/internal/organizations/{account.id}/token-usage-snapshots?from_date=2026-05-14&to_date=2026-05-16"
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["snapshot_date"].startswith("2026-05-15")
 
     db_session.close()
