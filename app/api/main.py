@@ -29,6 +29,7 @@ from app.infrastructure.stt_client import STTClient, build_stt_client
 from app.infrastructure.stt_concurrency import LocalSTTConcurrencyLimiter
 from app.infrastructure.startup_validation import validate_runtime_settings
 from app.infrastructure.summary_compressor import build_summary_compressor
+from app.infrastructure.telegram_client import TelegramClient, build_telegram_client
 from app.identity.csrf import CSRF_HEADER_NAME, csrf_tokens_match
 from app.api.rate_limit import LeadRateLimiter, build_lead_rate_limiter
 from app.identity.rate_limit import build_login_rate_limiter
@@ -108,6 +109,7 @@ def create_app(
     audio_converter: AudioConverter | None = None,
     lead_rate_limiter: LeadRateLimiter | None = None,
     speech_rate_limiter: SpeechRateLimiter | None = None,
+    telegram_client: TelegramClient | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     setup_logging(resolved_settings.log_level)
@@ -196,6 +198,7 @@ def create_app(
     app.state.login_rate_limiter = build_login_rate_limiter(resolved_settings)
     app.state.lead_rate_limiter = lead_rate_limiter or build_lead_rate_limiter(resolved_settings)
     app.state.speech_rate_limiter = speech_rate_limiter or build_speech_rate_limiter(resolved_settings)
+    app.state.telegram_client = telegram_client or build_telegram_client(resolved_settings)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(auth_router)

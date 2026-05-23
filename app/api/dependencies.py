@@ -15,6 +15,7 @@ from app.history.dependencies import get_history_service
 from app.history.service import HistoryService
 from app.infrastructure.config import Settings
 from app.infrastructure.db import get_db_session
+from app.infrastructure.telegram_client import TelegramClient
 
 
 @dataclass
@@ -62,6 +63,11 @@ def get_speech_service(request: Request) -> SpeechService:
 def get_app_settings(request: Request) -> Settings:
     """Return app settings for request-scoped services."""
     return request.app.state.settings
+
+
+def get_telegram_client(request: Request) -> TelegramClient:
+    """Return the shared Telegram notification client."""
+    return request.app.state.telegram_client
 
 
 def get_persona_generation_service(

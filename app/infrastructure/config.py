@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     stt_ffprobe_binary: str = "ffprobe"
     stt_ffmpeg_binary: str = "ffmpeg"
     stt_normalization_mode: str = "light"
+    telegram_bot_token: str = ""
+    telegram_lead_chat_id: str = ""
 
     @property
     def is_local_env(self) -> bool:

@@ -14,6 +14,7 @@ from app.api.dependencies import (
     get_report_service,
     get_runtime_activity_service,
     get_session_service,
+    get_telegram_client,
     get_turn_service,
 )
 from app.api.errors import conflict, not_found
@@ -65,6 +66,7 @@ from app.history.events import UsageEventType
 from app.history.service import HistoryService
 from app.infrastructure.db import get_db_session
 from app.infrastructure.config import Settings
+from app.infrastructure.telegram_client import TelegramClient
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -153,11 +155,32 @@ def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _format_lead_notification(lead: LandingLead) -> str:
+    """Build a plain-text summary of a landing lead for Telegram."""
+    lines = [
+        "Новая заявка с лендинга",
+        f"Имя: {lead.name}",
+        f"Email: {lead.email}",
+        f"Телефон: {lead.phone}",
+        f"Компания: {lead.company}",
+        f"Роль: {lead.role}",
+        f"Размер команды: {lead.sales_team_size}",
+    ]
+    if lead.comment:
+        lines.append(f"Комментарий: {lead.comment}")
+    if lead.query_params:
+        utm_parts = " ".join(f"{k}={v}" for k, v in lead.query_params.items())
+        lines.append(f"UTM: {utm_parts}")
+    lines.append(f"Время: {lead.created_at.isoformat()}")
+    return "\n".join(lines)
+
+
 @router.post("/leads", response_model=LandingSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
 def submit_landing_lead(
     request: LandingLeadRequest,
     http_request: Request,
     db_session: Session = Depends(get_db_session),
+    telegram_client: TelegramClient = Depends(get_telegram_client),
 ) -> LandingSubmitResponse:
     try:
         http_request.app.state.lead_rate_limiter.hit(
@@ -192,6 +215,11 @@ def submit_landing_lead(
     )
     db_session.add(lead)
     db_session.commit()
+    if not lead.is_spam:
+        try:
+            telegram_client.send_message(_format_lead_notification(lead))
+        except Exception:
+            logger.error("telegram_notification_failed lead_id=%s", lead.id, exc_info=True)
     return LandingSubmitResponse(status="accepted")
 
 

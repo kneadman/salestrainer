@@ -31,6 +31,7 @@ from app.infrastructure.db import Base, import_model_modules
 from app.infrastructure.llm_client import FakeLLMClient
 from app.infrastructure.session_repository import InMemorySessionRepository
 from app.infrastructure.stt_client import FakeSTTClient, STTResult
+from app.infrastructure.telegram_client import FakeTelegramClient, TelegramClient
 
 
 def _create_db_session() -> Session:
@@ -52,6 +53,7 @@ def _create_client(
     settings: Settings | None = None,
     stt_client: FakeSTTClient | None = None,
     lead_rate_limiter: LeadRateLimiter | None = None,
+    telegram_client: TelegramClient | None = None,
 ) -> TestClient:
     app = create_app(
         settings=settings or Settings(auth_cookie_secure=False, login_rate_limit_attempts=0),
@@ -59,6 +61,7 @@ def _create_client(
         llm_client=FakeLLMClient(),
         stt_client=stt_client,
         lead_rate_limiter=lead_rate_limiter,
+        telegram_client=telegram_client,
     )
 
     if db_session is not None:
@@ -1970,5 +1973,70 @@ def test_api_report_reveals_hidden_profile_only_after_finish() -> None:
     finish_response = client.post(f"/api/sessions/{session_id}/finish")
     assert finish_response.status_code == 200
     assert "# Кто был клиент" in finish_response.json()["report"]
+
+    db_session.close()
+
+
+class _MockTelegramClient:
+    """Test double that records sent messages."""
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+        self.should_raise = False
+
+    def send_message(self, text: str) -> None:
+        if self.should_raise:
+            raise RuntimeError("telegram down")
+        self.messages.append(text)
+
+
+def test_api_leads_sends_telegram_notification_on_valid_lead() -> None:
+    db_session = _create_db_session()
+    mock_telegram = _MockTelegramClient()
+    client = _create_client(db_session, telegram_client=mock_telegram)
+
+    response = client.post("/api/leads", json=_valid_lead_payload())
+    lead = db_session.scalar(select(LandingLead))
+
+    assert response.status_code == 202
+    assert lead is not None
+    assert len(mock_telegram.messages) == 1
+    assert lead.name in mock_telegram.messages[0]
+    assert lead.email in mock_telegram.messages[0]
+
+    db_session.close()
+
+
+def test_api_leads_skips_telegram_for_spam_lead() -> None:
+    db_session = _create_db_session()
+    mock_telegram = _MockTelegramClient()
+    client = _create_client(db_session, telegram_client=mock_telegram)
+
+    response = client.post(
+        "/api/leads",
+        json=_valid_lead_payload(website="bot-filled"),
+    )
+    lead = db_session.scalar(select(LandingLead))
+
+    assert response.status_code == 202
+    assert lead is not None
+    assert lead.is_spam is True
+    assert len(mock_telegram.messages) == 0
+
+    db_session.close()
+
+
+def test_api_leads_ignores_telegram_error() -> None:
+    db_session = _create_db_session()
+    mock_telegram = _MockTelegramClient()
+    mock_telegram.should_raise = True
+    client = _create_client(db_session, telegram_client=mock_telegram)
+
+    response = client.post("/api/leads", json=_valid_lead_payload())
+    lead = db_session.scalar(select(LandingLead))
+
+    assert response.status_code == 202
+    assert lead is not None
+    assert lead.email == "ivan@example.com"
 
     db_session.close()
