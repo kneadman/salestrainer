@@ -6,6 +6,8 @@ import { ClientApp } from "./client/ClientApp";
 import { clearLegacyTrainerSessionId, clearTrainerSessionRestoreState } from "./client/trainerSessionStorage";
 import { LoginPage } from "./components/LoginPage";
 import { DemoPage } from "./demo/DemoPage";
+import PrivacyPage from "./landing/pages/PrivacyPage";
+import CookiesPage from "./landing/pages/CookiesPage";
 import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
@@ -130,6 +132,14 @@ export default function App() {
 
   if (routePathname === "/demo") {
     return <DemoPage onNavigate={navigate} />;
+  }
+
+  if (routePathname === "/privacy") {
+    return <PrivacyPage />;
+  }
+
+  if (routePathname === "/cookies") {
+    return <CookiesPage />;
   }
 
   if (authBootstrapping) {

@@ -85,6 +85,14 @@ const Footer: React.FC = () => {
             <a href="/cookies" className="font-inter text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">
               Cookie
             </a>
+            <a
+              href="https://t.me/kneadman"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-inter text-[12px] text-text-tertiary hover:text-text-secondary transition-colors"
+            >
+              Telegram
+            </a>
           </div>
         </div>
       </div>
