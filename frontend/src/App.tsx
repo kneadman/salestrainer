@@ -8,6 +8,7 @@ import { LoginPage } from "./components/LoginPage";
 import { DemoPage } from "./demo/DemoPage";
 import PrivacyPage from "./landing/pages/PrivacyPage";
 import CookiesPage from "./landing/pages/CookiesPage";
+import { useYandexMetrika } from "./hooks/useYandexMetrika";
 import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
@@ -35,6 +36,8 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
+
+  useYandexMetrika(routePathname);
 
   const navigate = useCallback(
     (nextPath: string, replace = false) => {

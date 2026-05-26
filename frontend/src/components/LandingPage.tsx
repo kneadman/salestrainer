@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { submitLead } from "../api";
+import { reachGoal } from "@/hooks/useYandexMetrika";
 import { useLenis } from "@/landing/hooks/useLenis";
 import AmbientGlow from "@/landing/sections/AmbientGlow";
 import FixedHeader from "@/landing/sections/FixedHeader";
@@ -122,11 +123,13 @@ export function LandingPage({ authenticated }: LandingPageProps) {
 
     setLeadStatus("submitting");
     track("lead_form_submit");
+    reachGoal("landing_lead_submit");
 
     try {
       await submitLead(payload);
       setLeadStatus("success");
       track("lead_form_success");
+      reachGoal("landing_lead_success");
       form.reset();
       setLeadConsent(false);
     } catch {

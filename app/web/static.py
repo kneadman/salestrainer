@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_DIST_DIR = REPOSITORY_ROOT / "frontend" / "dist"
-SPA_ROUTES = ("/", "/login", "/app")
+SPA_ROUTES = ("/", "/login", "/app", "/blog")
 
 
 def mount_frontend(app: FastAPI) -> None:
@@ -40,3 +40,5 @@ def mount_frontend(app: FastAPI) -> None:
 
     for route in SPA_ROUTES:
         app.get(route, include_in_schema=False)(serve_index)
+
+    app.get("/blog/{path:path}", include_in_schema=False)(serve_index)
