@@ -37,6 +37,8 @@ from app.identity.routes import router as auth_router
 from app.internal_admin.routes import router as internal_admin_router
 from app.history.internal_routes import router as internal_history_router
 from app.history.routes import router as history_router
+from app.blog.routes import router as blog_router
+from app.blog.admin_routes import router as blog_admin_router
 from app.client_portal.routes import router as client_portal_router
 from app.web.static import mount_frontend
 
@@ -205,6 +207,8 @@ def create_app(
     app.include_router(router)
     app.include_router(build_speech_router())
     app.include_router(history_router)
+    app.include_router(blog_router)
+    app.include_router(blog_admin_router)
     app.include_router(client_portal_router)
     app.include_router(internal_admin_router)
     app.include_router(internal_history_router)
