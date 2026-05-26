@@ -8,7 +8,8 @@ export type AdminRoute =
   | "organization-user-analytics"
   | "history"
   | "history-detail"
-  | "audit-log";
+  | "audit-log"
+  | "blog";
 
 export type OrganizationDetailTab = "overview" | "users" | "configs" | "history" | "usage" | "audit";
 
@@ -255,4 +256,36 @@ export type TokenUsageSnapshotDTO = {
   total_tokens: number;
   input_tokens: number;
   output_tokens: number;
+};
+
+export type BlogPostDTO = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  cover_image_url: string | null;
+  author_name: string;
+  published_at: string | null;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BlogPostPayload = {
+  title: string;
+  slug?: string | null;
+  excerpt: string;
+  content: string;
+  cover_image_url?: string | null;
+  author_name: string;
+  is_published?: boolean;
+};
+
+export type BlogPostListResponse = {
+  items: Omit<BlogPostDTO, "is_published" | "created_at" | "updated_at">[];
+  total: number;
+};
+
+export type BlogPostDetailDTO = Omit<BlogPostDTO, "is_published" | "created_at" | "updated_at"> & {
+  content: string;
 };

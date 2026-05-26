@@ -9,6 +9,8 @@ import { DemoPage } from "./demo/DemoPage";
 import PrivacyPage from "./landing/pages/PrivacyPage";
 import CookiesPage from "./landing/pages/CookiesPage";
 import { useYandexMetrika } from "./hooks/useYandexMetrika";
+import { BlogListPage } from "./components/BlogListPage";
+import { BlogPostPage } from "./components/BlogPostPage";
 import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
@@ -143,6 +145,14 @@ export default function App() {
 
   if (routePathname === "/cookies") {
     return <CookiesPage />;
+  }
+
+  if (routePathname === "/blog") {
+    return <BlogListPage />;
+  }
+
+  if (routePathname.startsWith("/blog/")) {
+    return <BlogPostPage />;
   }
 
   if (authBootstrapping) {

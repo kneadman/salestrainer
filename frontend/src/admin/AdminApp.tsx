@@ -1,6 +1,7 @@
 import { AdminDashboard } from "./AdminDashboard";
 import { AdminLayout } from "./AdminLayout";
 import { AuditLogPage } from "./AuditLogPage";
+import { BlogPostsPage } from "./BlogPostsPage";
 import { HistoryPage } from "./HistoryPage";
 import { AdminUserAnalyticsPage } from "./UserAnalyticsPage";
 import { OrganizationDetailPage } from "./OrganizationDetailPage";
@@ -45,6 +46,7 @@ export function AdminApp({ user, path, onNavigate, onLogout }: AdminAppProps) {
       {route.route === "history" ? <HistoryPage onNavigate={onNavigate} /> : null}
       {route.route === "history-detail" ? <HistoryPage sessionId={route.sessionId} onNavigate={onNavigate} /> : null}
       {route.route === "audit-log" ? <AuditLogPage /> : null}
+      {route.route === "blog" ? <BlogPostsPage onNavigate={onNavigate} /> : null}
     </AdminLayout>
   );
 }

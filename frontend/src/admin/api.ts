@@ -2,6 +2,8 @@ import { request } from "../apiClient";
 import type {
   AdminUserAnalyticsDetailDTO,
   AuditLogDTO,
+  BlogPostDTO,
+  BlogPostPayload,
   HistorySessionDetailDTO,
   HistorySessionSummaryDTO,
   OrganizationDTO,
@@ -183,4 +185,42 @@ export function getTokenUsageSnapshots(
 export function listAuditLog(params: Record<string, string | number | null | undefined>): Promise<AuditLogDTO[]> {
   /** Load audit events with optional internal-admin filters. */
   return request<AuditLogDTO[]>(`/api/internal/audit-log${queryString(params)}`);
+}
+
+export function listBlogPosts(search?: string): Promise<BlogPostDTO[]> {
+  /** Load all blog posts for internal admin (includes drafts). */
+  return request<BlogPostDTO[]>(`/api/internal/blog/posts${queryString({ search })}`);
+}
+
+export function createBlogPost(payload: BlogPostPayload): Promise<BlogPostDTO> {
+  /** Create a new blog post. */
+  return request<BlogPostDTO>("/api/internal/blog/posts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateBlogPost(postId: string, payload: Partial<BlogPostPayload>): Promise<BlogPostDTO> {
+  /** Update an existing blog post. */
+  return request<BlogPostDTO>(`/api/internal/blog/posts/${postId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteBlogPost(postId: string): Promise<void> {
+  /** Permanently delete a blog post. */
+  return request<void>(`/api/internal/blog/posts/${postId}`, {
+    method: "DELETE",
+  });
+}
+
+export function uploadBlogImage(image: File): Promise<{ url: string }> {
+  /** Upload a blog cover image. */
+  const formData = new FormData();
+  formData.append("image", image);
+  return request<{ url: string }>("/api/internal/blog/upload-image", {
+    method: "POST",
+    body: formData,
+  });
 }

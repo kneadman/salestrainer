@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { label: "Обзор", path: "/admin" },
   { label: "Организации", path: "/admin/organizations" },
   { label: "История тренировок", path: "/admin/history" },
+  { label: "Блог", path: "/admin/blog" },
   { label: "Аудит", path: "/admin/audit-log" },
 ];
 

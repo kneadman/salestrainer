@@ -37,6 +37,9 @@ export function parseAdminPath(path: string): AdminRouteState {
   if (segments[1] === "audit-log") {
     return { route: "audit-log" };
   }
+  if (segments[1] === "blog") {
+    return { route: "blog" };
+  }
   return { route: "dashboard" };
 }
 
