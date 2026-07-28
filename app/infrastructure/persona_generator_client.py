@@ -4,14 +4,22 @@ import json
 import logging
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
 from app.domain.models import PersonaGenerationInput, PersonaGenerationOutput, PersonaProfile
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.token_counter import TokenCountedResult, TokenCounterService
-from app.infrastructure.llm_client import LLMClientError, _extract_json_object, _payload_size, _response_to_payload, _sanitize_api_key
+from app.infrastructure.responses_client import (
+    LLMClientError,
+    OpenAICompatibleResponsesClient,
+    Transport,
+    _payload_size,
+    _response_to_payload,
+    _sanitize_api_key,
+    parse_enveloped_json_output,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +69,13 @@ class FakePersonaGeneratorClient:
         return overrides
 
 
-Transport = Callable[[dict[str, Any]], Any]
-
-
 class PersonaGenerationBusinessValidationError(ValueError):
     """Raised when provider JSON is valid but violates product business rules."""
 
 
-class StructuredPersonaGeneratorClient:
+class StructuredPersonaGeneratorClient(OpenAICompatibleResponsesClient):
+    _openai_missing_message = "openai package is required for persona generator providers."
+
     def __init__(
         self,
         *,
@@ -88,19 +95,21 @@ class StructuredPersonaGeneratorClient:
         token_counter: TokenCounterService | None = None,
     ) -> None:
         """Configure an OpenAI/Yandex-compatible structured persona generator client."""
+        super().__init__(
+            base_url=base_url,
+            api_key=api_key,
+            folder_id=folder_id,
+            timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+            transport=transport,
+            debug_payload_logging=debug_payload_logging,
+        )
         self._provider = provider
-        self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
-        self._folder_id = folder_id
         self._agent_id = agent_id
         self._model_or_agent_label = model_or_agent_label
         self._master_prompt = master_prompt
         self._json_template = json_template
-        self._timeout_seconds = timeout_seconds
-        self._max_retries = max_retries
         self._fallback_client = fallback_client
-        self._transport = transport or self._default_transport
-        self._debug_payload_logging = debug_payload_logging
         self._token_counter = token_counter or TokenCounterService()
 
     def generate_persona(self, payload: PersonaGenerationInput) -> TokenCountedResult[PersonaGenerationOutput]:
@@ -182,60 +191,14 @@ class StructuredPersonaGeneratorClient:
             "payload_size": _payload_size(request_payload),
         }
 
-    def _default_transport(self, request_payload: dict[str, Any]) -> Any:
-        """Execute the responses API call through the optional OpenAI-compatible SDK."""
-        try:
-            from openai import OpenAI
-        except ImportError as error:
-            raise LLMClientError("openai package is required for persona generator providers.") from error
-
-        client = OpenAI(
-            api_key=self._api_key,
-            base_url=self._base_url,
-            project=self._folder_id,
-            timeout=self._timeout_seconds,
-        )
-        return client.responses.create(**request_payload)
-
-    @property
-    def endpoint_url(self) -> str:
-        """Return the provider endpoint used for sanitized request metadata."""
-        return f"{self._base_url}/responses"
-
-
 def parse_persona_generation_response(raw_payload: dict[str, Any] | str) -> PersonaGenerationOutput:
     """Parse known provider response envelopes into a strict PersonaGenerationOutput."""
-    if isinstance(raw_payload, dict) and "persona" in raw_payload:
-        return PersonaGenerationOutput.model_validate(raw_payload)
-    if isinstance(raw_payload, dict):
-        output_text = raw_payload.get("output_text")
-        if isinstance(output_text, str):
-            return PersonaGenerationOutput.model_validate_json(_extract_json_object(output_text))
-        output = raw_payload.get("output")
-        if isinstance(output, list):
-            for item in output:
-                if not isinstance(item, dict):
-                    continue
-                content = item.get("content")
-                if isinstance(content, list):
-                    for chunk in content:
-                        if not isinstance(chunk, dict):
-                            continue
-                        text = chunk.get("text")
-                        if isinstance(text, str):
-                            return PersonaGenerationOutput.model_validate_json(_extract_json_object(text))
-        alternatives = raw_payload.get("alternatives")
-        if isinstance(alternatives, list) and alternatives:
-            message = alternatives[0].get("message", {})
-            text = message.get("text")
-            if isinstance(text, str):
-                return PersonaGenerationOutput.model_validate_json(_extract_json_object(text))
-        raise LLMClientError("Persona generator response does not contain structured text output.")
-    try:
-        decoded = json.loads(raw_payload)
-    except JSONDecodeError:
-        return PersonaGenerationOutput.model_validate_json(_extract_json_object(raw_payload))
-    return parse_persona_generation_response(decoded)
+    return parse_enveloped_json_output(
+        raw_payload,
+        model=PersonaGenerationOutput,
+        direct_key="persona",
+        no_output_message="Persona generator response does not contain structured text output.",
+    )
 
 
 def validate_generated_persona(

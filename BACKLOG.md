@@ -4,7 +4,6 @@
 > Формат ТЗ: Problem → Context → Scope → AC → Decomposition → Risks → Files → DoD.
 
 ---
-
 ## Активные
 
 (пусто)

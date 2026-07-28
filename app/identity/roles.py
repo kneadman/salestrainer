@@ -28,6 +28,3 @@ def role_value(role: str | UserRole) -> str:
 def is_internal_admin(role: str | UserRole) -> bool:
     return normalize_role(role) == UserRole.INTERNAL_ADMIN
 
-
-def is_client_role(role: str | UserRole) -> bool:
-    return normalize_role(role) in CLIENT_ROLES

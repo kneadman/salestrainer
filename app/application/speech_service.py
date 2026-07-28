@@ -18,7 +18,7 @@ from app.infrastructure.audio_converter import AudioConverter, LocalFFmpegAudioC
 from app.infrastructure.audio_duration_probe import AudioDurationProbe, LocalAudioDurationProbe
 from app.infrastructure.config import Settings
 from app.infrastructure.stt_client import STTClient
-from app.infrastructure.stt_concurrency import STTConcurrencyLimiter
+from app.infrastructure.stt_concurrency import LocalSTTConcurrencyLimiter
 from app.infrastructure.text_normalizer import normalize_transcribed_text
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class SpeechService:
         stt_client: STTClient,
         *,
         settings: Settings,
-        concurrency_limiter: STTConcurrencyLimiter,
+        concurrency_limiter: LocalSTTConcurrencyLimiter,
         duration_probe: AudioDurationProbe | None = None,
         audio_converter: AudioConverter | None = None,
     ) -> None:

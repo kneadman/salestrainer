@@ -3,21 +3,22 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from app.application.summary_compressor import FakeSummaryCompressor, SummaryCompressor
 from app.domain.errors import LLMProviderConfigurationError
 from app.domain.models import TrainingSessionState, Turn
 from app.infrastructure.config import Settings, is_fake_fallback_allowed
-from app.infrastructure.llm_client import (
+from app.infrastructure.responses_client import (
     LLMClientError,
+    OpenAICompatibleResponsesClient,
+    Transport,
+    _http_error_body,
     _response_to_payload,
     _safe_request_metadata,
 )
 
 logger = logging.getLogger(__name__)
-
-Transport = Callable[[dict[str, Any]], Any]
 
 SUMMARY_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "summary_compressor.md"
 
@@ -57,7 +58,7 @@ def parse_summary_text(raw_payload: dict[str, Any] | str) -> str:
     return text[:1000]
 
 
-class YandexSummaryCompressor:
+class YandexSummaryCompressor(OpenAICompatibleResponsesClient):
     def __init__(
         self,
         *,
@@ -71,19 +72,17 @@ class YandexSummaryCompressor:
         transport: Transport | None = None,
         debug_payload_logging: bool = False,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
-        self._folder_id = folder_id
+        super().__init__(
+            base_url=base_url,
+            api_key=api_key,
+            folder_id=folder_id,
+            timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+            transport=transport,
+            debug_payload_logging=debug_payload_logging,
+        )
         self._agent_id = agent_id
-        self._timeout_seconds = timeout_seconds
-        self._max_retries = max_retries
         self._fallback_compressor = fallback_compressor
-        self._transport = transport or self._default_transport
-        self._debug_payload_logging = debug_payload_logging
-
-    @property
-    def endpoint_url(self) -> str:
-        return f"{self._base_url}/responses"
 
     def compress(
         self,
@@ -126,17 +125,7 @@ class YandexSummaryCompressor:
             except Exception as error:
                 last_error = error
                 status_code = getattr(error, "status_code", None)
-                response = getattr(error, "response", None)
-                error_body = ""
-                if response is not None:
-                    response_text = getattr(response, "text", None)
-                    if isinstance(response_text, str):
-                        error_body = response_text
-                    else:
-                        try:
-                            error_body = json.dumps(response.json(), ensure_ascii=True)
-                        except Exception:
-                            error_body = repr(response)
+                error_body = _http_error_body(error)
                 logger.warning(
                     "summary_compression_http_error attempt=%s status=%s error=%s body=%s",
                     attempt + 1,
@@ -188,22 +177,6 @@ class YandexSummaryCompressor:
             "prompt": {"id": self._agent_id},
             "input": input_text,
         }
-
-    def _default_transport(self, request_payload: dict[str, Any]) -> Any:
-        try:
-            from openai import OpenAI
-        except ImportError as error:
-            raise LLMClientError(
-                "openai package is required for yandex_compatible backend. Reinstall project dependencies."
-            ) from error
-
-        client = OpenAI(
-            api_key=self._api_key,
-            base_url=self._base_url,
-            project=self._folder_id,
-            timeout=self._timeout_seconds,
-        )
-        return client.responses.create(**request_payload)
 
 
 def build_summary_compressor(settings: Settings) -> SummaryCompressor:

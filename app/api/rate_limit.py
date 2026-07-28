@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 
 from redis import Redis
 from redis.exceptions import RedisError
 
 from app.infrastructure.config import Settings
+from app.infrastructure.rate_limit import InMemoryFixedWindowRateLimiter, RedisFixedWindowRateLimiter
 from app.infrastructure.redis_client import create_redis_client
 
 
@@ -26,12 +25,6 @@ class NoopLeadRateLimiter(LeadRateLimiter):
         return None
 
 
-@dataclass
-class _Bucket:
-    count: int
-    reset_at: float
-
-
 class InMemoryLeadRateLimiter(LeadRateLimiter):
     def __init__(
         self,
@@ -41,43 +34,31 @@ class InMemoryLeadRateLimiter(LeadRateLimiter):
         time_provider: Callable[[], float] = time.monotonic,
     ) -> None:
         self._max_attempts = max_attempts
-        self._window_seconds = window_seconds
-        self._time_provider = time_provider
-        self._buckets: dict[str, _Bucket] = {}
-        self._lock = threading.Lock()
+        self._engine = InMemoryFixedWindowRateLimiter(window_seconds=window_seconds, time_provider=time_provider)
 
     def hit(self, *, ip_address: str | None, email: str | None = None, phone: str | None = None) -> None:
         keys = _lead_rate_limit_keys(ip_address=ip_address, email=email, phone=phone)
-        now = self._time_provider()
-        with self._lock:
-            for key in keys:
-                bucket = self._buckets.get(key)
-                if bucket is None or bucket.reset_at <= now:
-                    bucket = _Bucket(count=0, reset_at=now + self._window_seconds)
-                    self._buckets[key] = bucket
-                bucket.count += 1
-                if bucket.count > self._max_attempts:
-                    raise LeadRateLimitExceeded
+        self._engine.hit(
+            buckets=[(key, self._max_attempts) for key in keys],
+            exceeded_error=LeadRateLimitExceeded,
+        )
 
 
 class RedisLeadRateLimiter(LeadRateLimiter):
     def __init__(self, *, client: Redis, max_attempts: int, window_seconds: int) -> None:
-        self._client = client
         self._max_attempts = max_attempts
-        self._window_seconds = window_seconds
+        self._engine = RedisFixedWindowRateLimiter(
+            client=client,
+            window_seconds=window_seconds,
+            key_prefix="lead-rate:",
+        )
 
     def hit(self, *, ip_address: str | None, email: str | None = None, phone: str | None = None) -> None:
         keys = _lead_rate_limit_keys(ip_address=ip_address, email=email, phone=phone)
-        for key in keys:
-            redis_key = f"lead-rate:{key}"
-            try:
-                count = int(self._client.incr(redis_key))
-                if count == 1:
-                    self._client.expire(redis_key, self._window_seconds)
-            except RedisError:
-                continue
-            if count > self._max_attempts:
-                raise LeadRateLimitExceeded
+        self._engine.hit(
+            buckets=[(key, self._max_attempts) for key in keys],
+            exceeded_error=LeadRateLimitExceeded,
+        )
 
 
 def build_lead_rate_limiter(settings: Settings) -> LeadRateLimiter:

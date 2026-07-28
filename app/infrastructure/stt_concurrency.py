@@ -3,16 +3,8 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Protocol
 
 from app.domain.errors import SpeechConcurrencyLimitError, SpeechQueueTimeoutError
-
-
-class STTConcurrencyLimiter(Protocol):
-    """Describe the async limiter used by the speech service."""
-
-    async def acquire(self, *, user_key: str) -> "STTConcurrencyLease":
-        """Acquire one global STT slot for the given user."""
 
 
 @dataclass

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from json import JSONDecodeError
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -21,12 +21,14 @@ from app.domain.judgement_models import (
 from app.domain.models import TurnEvaluation
 from app.domain.token_counter import TokenCountedResult, TokenCounterService
 from app.infrastructure.config import Settings
-from app.infrastructure.llm_client import (
+from app.infrastructure.responses_client import (
     LLMClientError,
-    _extract_json_object,
+    OpenAICompatibleResponsesClient,
+    Transport,
     _payload_size,
     _response_to_payload,
     _sanitize_api_key,
+    parse_enveloped_json_output,
 )
 from app.infrastructure.config import is_fake_fallback_allowed
 
@@ -37,8 +39,6 @@ class JudgeClient(Protocol):
     def judge_session(self, payload: JudgeSessionInput) -> TokenCountedResult[JudgeSessionOutput]:
         ...
 
-
-Transport = Callable[[dict[str, Any]], Any]
 
 
 class JudgeOutputValidationError(ValueError):
@@ -494,7 +494,9 @@ class FakeJudgeClient:
         return "red"
 
 
-class StructuredJudgeClient:
+class StructuredJudgeClient(OpenAICompatibleResponsesClient):
+    _openai_missing_message = "openai package is required for judge providers."
+
     def __init__(
         self,
         *,
@@ -512,17 +514,19 @@ class StructuredJudgeClient:
         token_counter: TokenCounterService | None = None,
     ) -> None:
         """Configure an OpenAI/Yandex-compatible structured judge client."""
+        super().__init__(
+            base_url=base_url,
+            api_key=api_key,
+            folder_id=folder_id,
+            timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+            transport=transport,
+            debug_payload_logging=debug_payload_logging,
+        )
         self._provider = provider
-        self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
-        self._folder_id = folder_id
         self._agent_id = agent_id
         self._model_or_agent_label = model_or_agent_label
-        self._timeout_seconds = timeout_seconds
-        self._max_retries = max_retries
         self._fallback_client = fallback_client
-        self._transport = transport or self._default_transport
-        self._debug_payload_logging = debug_payload_logging
         self._token_counter = token_counter or TokenCounterService()
 
     def judge_session(self, payload: JudgeSessionInput) -> TokenCountedResult[JudgeSessionOutput]:
@@ -597,60 +601,14 @@ class StructuredJudgeClient:
             "payload_size": _payload_size(request_payload),
         }
 
-    def _default_transport(self, request_payload: dict[str, Any]) -> Any:
-        """Execute the responses API call through the optional OpenAI-compatible SDK."""
-        try:
-            from openai import OpenAI
-        except ImportError as error:
-            raise LLMClientError("openai package is required for judge providers.") from error
-
-        client = OpenAI(
-            api_key=self._api_key,
-            base_url=self._base_url,
-            project=self._folder_id,
-            timeout=self._timeout_seconds,
-        )
-        return client.responses.create(**request_payload)
-
-    @property
-    def endpoint_url(self) -> str:
-        """Return the provider endpoint used for sanitized request metadata."""
-        return f"{self._base_url}/responses"
-
-
 def parse_judge_session_output(raw_payload: dict[str, Any] | str) -> JudgeSessionOutput:
     """Parse known provider response envelopes into a strict JudgeSessionOutput."""
-    if isinstance(raw_payload, dict) and "overall_score" in raw_payload:
-        return JudgeSessionOutput.model_validate(raw_payload)
-    if isinstance(raw_payload, dict):
-        output_text = raw_payload.get("output_text")
-        if isinstance(output_text, str):
-            return JudgeSessionOutput.model_validate_json(_extract_json_object(output_text))
-        output = raw_payload.get("output")
-        if isinstance(output, list):
-            for item in output:
-                if not isinstance(item, dict):
-                    continue
-                content = item.get("content")
-                if isinstance(content, list):
-                    for chunk in content:
-                        if not isinstance(chunk, dict):
-                            continue
-                        text = chunk.get("text")
-                        if isinstance(text, str):
-                            return JudgeSessionOutput.model_validate_json(_extract_json_object(text))
-        alternatives = raw_payload.get("alternatives")
-        if isinstance(alternatives, list) and alternatives:
-            message = alternatives[0].get("message", {})
-            text = message.get("text")
-            if isinstance(text, str):
-                return JudgeSessionOutput.model_validate_json(_extract_json_object(text))
-        raise LLMClientError("Judge provider response does not contain structured text output.")
-    try:
-        decoded = json.loads(raw_payload)
-    except JSONDecodeError:
-        return JudgeSessionOutput.model_validate_json(_extract_json_object(raw_payload))
-    return parse_judge_session_output(decoded)
+    return parse_enveloped_json_output(
+        raw_payload,
+        model=JudgeSessionOutput,
+        direct_key="overall_score",
+        no_output_message="Judge provider response does not contain structured text output.",
+    )
 
 
 def build_judge_client(settings: Settings) -> JudgeClient:
