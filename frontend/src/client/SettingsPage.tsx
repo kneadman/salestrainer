@@ -3,7 +3,7 @@ import type { AuthUser } from "../types";
 import { changePassword } from "./api";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
 import { buildUserProfileViewModel } from "../viewModels";
-import { getClientErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type SettingsPageProps = {
   user: AuthUser;
@@ -55,7 +55,7 @@ export function SettingsPage({ user, onUserUpdated }: SettingsPageProps) {
       setConfirmPassword("");
       setSuccess("Пароль изменен.");
     } catch (changeError) {
-      setError(getClientErrorMessage(changeError));
+      setError(getErrorMessage(changeError));
     } finally {
       setLoading(false);
     }

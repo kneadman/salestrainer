@@ -3,7 +3,7 @@ import { listAuditLog, listOrganizations, getUsageSummary } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO, UsageSummaryDTO } from "./types";
 import { buildAuditLogViewModel } from "../viewModels";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type AdminDashboardProps = {
   onNavigate: (path: string) => void;

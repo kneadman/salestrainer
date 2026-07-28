@@ -1,5 +1,3 @@
-import { ApiError } from "../apiClient";
-import { formatDate } from "../labels";
 import type { ClientRouteState } from "./types";
 
 export function parseClientPath(path: string): ClientRouteState {
@@ -37,25 +35,4 @@ export function parseClientPath(path: string): ClientRouteState {
     return { route: "settings" };
   }
   return { route: "dashboard" };
-}
-
-export function getClientErrorMessage(error: unknown): string {
-  /** Normalize thrown client/API errors to readable UI text. */
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Неожиданная ошибка.";
-}
-
-export function formatClientDate(value: string | null | undefined): string {
-  /** Format dates consistently in the client cabinet. */
-  return formatDate(value);
-}
-
-export function percent(value: number): string {
-  /** Format decimal ratios as whole percent labels. */
-  return `${Math.round(value * 100)}%`;
 }

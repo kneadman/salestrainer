@@ -1,7 +1,6 @@
 import { formatDate, roleLabel, scenarioLabel, stageLabel, statusLabel } from "../labels";
 import type { HistorySessionSummaryDTO, HistoryTurnDTO, ClientUserAnalyticsDTO } from "../client/types";
-import type { FactsPanelDTO, RevealedFactCategory, ReportPayload, SessionPublicDTO } from "../types";
-import { isJudgeSessionOutputPayload } from "../components/reportPayload";
+import type { FactsPanelDTO, RevealedFactCategory, SessionPublicDTO } from "../types";
 
 export type ClientHistorySessionViewModel = {
   sessionId: string;
@@ -223,30 +222,5 @@ export function buildUserProfileViewModel(user: { email: string; role: string; c
     organizationName: user.client_account.name,
     passwordStatusLabel: user.must_change_password ? "Требуется смена" : "Актуален",
     passwordStatusTone: user.must_change_password ? "warning" : "good",
-  };
-}
-
-export type ReportViewModel = {
-  hasStructuredPayload: boolean;
-  executiveSummary: string;
-  overallScore: number;
-  overallGradeLabel: string;
-  blocks: ReportPayload["bento_blocks"];
-  skillScores: ReportPayload["skill_scores"];
-  recommendations: unknown[];
-  plainText: string | null;
-};
-
-export function buildReportViewModel(report: string | null, reportPayload: ReportPayload | null): ReportViewModel {
-  const payload = isJudgeSessionOutputPayload(reportPayload) ? reportPayload : null;
-  return {
-    hasStructuredPayload: payload !== null,
-    executiveSummary: payload?.executive_summary ?? "",
-    overallScore: payload?.overall_score ?? 0,
-    overallGradeLabel: payload?.overall_grade ?? "",
-    blocks: payload?.bento_blocks ?? [],
-    skillScores: payload?.skill_scores ?? [],
-    recommendations: payload?.recommendations ?? [],
-    plainText: report,
   };
 }

@@ -39,15 +39,6 @@ export function scenarioLabel(id: string | null | undefined): string {
   return id ? labels[id] ?? "Другой сценарий" : "Не указано";
 }
 
-export function providerLabel(value: string | null | undefined): string {
-  const labels: Record<string, string> = {
-    yandex_compatible: "Yandex AI Studio",
-    openai_compatible: "Совместимый провайдер",
-    fake: "Локальная тестовая модель",
-  };
-  return value ? labels[value] ?? "Другой провайдер" : "Не указано";
-}
-
 export function stageLabel(value: string | null | undefined): string {
   const labels: Record<string, string> = {
     first_contact: "Первичный контакт",
@@ -69,22 +60,6 @@ export function stageLabel(value: string | null | undefined): string {
     closed_lost: "Завершена без результата",
   };
   return value ? labels[value] ?? "Другой этап" : "Не указан";
-}
-
-export function metricNameLabel(key: string): string {
-  const labels: Record<string, string> = {
-    final_interest_score: "Итоговый интерес",
-    turn_count: "Количество сообщений",
-    client_account_id: "ID организации",
-    session_id: "ID сессии",
-    training_config_id: "ID конфига",
-    scenario_id: "Сценарий",
-    status: "Статус",
-    sessions_by_status: "Тренировки по статусам",
-    sessions_by_scenario: "Тренировки по сценариям",
-    sessions_by_training_config: "Тренировки по настройкам",
-  };
-  return labels[key] ?? "Метрика";
 }
 
 export function auditActionLabel(action: string | null | undefined): string {
@@ -132,20 +107,6 @@ export function auditEntityLabel(entityType: string | null | undefined): string 
     login_session: "Сессия входа",
   };
   return entityType ? labels[entityType] ?? "Системный объект" : "Системный объект";
-}
-
-export function usageKeyLabel(key: string): string {
-  const labels: Record<string, string> = {
-    total_sessions: "Всего тренировок",
-    finished_sessions: "Завершённые",
-    active_sessions: "Активные",
-    unique_users: "Пользователи",
-    total_turns: "Сообщения",
-    avg_final_interest_score: "Средний интерес",
-    avg_turn_count: "Среднее число ходов",
-    usage_events_count: "События использования",
-  };
-  return labels[key] ?? "Показатель";
 }
 
 export function formatDate(value: string | null | undefined): string {

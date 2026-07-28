@@ -3,7 +3,7 @@ import { createOrganization, disableOrganization, enableOrganization, listOrgani
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { OrganizationDTO } from "./types";
 import { buildOrganizationViewModel } from "../viewModels";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type OrganizationsPageProps = {
   onNavigate: (path: string) => void;

@@ -1,11 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ApiError, getMe, logout as logoutRequest } from "./api";
+import { getErrorMessage } from "./errorMessage";
 import { AdminApp } from "./admin/AdminApp";
 import { ClientApp } from "./client/ClientApp";
 import { clearLegacyTrainerSessionId, clearTrainerSessionRestoreState } from "./client/trainerSessionStorage";
 import { LoginPage } from "./components/LoginPage";
-import { DemoPage } from "./demo/DemoPage";
 import PrivacyPage from "./landing/pages/PrivacyPage";
 import CookiesPage from "./landing/pages/CookiesPage";
 import { useYandexMetrika } from "./hooks/useYandexMetrika";
@@ -15,17 +15,7 @@ import type { AuthUser } from "./types";
 
 const POST_LOGIN_REDIRECT_KEY = "salestrainer.postLoginRedirect";
 const LandingPage = lazy(() => import("./components/LandingPage").then((module) => ({ default: module.LandingPage })));
-
-function getErrorMessage(error: unknown): string {
-  /** Normalize app-level API errors for display. */
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Неожиданная ошибка.";
-}
+const DemoPage = lazy(() => import("./demo/DemoPage").then((module) => ({ default: module.DemoPage })));
 
 export default function App() {
   /** Render public, login, client cabinet, and internal admin routes. */
@@ -136,7 +126,11 @@ export default function App() {
   };
 
   if (routePathname === "/demo") {
-    return <DemoPage onNavigate={navigate} />;
+    return (
+      <Suspense fallback={<div className="app-shell">Загрузка...</div>}>
+        <DemoPage onNavigate={navigate} />
+      </Suspense>
+    );
   }
 
   if (routePathname === "/privacy") {

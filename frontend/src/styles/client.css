@@ -117,22 +117,6 @@ a.client-link-button {
   outline-offset: 2px;
 }
 
-.client-nav__count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  margin-left: 8px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.18);
-  color: #9aa9bf;
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1;
-}
-
 .client-main-shell {
   min-width: 0;
   min-height: 100dvh;
@@ -184,8 +168,7 @@ a.client-link-button {
 }
 
 .client-page h1,
-.client-panel h2,
-.client-welcome h1 {
+.client-panel h2 {
   margin: 0;
 }
 
@@ -200,8 +183,7 @@ a.client-link-button {
 
 .client-panel,
 .client-state,
-.client-stat,
-.client-welcome {
+.client-stat {
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.86);
@@ -209,14 +191,8 @@ a.client-link-button {
 
 .client-panel,
 .client-state,
-.client-stat,
-.client-welcome {
+.client-stat {
   padding: 18px;
-}
-
-.client-welcome {
-  width: min(680px, 100%);
-  margin: auto;
 }
 
 /* Trainer start screen */
@@ -1107,10 +1083,6 @@ a.client-link-button {
     height: 44px;
     min-height: 44px;
     border-radius: 14px;
-  }
-
-  .composer__voice-label {
-    display: none;
   }
 
   .composer__hint,

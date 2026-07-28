@@ -2,7 +2,8 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createBlogPost, deleteBlogPost, listBlogPosts, updateBlogPost, uploadBlogImage } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { BlogPostDTO } from "./types";
-import { formatDate, getErrorMessage } from "./utils";
+import { formatDate } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type BlogPostsPageProps = {
   onNavigate: (path: string) => void;

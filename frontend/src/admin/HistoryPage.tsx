@@ -4,7 +4,7 @@ import { buildHistorySessionViewModel, buildHistoryTurnViewModel } from "../view
 import { getHistorySession, listOrganizationHistory, listOrganizations, listTrainingConfigs } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, OrganizationDTO, TrainingConfigDTO } from "./types";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type HistoryPageProps = {
   sessionId?: string;

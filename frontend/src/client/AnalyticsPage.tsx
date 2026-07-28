@@ -4,7 +4,7 @@ import { ClientState, SimpleBars } from "./components/ClientPrimitives";
 import type { ClientUserAnalyticsDTO, MetricTrendDTO } from "./types";
 import { buildClientAnalyticsViewModel } from "../viewModels";
 import { scenarioLabel, statusLabel } from "../labels";
-import { getClientErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type AnalyticsCardProps = {
   label: string;
@@ -28,7 +28,7 @@ export function AnalyticsPage() {
       try {
         setAnalytics(await getMyAnalytics());
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setLoading(false);
       }

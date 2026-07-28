@@ -4,7 +4,7 @@ import { ReportSurface } from "../components/ReportSurface";
 import { ClientBadge, ClientState } from "./components/ClientPrimitives";
 import type { HistorySessionDetailDTO, HistorySessionSummaryDTO, TrainingConfigOptionDTO } from "./types";
 import { buildClientHistorySessionViewModel, buildClientTurnViewModel } from "../viewModels";
-import { getClientErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type HistoryPageProps = {
   sessionId?: string;
@@ -66,7 +66,7 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
       try {
         setTrainingConfigs(await getTrainingConfigs());
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setConfigsLoading(false);
       }
@@ -82,7 +82,7 @@ function HistoryList({ path, onNavigate }: { path: string; onNavigate: (path: st
       try {
         setHistory(await getHistorySessions({ status, training_config_id: trainingConfigId, limit: 100, offset: 0 }));
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setHistoryLoading(false);
       }
@@ -146,7 +146,7 @@ function HistoryDetail({ sessionId, onNavigate }: { sessionId: string; onNavigat
       try {
         setDetail(await getHistorySessionDetail(sessionId));
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setLoading(false);
       }

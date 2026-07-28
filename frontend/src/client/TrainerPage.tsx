@@ -14,7 +14,7 @@ import {
   getStoredTrainerSessionId,
   storeTrainerSessionId,
 } from "./trainerSessionStorage";
-import { getClientErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type PendingMessageSubmission = {
   idempotencyKey: string;
@@ -68,7 +68,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
         if (restoreError instanceof ApiError && restoreError.code === "not_found") {
           clearStoredTrainerSessionId(userId);
         } else {
-          setError(getClientErrorMessage(restoreError));
+          setError(getErrorMessage(restoreError));
         }
       } finally {
         setBusyAction(null);
@@ -130,7 +130,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
       setSession(response.session);
       storeTrainerSessionId(userId, response.session.session_id);
     } catch (startError) {
-      setError(getClientErrorMessage(startError));
+      setError(getErrorMessage(startError));
       setSession(null);
       clearStoredTrainerSessionId(userId);
     } finally {
@@ -165,7 +165,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
       setPendingMessageSubmission(null);
     } catch (sendError) {
       setInputValue(message);
-      setError(getClientErrorMessage(sendError));
+      setError(getErrorMessage(sendError));
     } finally {
       setBusyAction(null);
     }
@@ -204,7 +204,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
       setReportPayload(response.report_payload ?? null);
       setReportModalOpen(true);
     } catch (finishError) {
-      setError(getClientErrorMessage(finishError));
+      setError(getErrorMessage(finishError));
     } finally {
       setBusyAction(null);
     }
@@ -287,7 +287,7 @@ export function TrainerPage({ userId }: TrainerPageProps) {
                 try {
                   await handleTranscribeAudio(audio);
                 } catch (transcriptionError) {
-                  const message = getClientErrorMessage(transcriptionError);
+                  const message = getErrorMessage(transcriptionError);
                   setVoiceError(message);
                   throw new Error(message);
                 }
