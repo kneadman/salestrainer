@@ -20,23 +20,12 @@
   gap: 16px;
 }
 
-.client-trainer-layout--has-report {
-  width: min(1180px, 100%);
-  grid-template-columns: minmax(0, 320px) max-content minmax(320px, 430px);
-  gap: 16px;
-}
-
 .trainer-report-rail {
   align-self: start;
   position: sticky;
   top: 84px;
   display: flex;
   justify-content: center;
-}
-
-.trainer-report-open-button {
-  min-width: 84px;
-  white-space: nowrap;
 }
 
 .panel-card,
@@ -136,33 +125,6 @@
   color: #b0bdd2;
 }
 
-.phone-shell {
-  width: 100%;
-  padding: 12px;
-  border-radius: 34px;
-  background: linear-gradient(180deg, #242d3e 0%, #161d2c 100%);
-  box-shadow: 0 30px 80px rgba(4, 8, 18, 0.5);
-}
-
-.phone-shell__speaker {
-  width: 120px;
-  height: 22px;
-  margin: 0 auto 10px;
-  border-radius: 999px;
-  background: rgba(10, 15, 25, 0.9);
-}
-
-.phone-shell__screen {
-  height: min(86vh, 840px);
-  min-height: 680px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: 24px;
-  background:
-    linear-gradient(180deg, rgba(19, 27, 42, 0.96) 0%, rgba(11, 18, 31, 0.98) 100%);
-}
-
 .session-header {
   padding: 16px 18px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
@@ -223,11 +185,6 @@
 }
 
 .primary-button--large {
-  min-height: 48px;
-  padding: 0 18px;
-}
-
-.secondary-button--large {
   min-height: 48px;
   padding: 0 18px;
 }
@@ -430,11 +387,6 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.composer__voice-label,
-.composer__send-label {
-  display: none;
 }
 
 .composer__voice-timer {

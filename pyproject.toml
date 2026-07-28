@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sales-trainer-mvp"
 version = "0.1.0"
-description = "Interactive CLI sales trainer MVP with stateless LLM simulation."
+description = "Interactive web sales trainer with stateless LLM simulation."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -36,7 +36,6 @@ packages = [
     "app.access",
     "app.api",
     "app.application",
-    "app.cli",
     "app.client_portal",
     "app.domain",
     "app.history",

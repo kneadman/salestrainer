@@ -28,16 +28,6 @@
   outline: 1px solid rgba(45, 212, 191, 0.8);
 }
 
-.welcome-card__actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.account-line {
-  font-size: 0.92rem;
-}
-
 .auth-error-strip {
   position: relative;
   width: min(420px, calc(100% - 32px));

@@ -4,7 +4,7 @@ import { buildAuditLogViewModel } from "../viewModels";
 import { listAuditLog, listOrganizations } from "./api";
 import { EmptyState, ErrorState, LoadingState } from "./components/AdminPrimitives";
 import type { AuditLogDTO, OrganizationDTO } from "./types";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type AuditFilters = {
   organization_id: string;

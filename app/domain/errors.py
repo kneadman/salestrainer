@@ -69,10 +69,6 @@ class SpeechQueueTimeoutError(SalesTrainerError):
     """Raised when a speech request waited too long for a global worker slot."""
 
 
-class SpeechSessionAccessError(SalesTrainerError):
-    """Raised when a user cannot access the provided session for speech operations."""
-
-
 class SpeechDisabledError(SalesTrainerError):
     """Raised when speech transcription is disabled in runtime configuration."""
 

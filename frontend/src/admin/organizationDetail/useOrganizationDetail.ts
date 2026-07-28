@@ -17,7 +17,7 @@ import type {
   UsageSummaryDTO,
   UserDTO,
 } from "../types";
-import { getErrorMessage } from "../utils";
+import { getErrorMessage } from "../../errorMessage";
 
 export type UseOrganizationDetailResult = {
   organization: OrganizationDTO | null;

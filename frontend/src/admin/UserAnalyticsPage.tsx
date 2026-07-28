@@ -3,7 +3,7 @@ import { getOrganizationUserAnalytics } from "./api";
 import { Badge, EmptyState, ErrorState, LoadingState, StatCard } from "./components/AdminPrimitives";
 import type { AdminUserAnalyticsDetailDTO } from "./types";
 import { buildClientAnalyticsViewModel, buildHistorySessionViewModel, buildTeamUserViewModel } from "../viewModels";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type AdminUserAnalyticsPageProps = {
   organizationId: string;

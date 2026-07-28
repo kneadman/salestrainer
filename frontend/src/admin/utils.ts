@@ -1,4 +1,3 @@
-import { ApiError } from "../apiClient";
 import { formatDate as formatSharedDate, statusLabel as sharedStatusLabel } from "../labels";
 import type { AdminRouteState, JsonObject, OrganizationDetailTab } from "./types";
 
@@ -37,37 +36,15 @@ export function parseAdminPath(path: string): AdminRouteState {
   if (segments[1] === "audit-log") {
     return { route: "audit-log" };
   }
+  if (segments[1] === "blog") {
+    return { route: "blog" };
+  }
   return { route: "dashboard" };
-}
-
-export function getErrorMessage(error: unknown): string {
-  /** Normalize thrown API/client errors to displayable text. */
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Неожиданная ошибка.";
 }
 
 export function formatDate(value: string | null | undefined): string {
   /** Format an ISO date for compact admin tables. */
   return formatSharedDate(value);
-}
-
-export function parseJsonObject(value: string, fieldName: string): JsonObject {
-  /** Parse a textarea JSON value and require an object payload. */
-  const parsed = JSON.parse(value) as unknown;
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${fieldName}: JSON должен быть объектом.`);
-  }
-  return parsed as JsonObject;
-}
-
-export function stringifyJson(value: JsonObject | null | undefined): string {
-  /** Pretty-print stored JSON objects for textarea editing. */
-  return JSON.stringify(value ?? {}, null, 2);
 }
 
 export function auditPayloadSummary(value: JsonObject | null | undefined): string {

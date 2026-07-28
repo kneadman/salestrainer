@@ -3,7 +3,7 @@ import { getTeamUserDetail, getTeamUsers } from "./api";
 import { ClientBadge, ClientState, ClientStat } from "./components/ClientPrimitives";
 import type { HistorySessionSummaryDTO, TeamUserDTO, TeamUserDetailDTO } from "./types";
 import { buildClientHistorySessionViewModel, buildTeamUserViewModel } from "../viewModels";
-import { getClientErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type TeamPageProps = {
   userId?: string;
@@ -30,7 +30,7 @@ function TeamList({ onNavigate }: { onNavigate: (path: string) => void }) {
       try {
         setUsers(await getTeamUsers());
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setLoading(false);
       }
@@ -64,7 +64,7 @@ function TeamUserDetail({ userId, onNavigate }: { userId: string; onNavigate: (p
       try {
         setDetail(await getTeamUserDetail(userId));
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setLoading(false);
       }

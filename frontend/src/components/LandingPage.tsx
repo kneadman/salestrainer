@@ -15,6 +15,7 @@ import PilotSection from "@/landing/sections/PilotSection";
 import DemoFormSection from "@/landing/sections/DemoFormSection";
 import FAQSection from "@/landing/sections/FAQSection";
 import Footer from "@/landing/sections/Footer";
+import { LatestPostsSection } from "./LatestPostsSection";
 
 type LeadStatus = "idle" | "submitting" | "success" | "error";
 
@@ -174,6 +175,7 @@ export function LandingPage({ authenticated }: LandingPageProps) {
           onLeadFormFocus={handleLeadFormFocus}
         />
         <FAQSection />
+        <LatestPostsSection />
         <Footer />
       </div>
 

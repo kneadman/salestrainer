@@ -4,7 +4,7 @@ import { getHistorySessions, getMyAnalytics, getTeamUsageSummary } from "./api";
 import { ClientState, ClientStat } from "./components/ClientPrimitives";
 import type { ClientUserAnalyticsDTO, HistorySessionSummaryDTO, TeamUsageSummaryDTO } from "./types";
 import { buildClientAnalyticsViewModel, buildClientHistorySessionViewModel } from "../viewModels";
-import { getClientErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type DashboardPageProps = {
   user: AuthUser;
@@ -35,7 +35,7 @@ export function DashboardPage({ user, onNavigate }: DashboardPageProps) {
           setTeamSummary(await getTeamUsageSummary().catch(() => null));
         }
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setLoading(false);
       }

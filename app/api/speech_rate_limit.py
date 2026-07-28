@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import logging
-import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 
 from redis import Redis
 from redis.exceptions import RedisError
 
 from app.infrastructure.config import Settings
+from app.infrastructure.rate_limit import InMemoryFixedWindowRateLimiter, RedisFixedWindowRateLimiter
 from app.infrastructure.redis_client import create_redis_client
 
 logger = logging.getLogger(__name__)
@@ -37,12 +36,6 @@ class NoopSpeechRateLimiter(SpeechRateLimiter):
         return None
 
 
-@dataclass
-class _Bucket:
-    count: int
-    reset_at: float
-
-
 class InMemorySpeechRateLimiter(SpeechRateLimiter):
     """Apply local fixed-window STT limits for one process."""
 
@@ -56,27 +49,18 @@ class InMemorySpeechRateLimiter(SpeechRateLimiter):
     ) -> None:
         self._max_user_attempts = max_user_attempts
         self._max_global_attempts = max_global_attempts
-        self._window_seconds = window_seconds
-        self._time_provider = time_provider
-        self._buckets: dict[str, _Bucket] = {}
-        self._lock = threading.Lock()
+        self._engine = InMemoryFixedWindowRateLimiter(window_seconds=window_seconds, time_provider=time_provider)
 
     def hit(self, *, user_id: str) -> None:
         """Increment user/global buckets and reject requests over either limit."""
-        now = self._time_provider()
-        with self._lock:
-            for key, max_attempts in _speech_rate_limit_keys(
+        self._engine.hit(
+            buckets=_speech_rate_limit_keys(
                 user_id=user_id,
                 max_user_attempts=self._max_user_attempts,
                 max_global_attempts=self._max_global_attempts,
-            ):
-                bucket = self._buckets.get(key)
-                if bucket is None or bucket.reset_at <= now:
-                    bucket = _Bucket(count=0, reset_at=now + self._window_seconds)
-                    self._buckets[key] = bucket
-                bucket.count += 1
-                if bucket.count > max_attempts:
-                    raise SpeechRateLimitExceeded
+            ),
+            exceeded_error=SpeechRateLimitExceeded,
+        )
 
 
 class RedisSpeechRateLimiter(SpeechRateLimiter):
@@ -90,28 +74,25 @@ class RedisSpeechRateLimiter(SpeechRateLimiter):
         max_global_attempts: int,
         window_seconds: int,
     ) -> None:
-        self._client = client
         self._max_user_attempts = max_user_attempts
         self._max_global_attempts = max_global_attempts
-        self._window_seconds = window_seconds
+        self._engine = RedisFixedWindowRateLimiter(
+            client=client,
+            window_seconds=window_seconds,
+            key_prefix="stt-rate:",
+            on_redis_error=lambda: logger.warning("speech_rate_limiter_redis_hit_failed", exc_info=True),
+        )
 
     def hit(self, *, user_id: str) -> None:
         """Increment Redis user/global buckets and reject requests over either limit."""
-        for key, max_attempts in _speech_rate_limit_keys(
-            user_id=user_id,
-            max_user_attempts=self._max_user_attempts,
-            max_global_attempts=self._max_global_attempts,
-        ):
-            redis_key = f"stt-rate:{key}"
-            try:
-                count = int(self._client.incr(redis_key))
-                if count == 1:
-                    self._client.expire(redis_key, self._window_seconds)
-            except RedisError:
-                logger.warning("speech_rate_limiter_redis_hit_failed", exc_info=True)
-                continue
-            if count > max_attempts:
-                raise SpeechRateLimitExceeded
+        self._engine.hit(
+            buckets=_speech_rate_limit_keys(
+                user_id=user_id,
+                max_user_attempts=self._max_user_attempts,
+                max_global_attempts=self._max_global_attempts,
+            ),
+            exceeded_error=SpeechRateLimitExceeded,
+        )
 
 
 def build_speech_rate_limiter(settings: Settings) -> SpeechRateLimiter:

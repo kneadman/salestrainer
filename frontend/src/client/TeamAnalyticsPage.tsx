@@ -3,7 +3,7 @@ import { getTeamUsageSummary } from "./api";
 import { ClientState, ClientStat, SimpleBars } from "./components/ClientPrimitives";
 import type { TeamUsageSummaryDTO } from "./types";
 import { scenarioLabel, statusLabel } from "../labels";
-import { getClientErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 export function TeamAnalyticsPage() {
   /** Render organization-level analytics for client leads. */
@@ -17,7 +17,7 @@ export function TeamAnalyticsPage() {
       try {
         setSummary(await getTeamUsageSummary());
       } catch (loadError) {
-        setError(getClientErrorMessage(loadError));
+        setError(getErrorMessage(loadError));
       } finally {
         setLoading(false);
       }

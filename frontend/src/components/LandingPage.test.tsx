@@ -5,6 +5,7 @@ const submitLeadMock = vi.fn();
 
 vi.mock("../api", () => ({
   submitLead: (payload: unknown) => submitLeadMock(payload),
+  listBlogPostsPublic: vi.fn().mockResolvedValue({ items: [] }),
 }));
 
 describe("LandingPage", () => {

@@ -177,46 +177,6 @@ class HistoryRepository:
         self._session.commit()
         return int(result.rowcount or 0)
 
-    def append_turn(
-        self,
-        *,
-        session_id: UUID,
-        turn_index: int,
-        manager_message: str,
-        client_answer: str,
-        interest_before: int,
-        interest_delta: int,
-        interest_after: int,
-        stage_before: str,
-        stage_after: str,
-        client_state_snapshot: dict[str, object] | None,
-        llm_payload_snapshot: dict[str, object] | None,
-        llm_response_snapshot: dict[str, object] | None,
-        evaluation_snapshot: dict[str, object] | None,
-        created_at: datetime,
-    ) -> TrainingTurnRecord:
-        """Append one durable turn row for a processed runtime turn."""
-        record = TrainingTurnRecord(
-            session_id=session_id,
-            turn_index=turn_index,
-            manager_message=manager_message,
-            client_answer=client_answer,
-            interest_before=interest_before,
-            interest_delta=interest_delta,
-            interest_after=interest_after,
-            stage_before=stage_before,
-            stage_after=stage_after,
-            client_state_snapshot=client_state_snapshot,
-            llm_payload_snapshot=llm_payload_snapshot,
-            llm_response_snapshot=llm_response_snapshot,
-            evaluation_snapshot=evaluation_snapshot,
-            created_at=created_at,
-        )
-        self._session.add(record)
-        self._session.commit()
-        self._session.refresh(record)
-        return record
-
     def upsert_report(
         self,
         *,

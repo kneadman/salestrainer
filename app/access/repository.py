@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.access.models import (
     AuditLog,
     ClientTrainingConfig,
-    LLMProviderConfig,
     RuntimeTrainingConfig,
     TrainingSessionOwnership,
     UserTrainingConfig,
@@ -135,9 +134,6 @@ class AccessRepository:
 
     def get_training_config_by_id(self, training_config_id: UUID) -> ClientTrainingConfig | None:
         return self._session.get(ClientTrainingConfig, training_config_id)
-
-    def get_llm_provider_config_by_id(self, config_id: UUID) -> LLMProviderConfig | None:
-        return self._session.get(LLMProviderConfig, config_id)
 
     def create_training_session_ownership(
         self,

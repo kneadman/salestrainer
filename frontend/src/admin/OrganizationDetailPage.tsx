@@ -23,7 +23,7 @@ import {
   useOrganizationDetail,
 } from "./organizationDetail";
 import type { OrganizationDetailTab, TrainingConfigDTO, UserDTO } from "./types";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../errorMessage";
 
 type OrganizationDetailPageProps = {
   organizationId: string;

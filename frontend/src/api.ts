@@ -92,6 +92,35 @@ export function submitLead(payload: Record<string, unknown>): Promise<{ status: 
   });
 }
 
+export type BlogPostPublicDTO = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  cover_image_url: string | null;
+  author_name: string;
+  published_at: string | null;
+};
+
+export type BlogPostDetailDTO = BlogPostPublicDTO & {
+  content: string;
+};
+
+export type BlogPostListResponse = {
+  items: BlogPostPublicDTO[];
+  total: number;
+};
+
+export function listBlogPostsPublic(limit = 9, offset = 0): Promise<BlogPostListResponse> {
+  /** Load published blog posts for the public site. */
+  return request<BlogPostListResponse>(`/api/blog/posts?limit=${limit}&offset=${offset}`);
+}
+
+export function getBlogPostPublic(slug: string): Promise<BlogPostDetailDTO> {
+  /** Load one published blog post by slug. */
+  return request<BlogPostDetailDTO>(`/api/blog/posts/${slug}`);
+}
+
 function _extensionForAudio(mimeType: string): string {
   /** Keep a stable file extension so the backend sees a matching container hint. */
   if (mimeType.includes("ogg")) {
