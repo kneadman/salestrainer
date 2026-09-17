@@ -62,7 +62,10 @@ class ClientAccountBriefDTO(BaseModel):
 class UserDTO(BaseModel):
     id: UUID
     client_account_id: UUID
-    email: EmailStr
+    # Plain str on purpose: this is an output DTO and must serialize whatever is
+    # stored. EmailStr rejects reserved TLDs such as .local, which the admin CLI
+    # legitimately uses for bootstrap accounts, turning list users into a 500.
+    email: str
     role: str
     is_active: bool
     must_change_password: bool

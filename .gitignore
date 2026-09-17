@@ -54,3 +54,5 @@ Thumbs.db
 /uv.lock
 
 /docs/screenshots/
+# Local deploy helper scripts
+/.deploy-tmp/

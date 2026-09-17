@@ -211,6 +211,27 @@ def test_organization_create_duplicate_disable_enable_and_audit() -> None:
     session.close()
 
 
+def test_list_users_serializes_reserved_tld_email() -> None:
+    """Regression: bootstrap accounts use .local, which EmailStr rejects.
+
+    The admin CLI creates the first internal admin as admin@replikor.local, and
+    EmailStr treats .local as a special-use name. Because UserDTO is an output
+    schema, that made GET /organizations/{id}/users fail with a 500.
+    """
+    session = _create_session()
+    _seed_user(session, email="admin@example.com", role="internal_admin", slug="platform")
+    bootstrap = _seed_user(session, email="root@replikor.local", role="internal_admin", slug="bootstrap")
+    client = _create_client(session)
+    _login(client, email="admin@example.com")
+
+    response = client.get(f"/api/internal/organizations/{bootstrap.client_account_id}/users")
+
+    assert response.status_code == 200
+    emails = [user["email"] for user in response.json()]
+    assert "root@replikor.local" in emails
+    session.close()
+
+
 def test_user_management_create_roles_reject_admin_reset_disable_enable() -> None:
     session = _create_session()
     client = _admin_client(session)

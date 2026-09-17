@@ -1,0 +1,43 @@
+# Production override for docker-compose.yml.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+#
+# Why this file exists:
+#   - pins the compose network subnet so TRUSTED_PROXY_IPS / set_real_ip_from are stable
+#   - publishes the frontend only on 127.0.0.1 (TLS is terminated by the host nginx)
+#   - adds restart policies so the stack survives reboots (base file only sets one
+#     for snapshot-scheduler)
+#
+# The host nginx terminates TLS and proxies to 127.0.0.1:8080. If you change the
+# subnet here, update TRUSTED_PROXY_IPS in .env and set_real_ip_from in
+# deploy/nginx/default.conf to match.
+
+services:
+  migrate:
+    restart: "no"
+
+  backend:
+    restart: unless-stopped
+
+  frontend:
+    restart: unless-stopped
+    # The base file publishes "8080:80" on every interface. Compose merges port
+    # lists instead of replacing them, so use !override to drop that entry.
+    ports: !override
+      - "127.0.0.1:8080:80"
+
+  redis:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  snapshot-scheduler:
+    restart: unless-stopped
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
