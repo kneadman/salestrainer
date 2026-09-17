@@ -9,8 +9,24 @@ def test_nginx_proxies_api_and_auth_to_backend() -> None:
 
     assert "location /api/" in config
     assert "location /auth/" in config
-    assert config.count("proxy_pass http://backend:8000") >= 2
+    assert config.count("proxy_pass $backend_upstream") >= 2
     assert "try_files $uri $uri/ /index.html" in config
+
+
+def test_nginx_re_resolves_backend_instead_of_caching_its_ip() -> None:
+    """A recreated backend must not need a frontend restart.
+
+    nginx caches the IP of a literal ``proxy_pass http://backend:8000`` at startup,
+    so after a backend container is recreated the running frontend proxies to the
+    stale address and every /api and /auth request returns 502. Passing the upstream
+    through a variable plus a resolver makes nginx re-resolve.
+    """
+    config = Path("deploy/nginx/default.conf").read_text(encoding="utf-8")
+
+    assert "resolver 127.0.0.11" in config
+    assert "set $backend_upstream http://backend:8000;" in config
+    # A literal proxy_pass with a hostname would cache the address again.
+    assert "proxy_pass http://backend:8000" not in config
 
 
 def test_nginx_read_timeout_covers_llm_retries() -> None:
