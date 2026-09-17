@@ -257,8 +257,9 @@ def reasoning_params(mode: str) -> dict[str, Any]:
     Supported values:
 
     - ``provider_default`` — send nothing and let the router/model decide.
-    - ``off`` — disable hidden thinking. Sent as ``thinking: {"type": "disabled"}``,
-      which OpenAI-compatible routers map onto the underlying vendor control.
+    - ``off`` — disable hidden thinking. Sent as ``thinking: {"type": "disabled"}``
+      through ``extra_body``, which OpenAI-compatible routers map onto the
+      underlying vendor control.
     - ``effort:<minimal|low|medium|high>`` — send ``reasoning_effort``.
 
     Unknown values are rejected early instead of silently sending a parameter the
@@ -349,7 +350,9 @@ class OpenAICompatibleClient:
                 base_url=self._base_url,
                 timeout=self._timeout_seconds,
             )
-            return client.chat.completions.create(**self._chat_completions_request(request_payload))
+            return client.chat.completions.create(
+                **self._with_reasoning_params(self._chat_completions_request(request_payload))
+            )
 
         client = OpenAI(
             api_key=self._api_key,
@@ -357,7 +360,23 @@ class OpenAICompatibleClient:
             project=self._folder_id,
             timeout=self._timeout_seconds,
         )
-        return client.responses.create(**request_payload)
+        return client.responses.create(**self._with_reasoning_params(request_payload))
+
+    def _with_reasoning_params(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Attach vendor reasoning controls where the OpenAI SDK expects them.
+
+        The SDK validates its keyword arguments, so a vendor extension such as
+        ``thinking`` cannot be passed at the top level: it raises
+        ``Completions.create() got an unexpected keyword argument 'thinking'``,
+        which failed every LLM call. ``extra_body`` is the SDK's documented escape
+        hatch and is merged into the JSON request body verbatim, which is where
+        OpenRouter-style reasoning controls belong.
+        """
+        if not self._reasoning_params:
+            return request
+        extra_body = dict(request.get("extra_body") or {})
+        extra_body.update(self._reasoning_params)
+        return {**request, "extra_body": extra_body}
 
     def _chat_completions_request(self, request_payload: dict[str, Any]) -> dict[str, Any]:
         """Map the internal request payload onto the ``/chat/completions`` wire shape."""
@@ -386,5 +405,4 @@ class OpenAICompatibleClient:
                 }
             else:
                 request["response_format"] = {"type": "json_object"}
-        request.update(self._reasoning_params)
         return request

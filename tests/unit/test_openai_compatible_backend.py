@@ -150,7 +150,13 @@ def test_reasoning_params_rejects_unknown_mode() -> None:
             reasoning_params(mode)
 
 
-def test_reasoning_mode_off_is_added_to_chat_completions_request() -> None:
+def test_reasoning_mode_off_is_routed_through_extra_body() -> None:
+    """``thinking`` is a vendor extension, so it must not be an SDK kwarg.
+
+    Passing it at the top level made the OpenAI SDK raise
+    ``Completions.create() got an unexpected keyword argument 'thinking'``,
+    which failed every LLM call on production.
+    """
     client = OpenAICompatibleClient(
         base_url="https://router.example.test/v1",
         api_key="k",
@@ -159,9 +165,38 @@ def test_reasoning_mode_off_is_added_to_chat_completions_request() -> None:
         reasoning_mode="off",
     )
 
-    request = client._chat_completions_request({"input": "hello"})
+    request = client._with_reasoning_params(client._chat_completions_request({"input": "hello"}))
 
-    assert request["thinking"] == {"type": "disabled"}
+    assert "thinking" not in request
+    assert request["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+def test_reasoning_mode_effort_also_uses_extra_body() -> None:
+    client = OpenAICompatibleClient(
+        base_url="https://router.example.test/v1",
+        api_key="k",
+        model="m",
+        api_style="chat_completions",
+        reasoning_mode="effort:low",
+    )
+
+    request = client._with_reasoning_params(client._chat_completions_request({"input": "hello"}))
+
+    assert request["extra_body"] == {"reasoning_effort": "low"}
+
+
+def test_reasoning_params_are_merged_into_existing_extra_body() -> None:
+    client = OpenAICompatibleClient(
+        base_url="https://router.example.test/v1",
+        api_key="k",
+        model="m",
+        api_style="chat_completions",
+        reasoning_mode="off",
+    )
+
+    request = client._with_reasoning_params({"model": "m", "extra_body": {"top_k": 5}})
+
+    assert request["extra_body"] == {"top_k": 5, "thinking": {"type": "disabled"}}
 
 
 def test_reasoning_mode_provider_default_keeps_request_clean() -> None:
@@ -172,10 +207,55 @@ def test_reasoning_mode_provider_default_keeps_request_clean() -> None:
         api_style="chat_completions",
     )
 
-    request = client._chat_completions_request({"input": "hello"})
+    request = client._with_reasoning_params(client._chat_completions_request({"input": "hello"}))
 
     assert "thinking" not in request
     assert "reasoning_effort" not in request
+    # Nothing to send, so the SDK call stays byte-identical to before the feature.
+    assert "extra_body" not in request
+
+
+def test_default_transport_kwargs_are_accepted_by_the_openai_sdk() -> None:
+    """Regression guard: the real SDK must accept the kwargs we build.
+
+    The tests above only inspect the dict we hand to the SDK. The production bug
+    was that ``thinking`` reached ``client.chat.completions.create(**request)`` as
+    a keyword argument and the SDK rejected it before sending anything:
+    ``Completions.create() got an unexpected keyword argument 'thinking'``.
+    Binding against the real SDK signature reproduces that without a network call.
+    """
+    import inspect
+
+    from openai import OpenAI
+
+    openai_client = OpenAI(api_key="k")
+    for mode in ("provider_default", "off", "effort:low"):
+        # chat/completions shape
+        chat_client = OpenAICompatibleClient(
+            base_url="https://router.example.test/v1",
+            api_key="k",
+            model="m",
+            api_style="chat_completions",
+            reasoning_mode=mode,
+        )
+        chat_request = chat_client._with_reasoning_params(
+            chat_client._chat_completions_request({"input": "hello"})
+        )
+        # Raises TypeError on an unsupported keyword, exactly like production did.
+        inspect.signature(openai_client.chat.completions.create).bind(**chat_request)
+
+        # responses shape
+        responses_client = OpenAICompatibleClient(
+            base_url="https://router.example.test/v1",
+            api_key="k",
+            model="m",
+            api_style="responses",
+            reasoning_mode=mode,
+        )
+        responses_request = responses_client._with_reasoning_params(
+            {"model": "m", "input": "hello"}
+        )
+        inspect.signature(openai_client.responses.create).bind(**responses_request)
 
 
 def test_reasoning_mode_is_validated_at_construction() -> None:
