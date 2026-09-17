@@ -31,13 +31,23 @@ from sqlalchemy.orm import Session
 from app.access.models import RuntimeTrainingConfig
 from app.access.persona_pool_repository import PersonaPoolRepository
 from app.application.persona_generation_service import PersonaGenerationService
-from app.domain.contract_versions import PERSONA_PROMPT_VERSION
 from app.domain.errors import PersonaGenerationError
 from app.domain.models import PersonaProfile
 from app.domain.token_counter import TokenCountedResult
 from app.prompts.versions import prompt_revisions
 
 logger = logging.getLogger(__name__)
+
+
+def pool_prompt_version() -> str:
+    """Return the persona-prompt revision used as part of the pool key.
+
+    The durable history column keeps the stable ``PERSONA_PROMPT_VERSION`` label
+    for backwards compatibility, but the reserve must be keyed by the *content*
+    revision: otherwise editing ``persona_generator.md`` would leave sessions
+    served personas produced by the previous prompt.
+    """
+    return prompt_revisions()["persona"]
 
 
 def build_pool_context_hash(training_config: RuntimeTrainingConfig) -> str:
@@ -114,7 +124,7 @@ class PersonaPoolService:
                 training_config_id=training_config.id,
                 scenario_id=scenario_id,
                 context_hash=context_hash,
-                prompt_version=PERSONA_PROMPT_VERSION,
+                prompt_version=pool_prompt_version(),
             )
         except Exception:
             # A failed statement leaves the session unusable until it is rolled
@@ -159,7 +169,7 @@ class PersonaPoolService:
             training_config_id=training_config.id,
             scenario_id=scenario_id,
             context_hash=self.context_hash_for(training_config),
-            prompt_version=PERSONA_PROMPT_VERSION,
+            prompt_version=pool_prompt_version(),
         )
 
     def refill(
@@ -181,7 +191,7 @@ class PersonaPoolService:
                 training_config_id=training_config.id,
                 scenario_id=scenario_id,
                 context_hash=self.context_hash_for(training_config),
-                prompt_version=PERSONA_PROMPT_VERSION,
+                prompt_version=pool_prompt_version(),
             )
             available = self.available_count(training_config=training_config, scenario_id=scenario_id)
         except Exception:
@@ -218,6 +228,9 @@ class PersonaPoolService:
                     scenario_id=scenario_id,
                     context_hash=self.context_hash_for(training_config),
                     persona=result.value.model_dump(mode="json"),
+                    # Explicit, not a hidden default: the write key must stay
+                    # identical to the read key in claim()/available_count().
+                    persona_prompt_version=pool_prompt_version(),
                 )
             except Exception:
                 self._rollback()

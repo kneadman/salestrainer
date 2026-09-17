@@ -6,7 +6,19 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.access.models import ClientTrainingConfig, PersonaPoolEntry
-from app.domain.contract_versions import PERSONA_PROMPT_VERSION, PERSONA_SCHEMA_VERSION
+from app.domain.contract_versions import PERSONA_SCHEMA_VERSION
+
+
+def default_persona_pool_prompt_version() -> str:
+    """Return the pool's default prompt revision.
+
+    Imported lazily: ``app.prompts.versions`` reads prompt files from disk, and
+    the access layer must stay importable in contexts where those files are not
+    the ones under test.
+    """
+    from app.prompts.versions import prompt_revisions
+
+    return prompt_revisions()["persona"]
 
 
 class PersonaPoolRepository:
@@ -78,7 +90,7 @@ class PersonaPoolRepository:
         scenario_id: str,
         context_hash: str,
         persona: dict,
-        persona_prompt_version: str = PERSONA_PROMPT_VERSION,
+        persona_prompt_version: str | None = None,
         persona_schema_version: str = PERSONA_SCHEMA_VERSION,
     ) -> PersonaPoolEntry:
         """Persist one ready persona for later claim."""
@@ -89,7 +101,7 @@ class PersonaPoolRepository:
             context_hash=context_hash,
             persona=persona,
             persona_schema_version=persona_schema_version,
-            persona_prompt_version=persona_prompt_version,
+            persona_prompt_version=persona_prompt_version or default_persona_pool_prompt_version(),
         )
         self._session.add(entry)
         self._session.commit()
