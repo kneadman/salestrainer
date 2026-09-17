@@ -18,7 +18,6 @@ import time
 
 from app.application.persona_generation_service import PersonaGenerationService
 from app.application.persona_pool_service import PersonaPoolService
-from app.domain.scenarios import list_scenarios
 from app.infrastructure.config import get_settings
 from app.infrastructure.db import get_session_factory, import_model_modules
 
@@ -34,7 +33,9 @@ def run_refill_once() -> int:
     """
     import_model_modules()
     settings = get_settings()
-    scenario_ids = [scenario.id for scenario in list_scenarios()]
+    # Only the configured scenarios: the UI resolves every session to the default
+    # scenario, so warming the rest would pay for personas nothing can claim.
+    scenario_ids = settings.resolved_persona_pool_scenario_ids()
     with get_session_factory()() as session:
         generation_service = PersonaGenerationService(session, settings=settings)
         pool_service = PersonaPoolService(

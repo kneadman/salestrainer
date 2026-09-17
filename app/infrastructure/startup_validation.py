@@ -37,12 +37,31 @@ def _validate_secret_encryption(settings: Settings) -> None:
         raise RuntimeConfigurationError(str(error)) from error
 
 
+def _validate_persona_pool(settings: Settings) -> None:
+    """Reject unknown scenario ids in PERSONA_POOL_SCENARIO_IDS at startup.
+
+    The scenario list is configuration-driven and a typo would otherwise surface
+    only much later, as a background worker that silently warms nothing.
+    """
+    from app.domain.errors import UnknownScenarioError
+    from app.domain.scenarios import get_scenario
+
+    for scenario_id in settings.resolved_persona_pool_scenario_ids():
+        try:
+            get_scenario(scenario_id)
+        except UnknownScenarioError as error:
+            raise LLMProviderConfigurationError(
+                f"Unknown scenario id in PERSONA_POOL_SCENARIO_IDS: '{scenario_id}'."
+            ) from error
+
+
 def _validate_llm_runtime(settings: Settings) -> None:
     """Reject unknown backends, incomplete Yandex config, and fake fallback in production-like envs."""
     backend = settings.llm_backend.lower().strip()
     if backend not in _ALLOWED_LLM_BACKENDS:
         raise LLMProviderConfigurationError(f"Unknown llm_backend '{settings.llm_backend}'.")
     _validate_reasoning_mode(settings)
+    _validate_persona_pool(settings)
     if settings.allow_fake_llm_fallback:
         raise LLMProviderConfigurationError(
             "ALLOW_FAKE_LLM_FALLBACK is not permitted outside local/dev/test/demo environments."

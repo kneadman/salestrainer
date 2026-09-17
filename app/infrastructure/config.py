@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     persona_pool_refill_batch_size: int = Field(default=4, ge=1, le=25)
     # Seconds between background refill sweeps of the reserve.
     persona_pool_refill_interval_seconds: int = Field(default=120, ge=10, le=3600)
+    # Scenarios to keep warm, comma-separated. Empty means "only the default
+    # scenario", which is what the current UI can actually reach: the client sends
+    # a training config but never a scenario id, so warming every scenario would
+    # pay for personas no request can ever claim.
+    persona_pool_scenario_ids: str = ""
     default_training_scenario_id: str = "first_contact_discovery"
     auth_cookie_name: str = "salestrainer_session"
     auth_session_ttl_seconds: int = 1209600
@@ -95,6 +100,17 @@ class Settings(BaseSettings):
     @property
     def is_local_env(self) -> bool:
         return self.app_env.lower().strip() == "local"
+
+    def resolved_persona_pool_scenario_ids(self) -> list[str]:
+        """Return the scenarios the persona reserve should be kept warm for.
+
+        Defaults to the default scenario alone. The UI always asks for a training
+        config and never for a scenario, so every reachable session resolves to
+        ``default_training_scenario_id``; warming the other scenarios would burn
+        real LLM calls on personas that can never be claimed.
+        """
+        configured = [item.strip() for item in self.persona_pool_scenario_ids.split(",") if item.strip()]
+        return configured or [self.default_training_scenario_id]
 
 
 def is_fake_fallback_allowed(settings: Settings) -> bool:

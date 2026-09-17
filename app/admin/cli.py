@@ -319,9 +319,14 @@ def _snapshot_token_usage(
 
 
 def _warm_persona_pool(*, db_session, scenario_ids: list[str] | None) -> str:  # type: ignore[no-untyped-def]
-    """Refill the pre-generated persona reserve for active training configs."""
+    """Refill the pre-generated persona reserve for active training configs.
+
+    Without explicit ``--scenario-id`` values this warms
+    ``PERSONA_POOL_SCENARIO_IDS`` (the default scenario when unset), matching what
+    the background worker does. Pass ``--all-scenarios`` to warm every scenario.
+    """
     settings = get_settings()
-    resolved_scenario_ids = scenario_ids or [scenario.id for scenario in list_scenarios()]
+    resolved_scenario_ids = scenario_ids or settings.resolved_persona_pool_scenario_ids()
     generation_service = PersonaGenerationService(db_session, settings=settings)
     pool_service = PersonaPoolService(
         db_session,
@@ -389,7 +394,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--scenario-id",
         action="append",
         dest="scenario_ids",
-        help="Scenario id to refill (repeatable; default: all universal scenarios)",
+        help="Scenario id to refill (repeatable; default: PERSONA_POOL_SCENARIO_IDS)",
+    )
+    warm_pool_parser.add_argument(
+        "--all-scenarios",
+        action="store_true",
+        dest="all_scenarios",
+        help="Refill every universal scenario instead of the configured subset",
     )
 
     return parser
@@ -473,9 +484,12 @@ def run_cli(argv: list[str] | None = None) -> int:
                     date_str=args.date,
                 )
             elif args.command == "warm-persona-pool":
+                requested_scenarios = args.scenario_ids
+                if args.all_scenarios:
+                    requested_scenarios = [scenario.id for scenario in list_scenarios()]
                 message = _warm_persona_pool(
                     db_session=session,
-                    scenario_ids=args.scenario_ids,
+                    scenario_ids=requested_scenarios,
                 )
             else:
                 message = _cleanup_expired_sessions(identity_repository=identity_repository)

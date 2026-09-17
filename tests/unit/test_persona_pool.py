@@ -316,6 +316,29 @@ def test_invalid_pooled_persona_is_discarded_as_a_miss() -> None:
     assert service.available_count(training_config=config, scenario_id="first_contact_discovery") == 2
 
 
+def test_pool_scenarios_default_to_the_default_scenario() -> None:
+    """The UI never sends a scenario id, so only the default one is reachable."""
+    from app.infrastructure.config import Settings
+
+    settings = Settings(app_env="local")
+
+    assert settings.resolved_persona_pool_scenario_ids() == [settings.default_training_scenario_id]
+
+
+def test_pool_scenarios_honour_an_explicit_list() -> None:
+    from app.infrastructure.config import Settings
+
+    settings = Settings(
+        app_env="local",
+        persona_pool_scenario_ids="first_contact_discovery, objection_handling",
+    )
+
+    assert settings.resolved_persona_pool_scenario_ids() == [
+        "first_contact_discovery",
+        "objection_handling",
+    ]
+
+
 def test_refill_all_active_configs_covers_every_scenario() -> None:
     session = _create_session()
     _persist_config(session)

@@ -121,3 +121,54 @@ def test_validate_runtime_settings_accepts_complete_yandex_config_in_production(
             yandex_persona_agent_id="persona-agent",
         )
     )
+
+
+def test_validate_runtime_settings_rejects_unknown_reasoning_mode() -> None:
+    with pytest.raises(LLMProviderConfigurationError, match="llm_reasoning_mode"):
+        validate_runtime_settings(
+            Settings(
+                app_env="production",
+                llm_backend="openai_compatible",
+                allow_fake_llm_fallback=False,
+                database_url="postgresql+psycopg://user:pass@db:5432/sales_trainer",
+                secret_encryption_key="prod-secret",
+                llm_base_url="https://router.example/v1",
+                llm_api_key="key",
+                llm_model="model",
+                llm_reasoning_mode="sometimes",
+            )
+        )
+
+
+def test_validate_runtime_settings_rejects_unknown_pool_scenario() -> None:
+    """A typo would otherwise leave the background worker silently warming nothing."""
+    with pytest.raises(LLMProviderConfigurationError, match="PERSONA_POOL_SCENARIO_IDS"):
+        validate_runtime_settings(
+            Settings(
+                app_env="production",
+                llm_backend="openai_compatible",
+                allow_fake_llm_fallback=False,
+                database_url="postgresql+psycopg://user:pass@db:5432/sales_trainer",
+                secret_encryption_key="prod-secret",
+                llm_base_url="https://router.example/v1",
+                llm_api_key="key",
+                llm_model="model",
+                persona_pool_scenario_ids="not_a_real_scenario",
+            )
+        )
+
+
+def test_validate_runtime_settings_accepts_configured_pool_scenarios() -> None:
+    validate_runtime_settings(
+        Settings(
+            app_env="production",
+            llm_backend="openai_compatible",
+            allow_fake_llm_fallback=False,
+            database_url="postgresql+psycopg://user:pass@db:5432/sales_trainer",
+            secret_encryption_key="prod-secret",
+            llm_base_url="https://router.example/v1",
+            llm_api_key="key",
+            llm_model="model",
+            persona_pool_scenario_ids="first_contact_discovery, objection_handling",
+        )
+    )
