@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
-from app.domain.models import PersonaGenerationInput, PersonaGenerationOutput, PersonaProfile
+from app.domain.models import STATUS_QUO_MARKERS, PersonaGenerationInput, PersonaGenerationOutput, PersonaProfile
 from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.token_counter import TokenCountedResult, TokenCounterService
 from app.infrastructure.responses_client import (
@@ -234,17 +234,7 @@ def validate_generated_persona(
         raise PersonaGenerationBusinessValidationError("Generated persona must include at least two alternative_solutions.")
 
     alternatives_joined = " | ".join(solution.lower() for solution in persona.alternative_solutions)
-    status_quo_markers = [
-        "статус-кво",
-        "ничего не менять",
-        "как сейчас",
-        "текущий процесс",
-        "оставить текущ",
-        "продолжать",
-        "status quo",
-        "status-quo",
-    ]
-    if not any(marker in alternatives_joined for marker in status_quo_markers):
+    if not any(marker in alternatives_joined for marker in STATUS_QUO_MARKERS):
         raise PersonaGenerationBusinessValidationError(
             "Generated persona alternative_solutions must include status quo."
         )

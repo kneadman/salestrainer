@@ -350,7 +350,56 @@ def test_persona_profile_requires_status_quo_alternative() -> None:
         PersonaProfile.model_validate(payload)
 
 
-def test_persona_generation_output_json_schema_does_not_contain_legacy_fields() -> None:
+@pytest.mark.parametrize(
+    "status_quo_phrase",
+    [
+        "оставить как есть",
+        "Оставить всё как есть",
+        "сохранить как есть",
+        "работать как сейчас",
+        "оставить текущий процесс",
+        "ничего не менять",
+    ],
+)
+def test_persona_profile_accepts_natural_status_quo_phrasings(status_quo_phrase: str) -> None:
+    """Only a whitelist counts as status quo, so natural phrasings must be listed.
+
+    A miss here rejects an otherwise-valid generated persona, which costs a full
+    LLM retry and can push POST /api/sessions past the proxy read timeout.
+    """
+    payload = {
+        "id": "test",
+        "display_name": "Test",
+        "role": "owner",
+        "industry": "b2b",
+        "company_size": "30-100",
+        "authority_level": "final_decider",
+        "behavior_model": "skeptical_but_rational",
+        "target_action": "book_meeting",
+        "current_business_context": "Context.",
+        "business_facts": ["Fact 1", "Fact 2"],
+        "cares_about": ["a", "b", "c"],
+        "current_solution": "Excel",
+        "alternative_solutions": [status_quo_phrase, "купить конкурирующий ATS"],
+        "information_gaps": ["gap 1", "gap 2"],
+        "latent_pains": ["pain 1", "pain 2"],
+        "buying_motivation": ["motivation 1", "motivation 2"],
+        "decision_criteria": ["c1", "c2", "c3"],
+        "hidden_constraints": ["constraint 1"],
+        "typical_objections": ["objection 1", "objection 2"],
+        "proof_sensitivity": ["proof 1", "proof 2"],
+        "call_scoring_criteria": ["criteria 1", "criteria 2", "criteria 3"],
+        "communication_style": "Style.",
+        "initial_openness": 25,
+        "starting_interest": 25,
+        "price_sensitivity": 50,
+        "urgency": 20,
+        "trust_baseline": 20,
+    }
+
+    persona = PersonaProfile.model_validate(payload)
+
+    assert persona.alternative_solutions[0] == status_quo_phrase
     schema = PersonaGenerationOutput.model_json_schema()
     schema_as_text = json.dumps(schema, ensure_ascii=False)
 

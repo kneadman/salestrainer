@@ -72,6 +72,36 @@ class RevealedFact(BaseModel):
     turn_index: int = Field(ge=1)
 
 
+STATUS_QUO_MARKERS: tuple[str, ...] = (
+    "статус-кво",
+    "ничего не менять",
+    "как сейчас",
+    "как есть",
+    "без изменений",
+    "не менять",
+    "оставить текущ",
+    "оставить всё",
+    "оставить все",
+    "продолжать",
+    "продолжить",
+    "сохранить текущ",
+    "сохранить как есть",
+    "текущий процесс",
+    "текущим подрядчиком",
+    "текущим поставщиком",
+    "текущий подрядчик",
+    "текущий поставщик",
+    "status quo",
+    "status-quo",
+)
+"""Markers that satisfy the "status quo is always an alternative" rule.
+
+Shared by the Pydantic validator and the persona generator's business checks so
+prompt, validation and post-checks cannot drift apart. A miss here rejects an
+otherwise-valid persona, which costs a full LLM retry.
+"""
+
+
 class PersonaProfile(BaseModel):
     """Universal B2B persona schema v3.1.
 
@@ -136,28 +166,7 @@ class PersonaProfile(BaseModel):
     @classmethod
     def alternative_solutions_must_include_status_quo(cls, value: list[str]) -> list[str]:
         normalized = " | ".join(item.lower() for item in value)
-        status_quo_markers = [
-            "статус-кво",
-            "ничего не менять",
-            "как сейчас",
-            "текущий процесс",
-            "оставить текущ",
-            "продолжать",
-            "продолжить",
-            "оставить всё",
-            "оставить все",
-            "без изменений",
-            "не менять",
-            "сохранить текущ",
-            "сохранить как есть",
-            "текущим подрядчиком",
-            "текущий подрядчик",
-            "текущим поставщиком",
-            "текущий поставщик",
-            "status quo",
-            "status-quo",
-        ]
-        if not any(marker in normalized for marker in status_quo_markers):
+        if not any(marker in normalized for marker in STATUS_QUO_MARKERS):
             raise ValueError("alternative_solutions must include status quo.")
         return value
 
