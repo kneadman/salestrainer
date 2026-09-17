@@ -21,9 +21,10 @@ from app.domain.judgement_models import (
 from app.domain.models import TurnEvaluation
 from app.domain.token_counter import TokenCountedResult, TokenCounterService
 from app.infrastructure.config import Settings
+from app.prompts.schemas import load_judge_prompt
 from app.infrastructure.responses_client import (
     LLMClientError,
-    OpenAICompatibleResponsesClient,
+    OpenAICompatibleClient,
     Transport,
     _payload_size,
     _response_to_payload,
@@ -494,7 +495,7 @@ class FakeJudgeClient:
         return "red"
 
 
-class StructuredJudgeClient(OpenAICompatibleResponsesClient):
+class StructuredJudgeClient(OpenAICompatibleClient):
     _openai_missing_message = "openai package is required for judge providers."
 
     def __init__(
@@ -506,6 +507,9 @@ class StructuredJudgeClient(OpenAICompatibleResponsesClient):
         folder_id: str | None,
         agent_id: str | None,
         model_or_agent_label: str | None = None,
+        system_prompt: str | None = None,
+        api_style: str = "responses",
+        response_format: str = "json_schema",
         timeout_seconds: int = 30,
         max_retries: int = 1,
         fallback_client: JudgeClient | None = None,
@@ -513,11 +517,15 @@ class StructuredJudgeClient(OpenAICompatibleResponsesClient):
         debug_payload_logging: bool = False,
         token_counter: TokenCounterService | None = None,
     ) -> None:
-        """Configure an OpenAI/Yandex-compatible structured judge client."""
+        """Configure a structured judge client for OpenAI-compatible providers."""
         super().__init__(
             base_url=base_url,
             api_key=api_key,
+            model=model_or_agent_label,
             folder_id=folder_id,
+            system_prompt=system_prompt,
+            api_style=api_style,
+            response_format=response_format,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             transport=transport,
@@ -587,6 +595,8 @@ class StructuredJudgeClient(OpenAICompatibleResponsesClient):
             request_payload["prompt"] = {"id": self._agent_id}
         else:
             request_payload["model"] = self._model_or_agent_label or "gpt-4.1-mini"
+        if self._system_prompt:
+            request_payload["system_prompt"] = self._system_prompt
         return request_payload
 
     def _safe_request_metadata(self, *, attempt: int, request_payload: dict[str, Any]) -> dict[str, object]:
@@ -632,6 +642,31 @@ def build_judge_client(settings: Settings) -> JudgeClient:
             api_key=settings.yandex_api_key,
             folder_id=folder_id,
             agent_id=agent_id,
+            api_style="responses",
+            timeout_seconds=settings.llm_request_timeout_seconds,
+            max_retries=1,
+            fallback_client=FakeJudgeClient() if is_fake_fallback_allowed(settings) else None,
+            debug_payload_logging=settings.debug_llm_payload,
+        )
+    if backend == "openai_compatible":
+        model = settings.llm_judge_model or settings.llm_model
+        if not all([settings.llm_base_url, settings.llm_api_key, model]):
+            if is_fake_fallback_allowed(settings):
+                logger.warning("judge_backend_incomplete_config backend=%s fallback=fake", backend)
+                return FakeJudgeClient()
+            raise LLMProviderConfigurationError(
+                "Incomplete OpenAI-compatible judge configuration and fake fallback is disabled."
+            )
+        return StructuredJudgeClient(
+            provider="openai_compatible",
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            folder_id=None,
+            agent_id=None,
+            model_or_agent_label=model,
+            system_prompt=load_judge_prompt(),
+            api_style=settings.llm_api_style,
+            response_format=settings.llm_response_format,
             timeout_seconds=settings.llm_request_timeout_seconds,
             max_retries=1,
             fallback_client=FakeJudgeClient() if is_fake_fallback_allowed(settings) else None,

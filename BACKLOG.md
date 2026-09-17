@@ -10,6 +10,8 @@
 
 ## Последние закрытые
 
+- **2026-05-26**: Фича — переключение LLM-роутера через `.env`. Добавлен backend `LLM_BACKEND=openai_compatible` поверх любого OpenAI-compatible роутера (`/chat/completions` или `/responses`). Рефакторинг транспорта: `OpenAICompatibleResponsesClient` → `OpenAICompatibleClient` с `api_style` (`responses`/`chat_completions`), `response_format` (`json_schema`/`json_object`/`none`) и парсингом `choices[].message.content`. Новые env-переменные: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_API_STYLE`, `LLM_RESPONSE_FORMAT`, `LLM_MODEL`, `LLM_DIALOGUE_MODEL`, `LLM_PERSONA_MODEL`, `LLM_JUDGE_MODEL`, `LLM_SUMMARY_MODEL`. Для `openai_compatible` ролевые системные промпты берутся из `app/prompts/*.md` (`load_client_simulator_prompt`, `load_judge_prompt`, `load_persona_generator_prompt`), строгая JSON-схема передаётся через `response_format`. Startup-валидация и fake fallback-политика расширены на новый backend; `yandex_compatible` сохранён без изменений. Тесты: `tests/unit/test_openai_compatible_backend.py` + расширение summary-компрессора. `pytest` green (unit 241, integration 205 passed / 1 skipped).
+
 - **2026-05-26**: Epic — Блог: раздел статей с управлением в админке. Добавлена модель `BlogPost` с Alembic-миграцией, публичные эндпоинты `GET /api/blog/posts` и `GET /api/blog/posts/{slug}`, admin CRUD `GET/POST/PATCH/DELETE /api/internal/blog/posts` с поиском, загрузка обложек `POST /api/internal/blog/upload-image` (лимит 5 МБ, MIME image/*). Frontend: секция `LatestPostsSection` на лендинге, страницы `BlogListPage` (`/blog`) и `BlogPostPage` (`/blog/{slug}`), admin `BlogPostsPage` (`/admin/blog`) с таблицей, inline-формой, debounce-поиском и переключателем публикации. `python -m compileall`, `npm run build`, `pytest` green.
 
 

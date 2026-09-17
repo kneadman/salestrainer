@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 from json import JSONDecodeError
-from pathlib import Path
 from typing import Any, Protocol
 
 from pydantic import ValidationError
@@ -13,7 +12,7 @@ from app.domain.persona_generation import UniversalFakePersonaGenerator
 from app.domain.token_counter import TokenCountedResult, TokenCounterService
 from app.infrastructure.responses_client import (
     LLMClientError,
-    OpenAICompatibleResponsesClient,
+    OpenAICompatibleClient,
     Transport,
     _payload_size,
     _response_to_payload,
@@ -73,7 +72,7 @@ class PersonaGenerationBusinessValidationError(ValueError):
     """Raised when provider JSON is valid but violates product business rules."""
 
 
-class StructuredPersonaGeneratorClient(OpenAICompatibleResponsesClient):
+class StructuredPersonaGeneratorClient(OpenAICompatibleClient):
     _openai_missing_message = "openai package is required for persona generator providers."
 
     def __init__(
@@ -87,6 +86,9 @@ class StructuredPersonaGeneratorClient(OpenAICompatibleResponsesClient):
         model_or_agent_label: str | None = None,
         master_prompt: str | None = None,
         json_template: str | None = None,
+        system_prompt: str | None = None,
+        api_style: str = "responses",
+        response_format: str = "json_schema",
         timeout_seconds: int = 30,
         max_retries: int = 1,
         fallback_client: PersonaGeneratorClient | None = None,
@@ -94,11 +96,15 @@ class StructuredPersonaGeneratorClient(OpenAICompatibleResponsesClient):
         debug_payload_logging: bool = False,
         token_counter: TokenCounterService | None = None,
     ) -> None:
-        """Configure an OpenAI/Yandex-compatible structured persona generator client."""
+        """Configure a structured persona generator client for OpenAI-compatible providers."""
         super().__init__(
             base_url=base_url,
             api_key=api_key,
+            model=model_or_agent_label,
             folder_id=folder_id,
+            system_prompt=system_prompt,
+            api_style=api_style,
+            response_format=response_format,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             transport=transport,
@@ -176,6 +182,8 @@ class StructuredPersonaGeneratorClient(OpenAICompatibleResponsesClient):
             request_payload["prompt"] = {"id": self._agent_id}
         else:
             request_payload["model"] = self._model_or_agent_label or "gpt-4.1-mini"
+        if self._system_prompt:
+            request_payload["system_prompt"] = self._system_prompt
         return request_payload
 
     def _safe_request_metadata(self, *, attempt: int, request_payload: dict[str, Any]) -> dict[str, object]:
@@ -272,17 +280,3 @@ def validate_generated_persona(
         raise PersonaGenerationBusinessValidationError("Generated persona must include communication_style.")
 
     return persona
-
-
-def _persona_generator_instructions() -> str:
-    """Keep persona-generator responsibilities separate from dialogue simulation."""
-    prompt_path = Path(__file__).resolve().parents[1] / "prompts" / "persona_generator.md"
-    if prompt_path.exists():
-        return prompt_path.read_text(encoding="utf-8")
-    return (
-        "Generate a hidden B2B client PersonaProfile for a sales training simulator. "
-        "Use only the provided organization/training policy and scenario context. "
-        "Return JSON matching the schema. Do not simulate dialogue turns. "
-        "Do not include secrets, API keys, credentials, or raw internal notes. "
-        "The persona is server-side hidden state and must be internally consistent."
-    )

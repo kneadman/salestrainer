@@ -9,10 +9,22 @@ from pydantic import BaseModel
 from app.domain.models import LLMTurnResponse
 
 PROMPT_PATH = Path(__file__).with_name("client_simulator.md")
+JUDGE_PROMPT_PATH = Path(__file__).with_name("judge_agent.md")
+PERSONA_PROMPT_PATH = Path(__file__).with_name("persona_generator.md")
 
 
 def load_client_simulator_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8").strip()
+
+
+def load_judge_prompt() -> str:
+    """Load the reference judge instructions for providers without hosted agents."""
+    return JUDGE_PROMPT_PATH.read_text(encoding="utf-8").strip()
+
+
+def load_persona_generator_prompt() -> str:
+    """Load the reference persona-generator instructions for providers without hosted agents."""
+    return PERSONA_PROMPT_PATH.read_text(encoding="utf-8").strip()
 
 
 def build_strict_json_schema(model_class: type[BaseModel]) -> dict[str, Any]:

@@ -5,7 +5,7 @@ from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.secrets import SecretEncryptionError, require_secret_encryption_key
 
 _DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer"
-_ALLOWED_LLM_BACKENDS = {"fake", "yandex_compatible"}
+_ALLOWED_LLM_BACKENDS = {"fake", "yandex_compatible", "openai_compatible"}
 
 
 def validate_runtime_settings(settings: Settings) -> None:
@@ -49,6 +49,9 @@ def _validate_llm_runtime(settings: Settings) -> None:
         raise LLMProviderConfigurationError(
             "LLM_BACKEND=fake is not permitted outside local/dev/test/demo environments."
         )
+    if backend == "openai_compatible":
+        _validate_openai_compatible_config(settings)
+        return
 
     missing_fields: list[str] = []
     if not settings.yandex_api_key:
@@ -73,3 +76,24 @@ def _validate_llm_runtime(settings: Settings) -> None:
 
 class RuntimeConfigurationError(RuntimeError):
     """Raised when startup configuration is unsafe for production-like environments."""
+
+
+def _validate_openai_compatible_config(settings: Settings) -> None:
+    """Require a router URL, API key, and per-role model names for the generic backend."""
+    missing_fields: list[str] = []
+    if not settings.llm_base_url.strip():
+        missing_fields.append("LLM_BASE_URL")
+    if not settings.llm_api_key:
+        missing_fields.append("LLM_API_KEY")
+    if not (settings.llm_dialogue_model or settings.llm_model):
+        missing_fields.append("LLM_DIALOGUE_MODEL/LLM_MODEL")
+    if not (settings.llm_judge_model or settings.llm_model):
+        missing_fields.append("LLM_JUDGE_MODEL/LLM_MODEL")
+    if not (settings.llm_persona_model or settings.llm_model):
+        missing_fields.append("LLM_PERSONA_MODEL/LLM_MODEL")
+    if not (settings.llm_summary_model or settings.llm_model):
+        missing_fields.append("LLM_SUMMARY_MODEL/LLM_MODEL")
+    if missing_fields:
+        raise LLMProviderConfigurationError(
+            "Incomplete OpenAI-compatible LLM configuration: missing " + ", ".join(missing_fields) + "."
+        )
