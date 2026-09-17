@@ -11,8 +11,9 @@ from app.domain.models import TrainingSessionState, Turn
 from app.infrastructure.config import Settings, is_fake_fallback_allowed
 from app.infrastructure.responses_client import (
     LLMClientError,
-    OpenAICompatibleResponsesClient,
+    OpenAICompatibleClient,
     Transport,
+    _chat_completions_text,
     _http_error_body,
     _response_to_payload,
     _safe_request_metadata,
@@ -45,6 +46,9 @@ def parse_summary_text(raw_payload: dict[str, Any] | str) -> str:
                         text = chunk.get("text")
                         if isinstance(text, str) and text.strip():
                             return text.strip()[:1000]
+        chat_text = _chat_completions_text(raw_payload)
+        if chat_text is not None and chat_text.strip():
+            return chat_text.strip()[:1000]
         raise LLMClientError("Summary response does not contain output_text.")
     try:
         decoded = json.loads(raw_payload)
@@ -58,14 +62,21 @@ def parse_summary_text(raw_payload: dict[str, Any] | str) -> str:
     return text[:1000]
 
 
-class YandexSummaryCompressor(OpenAICompatibleResponsesClient):
+class OpenAICompatibleSummaryCompressor(OpenAICompatibleClient):
+    """Summary compressor for any OpenAI-compatible router."""
+
     def __init__(
         self,
         *,
         base_url: str,
         api_key: str,
-        folder_id: str,
-        agent_id: str,
+        model: str | None = None,
+        folder_id: str | None = None,
+        agent_id: str | None = None,
+        system_prompt: str | None = None,
+        provider: str = "openai_compatible",
+        api_style: str = "chat_completions",
+        response_format: str = "none",
         timeout_seconds: int = 30,
         max_retries: int = 1,
         fallback_compressor: SummaryCompressor | None = None,
@@ -75,12 +86,17 @@ class YandexSummaryCompressor(OpenAICompatibleResponsesClient):
         super().__init__(
             base_url=base_url,
             api_key=api_key,
+            model=model,
             folder_id=folder_id,
+            system_prompt=system_prompt,
+            api_style=api_style,
+            response_format=response_format,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             transport=transport,
             debug_payload_logging=debug_payload_logging,
         )
+        self._provider = provider
         self._agent_id = agent_id
         self._fallback_compressor = fallback_compressor
 
@@ -105,11 +121,11 @@ class YandexSummaryCompressor(OpenAICompatibleResponsesClient):
                 retry_instruction=retry_instruction,
             )
             metadata = _safe_request_metadata(
-                provider="yandex_summary_compressor",
+                provider=self._provider,
                 endpoint_url=self.endpoint_url,
                 api_key=self._api_key,
-                project_id=self._folder_id,
-                prompt_id=self._agent_id,
+                project_id=self._folder_id or "",
+                prompt_id=self._agent_id or self._model or "",
                 attempt=attempt + 1,
                 request_payload=request_payload,
             )
@@ -173,14 +189,69 @@ class YandexSummaryCompressor(OpenAICompatibleResponsesClient):
             f"Current session state:\n"
             f"{json.dumps({'interest_score': session.interest_score, 'stage': session.stage, 'client_state': session.client_state.model_dump(mode='json')}, ensure_ascii=True, indent=2)}"
         )
-        return {
-            "prompt": {"id": self._agent_id},
-            "input": input_text,
-        }
+        request_payload: dict[str, Any] = {"input": input_text}
+        if self._agent_id:
+            request_payload["prompt"] = {"id": self._agent_id}
+        elif self._model:
+            request_payload["model"] = self._model
+        return request_payload
+
+
+class YandexSummaryCompressor(OpenAICompatibleSummaryCompressor):
+    """Yandex agents responses-API flavour of the summary compressor."""
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        folder_id: str,
+        agent_id: str,
+        timeout_seconds: int = 30,
+        max_retries: int = 1,
+        fallback_compressor: SummaryCompressor | None = None,
+        transport: Transport | None = None,
+        debug_payload_logging: bool = False,
+    ) -> None:
+        super().__init__(
+            base_url=base_url,
+            api_key=api_key,
+            folder_id=folder_id,
+            agent_id=agent_id,
+            provider="yandex_summary_compressor",
+            api_style="responses",
+            response_format="none",
+            timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+            fallback_compressor=fallback_compressor,
+            transport=transport,
+            debug_payload_logging=debug_payload_logging,
+        )
 
 
 def build_summary_compressor(settings: Settings) -> SummaryCompressor:
     backend = settings.llm_backend.lower().strip()
+    if backend == "openai_compatible":
+        model = settings.llm_summary_model or settings.llm_model
+        if not all([settings.llm_base_url, settings.llm_api_key, model]):
+            if is_fake_fallback_allowed(settings):
+                logger.warning("summary_compressor_incomplete_config fallback=fake")
+                return FakeSummaryCompressor()
+            raise LLMProviderConfigurationError(
+                "Incomplete summary compressor configuration and fake fallback is disabled."
+            )
+        return OpenAICompatibleSummaryCompressor(
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            model=model,
+            system_prompt=load_summary_prompt(),
+            api_style=settings.llm_api_style,
+            response_format="none",
+            timeout_seconds=settings.llm_request_timeout_seconds,
+            max_retries=1,
+            fallback_compressor=FakeSummaryCompressor() if is_fake_fallback_allowed(settings) else None,
+            debug_payload_logging=settings.debug_llm_payload,
+        )
     if backend != "yandex_compatible":
         return FakeSummaryCompressor()
     if not all([settings.yandex_api_key, settings.yandex_folder_id, settings.yandex_agent_id]):

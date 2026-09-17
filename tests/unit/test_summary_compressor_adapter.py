@@ -13,6 +13,7 @@ from app.domain.models import ClientState, PersonaProfile, TrainingSessionState,
 from tests.unit._persona_fixtures import valid_minimal_persona
 from app.infrastructure.config import Settings
 from app.infrastructure.summary_compressor import (
+    OpenAICompatibleSummaryCompressor,
     YandexSummaryCompressor,
     build_summary_compressor,
     parse_summary_text,
@@ -75,6 +76,44 @@ def test_parse_summary_text_from_prompt_response_payload() -> None:
         "output": [{"type": "message", "content": []}],
     }
     assert parse_summary_text(raw) == "Compact summary of earlier turns."
+
+
+def test_parse_summary_text_from_chat_completions_payload() -> None:
+    raw = {
+        "choices": [
+            {"index": 0, "message": {"role": "assistant", "content": "Compressed summary from router."}}
+        ]
+    }
+    assert parse_summary_text(raw) == "Compressed summary from router."
+
+
+def test_openai_compatible_summary_compressor_uses_router_payload() -> None:
+    calls: list[dict[str, object]] = []
+
+    def transport(request_payload: dict[str, object]) -> FakeResponse:
+        calls.append(request_payload)
+        return FakeResponse(
+            {"choices": [{"index": 0, "message": {"content": "Compressed summary from router."}}]}
+        )
+
+    compressor = OpenAICompatibleSummaryCompressor(
+        base_url="https://router.example.test/v1",
+        api_key="router-key",
+        model="summary/model",
+        system_prompt="Summarize.",
+        transport=transport,
+    )
+
+    summary = compressor.compress(
+        existing_summary="Existing summary.",
+        overflow_turns=[make_turn()],
+        session=make_session(),
+        latest_internal_notes="Client is slightly warmer.",
+    )
+
+    assert summary == "Compressed summary from router."
+    assert calls[0]["model"] == "summary/model"
+    assert "Overflow turns:" in calls[0]["input"]
 
 
 def test_yandex_summary_compressor_retries_then_succeeds() -> None:

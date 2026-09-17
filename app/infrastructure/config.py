@@ -20,6 +20,17 @@ class Settings(BaseSettings):
     allow_fake_llm_fallback: bool = False
     allow_in_memory_repository: bool = True
     llm_request_timeout_seconds: int = Field(default=30, ge=1, le=120)
+    # Provider-neutral OpenAI-compatible router settings (used when llm_backend=openai_compatible).
+    # LLM_BASE_URL lets deployments swap the router without code changes.
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_api_style: str = "chat_completions"
+    llm_model: str = ""
+    llm_dialogue_model: str = ""
+    llm_persona_model: str = ""
+    llm_judge_model: str = ""
+    llm_summary_model: str = ""
+    llm_response_format: str = "json_schema"
     yandex_api_key: str = ""
     yandex_folder_id: str = ""
     yandex_agent_id: str = ""

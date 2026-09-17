@@ -23,6 +23,7 @@ from app.infrastructure.persona_generator_client import (
     validate_generated_persona,
 )
 from app.infrastructure.llm_client import LLMClientError
+from app.prompts.schemas import load_persona_generator_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,8 @@ class PersonaGenerationService:
         """Return a stable label for sanitized logs."""
         if isinstance(client, FakePersonaGeneratorClient):
             return "local_fallback"
+        if isinstance(client, StructuredPersonaGeneratorClient):
+            return getattr(client, "_provider", "openai_compatible") or "openai_compatible"
         return "global_yandex"
 
     def _allow_local_fallback(self) -> bool:
@@ -161,6 +164,23 @@ class PersonaGeneratorClientFactory:
         provider = self._settings.llm_backend.lower().strip()
         if provider == "fake":
             return FakePersonaGeneratorClient(fallback_generator)
+        if provider == "openai_compatible":
+            model = self._settings.llm_persona_model or self._settings.llm_model
+            if not all([self._settings.llm_base_url, self._settings.llm_api_key, model]):
+                raise LLMProviderConfigurationError(
+                    "Incomplete global OpenAI-compatible persona configuration and local fallback is disabled."
+                )
+            return StructuredPersonaGeneratorClient(
+                provider="openai_compatible",
+                base_url=self._settings.llm_base_url,
+                api_key=self._settings.llm_api_key,
+                model_or_agent_label=model,
+                system_prompt=load_persona_generator_prompt(),
+                api_style=self._settings.llm_api_style,
+                response_format=self._settings.llm_response_format,
+                timeout_seconds=self._settings.llm_request_timeout_seconds,
+                debug_payload_logging=self._settings.debug_llm_payload,
+            )
         if provider != "yandex_compatible":
             raise LLMProviderConfigurationError(
                 f"Unsupported llm_backend '{self._settings.llm_backend}' for persona generation."

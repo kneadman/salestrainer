@@ -13,7 +13,7 @@ Sales Trainer MVP — тренажёр B2B-продаж для менеджер�
 - PostgreSQL для пользователей, доступов, training configs, durable history, отчётов, usage events и audit log.
 - Cookie auth через HttpOnly session cookie и CSRF для mutating-запросов.
 - Роли `internal_admin`, `client_lead`, `client_manager`; legacy `client_user` нормализуется в `client_manager`.
-- Yandex/OpenAI-compatible LLM adapters для persona generation, dialogue и judge.
+- OpenAI-compatible LLM adapters (persona generation, dialogue, judge, summary) поверх любого роутера: `yandex_compatible` (Responses API + Yandex Agents) или `openai_compatible` (любой `/chat/completions` роутер).
 - Fake/local LLM fallback для разработки и демо.
 - Voice input MVP: браузерная запись голоса, batch STT через `/api/speech/transcribe`, вставка текста в composer без auto-send.
 - Public landing `/` и lead form `/api/leads`.
@@ -23,7 +23,7 @@ Sales Trainer MVP — тренажёр B2B-продаж для менеджер�
 - Python 3.13+, FastAPI, Pydantic v2, SQLAlchemy, Alembic.
 - PostgreSQL, Redis.
 - React 18, TypeScript, Vite, nginx.
-- Yandex-compatible LLM agents; fake fallback только для local/dev/demo.
+- OpenAI-compatible LLM: `yandex_compatible` (Yandex Agents) или `openai_compatible` (любой роутер); fake fallback только для local/dev/demo.
 
 ## Архитектура
 
@@ -151,7 +151,7 @@ curl -i http://localhost:8080/api/health
 - Runtime: `APP_ENV`, `SESSION_TTL_SECONDS`, `DEFAULT_TRAINING_SCENARIO_ID`.
 - Auth/cookies: `AUTH_SESSION_TTL_SECONDS`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `CSRF_TOKEN_TTL_SECONDS`.
 - Rate limits/proxy: `LOGIN_RATE_LIMIT_ATTEMPTS`, `LEAD_RATE_LIMIT_ATTEMPTS`, `TRUSTED_PROXY_IPS`.
-- LLM: `LLM_BACKEND`, `ALLOW_FAKE_LLM_FALLBACK`, `YANDEX_API_KEY`, `YANDEX_BASE_URL`, `YANDEX_PERSONA_*`, `YANDEX_DIALOGUE_*`, `YANDEX_JUDGE_*`.
+- LLM: `LLM_BACKEND`, `ALLOW_FAKE_LLM_FALLBACK`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_API_STYLE`, `LLM_RESPONSE_FORMAT`, `LLM_MODEL`, `LLM_DIALOGUE_MODEL`, `LLM_PERSONA_MODEL`, `LLM_JUDGE_MODEL`, `LLM_SUMMARY_MODEL`, `YANDEX_API_KEY`, `YANDEX_BASE_URL`, `YANDEX_PERSONA_*`, `YANDEX_DIALOGUE_*`, `YANDEX_JUDGE_*`.
 - STT: `STT_ENABLED`, `STT_BACKEND`, `STT_WHISPER_CPP_BINARY`, `STT_MODEL_PATH`, `STT_RATE_LIMIT_ATTEMPTS`, `STT_GLOBAL_RATE_LIMIT_ATTEMPTS`.
 
 `.env` не должен попадать в Git.
@@ -301,6 +301,12 @@ Runtime разделён на несколько контрактов:
 
 Все provider outputs считаются недоверенными и валидируются Pydantic-моделями. Fake/local fallback предназначен для разработки и демо. Staging/prod должны явно конфигурировать реальные credentials и fallback-политику.
 
+Backend `LLM_BACKEND`:
+
+- `fake` — детерминированный локальный fallback, только local/dev/demo.
+- `yandex_compatible` — Yandex Cloud AI Agents: `YANDEX_API_KEY`, `YANDEX_BASE_URL`, folder/agent IDs, Responses API.
+- `openai_compatible` — любой OpenAI-compatible роутер (`/chat/completions` или `/responses`). Переключение провайдера делается через `.env` без изменения кода: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_API_STYLE`, `LLM_RESPONSE_FORMAT` и модель по роли (`LLM_DIALOGUE_MODEL`, `LLM_PERSONA_MODEL`, `LLM_JUDGE_MODEL`, `LLM_SUMMARY_MODEL`; общий fallback — `LLM_MODEL`). В `openai_compatible` ролевые системные промпты берутся из `app/prompts/*.md`, а строгая JSON-схема передаётся через `response_format`.
+
 Durable history хранит internal metadata версий контрактов:
 
 - persona schema/prompt version;
@@ -411,7 +417,7 @@ pytest tests/integration/test_static_frontend.py
 
 ## Ограничения MVP
 
-- Live Yandex smoke test не входит в обычный local test suite.
+- Live LLM smoke test с реальным роутером не входит в обычный local test suite.
 - Organization-level LLM provider configs не управляют основным MVP runtime.
 - Billing/payment не реализован.
 - Balance/usage surfaces остаются groundwork, а не платёжной системой.

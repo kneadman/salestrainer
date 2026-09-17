@@ -75,6 +75,7 @@ def test_validate_runtime_settings_rejects_fake_backend_in_production() -> None:
             Settings(
                 app_env="production",
                 llm_backend="fake",
+                allow_fake_llm_fallback=False,
                 database_url="postgresql+psycopg://user:pass@db:5432/sales_trainer",
                 secret_encryption_key="prod-secret",
             )
@@ -87,6 +88,7 @@ def test_validate_runtime_settings_rejects_incomplete_yandex_config_in_productio
             Settings(
                 app_env="production",
                 llm_backend="yandex_compatible",
+                allow_fake_llm_fallback=False,
                 database_url="postgresql+psycopg://user:pass@db:5432/sales_trainer",
                 secret_encryption_key="prod-secret",
                 yandex_api_key="token",
@@ -107,6 +109,7 @@ def test_validate_runtime_settings_accepts_complete_yandex_config_in_production(
         Settings(
             app_env="production",
             llm_backend="yandex_compatible",
+            allow_fake_llm_fallback=False,
             database_url="postgresql+psycopg://user:pass@db:5432/sales_trainer",
             secret_encryption_key="prod-secret",
             yandex_api_key="token",
