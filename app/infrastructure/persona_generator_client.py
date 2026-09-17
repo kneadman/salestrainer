@@ -19,6 +19,7 @@ from app.infrastructure.responses_client import (
     _sanitize_api_key,
     parse_enveloped_json_output,
 )
+from app.prompts.schemas import make_strict_json_schema
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ class StructuredPersonaGeneratorClient(OpenAICompatibleClient):
         system_prompt: str | None = None,
         api_style: str = "responses",
         response_format: str = "json_schema",
+        reasoning_mode: str = "provider_default",
         timeout_seconds: int = 30,
         max_retries: int = 1,
         fallback_client: PersonaGeneratorClient | None = None,
@@ -105,6 +107,7 @@ class StructuredPersonaGeneratorClient(OpenAICompatibleClient):
             system_prompt=system_prompt,
             api_style=api_style,
             response_format=response_format,
+            reasoning_mode=reasoning_mode,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             transport=transport,
@@ -173,7 +176,7 @@ class StructuredPersonaGeneratorClient(OpenAICompatibleClient):
                 "format": {
                     "type": "json_schema",
                     "name": "persona_generation_output",
-                    "schema": PersonaGenerationOutput.model_json_schema(),
+                    "schema": make_strict_json_schema(PersonaGenerationOutput),
                     "strict": True,
                 }
             },

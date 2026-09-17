@@ -29,22 +29,16 @@ dependencies = [
     "tiktoken>=0.9,<1.0",
 ]
 
-[tool.setuptools]
-packages = [
-    "app",
-    "app.admin",
-    "app.access",
-    "app.api",
-    "app.application",
-    "app.client_portal",
-    "app.domain",
-    "app.history",
-    "app.identity",
-    "app.infrastructure",
-    "app.internal_admin",
-    "app.prompts",
-    "app.web",
-]
+[tool.setuptools.packages.find]
+# Auto-discovery instead of a hand-maintained list. A forgotten entry used to
+# ship a half-installed wheel: ``app.blog`` and the prompt ``*.md`` files were
+# missing, which only surfaced in containers running from site-packages.
+include = ["app*"]
+exclude = ["tests*"]
+
+# Master prompts and the seed template are read from disk at runtime.
+[tool.setuptools.package-data]
+"app.prompts" = ["*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

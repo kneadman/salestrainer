@@ -1102,7 +1102,9 @@ def test_api_create_session_uses_persona_generation_service_for_client_config() 
     assert saved_session.persona.role == "cfo"
     assert saved_session.interest_score == 31
     assert captured["persona_generation_context"] == "Buyer for a cosmetics retail business with low repeat sales and poor diagnostics."
-    assert captured["scenario_id"] is None
+    # The route resolves the default scenario before generation so the persona
+    # pool key matches the one the background refill uses.
+    assert captured["scenario_id"] == "first_contact_discovery"
     assert "llm_generated_cfo_cash_gap" not in response.text
 
     db_session.close()

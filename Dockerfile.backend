@@ -50,6 +50,7 @@ COPY alembic.ini ./
 COPY app ./app
 COPY migrations ./migrations
 COPY deploy/snapshot_scheduler.py ./deploy/snapshot_scheduler.py
+COPY deploy/persona_pool_worker.py ./deploy/persona_pool_worker.py
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .

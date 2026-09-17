@@ -52,7 +52,9 @@ class PersonaGenerationService:
         scenario_id: str | None = None,
     ) -> TokenCountedResult[PersonaProfile]:
         """Generate a hidden PersonaProfile from training-config business context."""
-        del self._session
+        # The session is intentionally unused here: generation is stateless and the
+        # durable writes are the caller's job. Do not delete the attribute - this
+        # method is called repeatedly (for example by the persona pool refill).
         input_payload = self.build_input(training_config=training_config, scenario_id=scenario_id)
         client = self._build_client(training_config=training_config, input_payload=input_payload)
         try:
@@ -178,6 +180,7 @@ class PersonaGeneratorClientFactory:
                 system_prompt=load_persona_generator_prompt(),
                 api_style=self._settings.llm_api_style,
                 response_format=self._settings.llm_response_format,
+                reasoning_mode=self._settings.llm_reasoning_mode,
                 timeout_seconds=self._settings.llm_request_timeout_seconds,
                 debug_payload_logging=self._settings.debug_llm_payload,
             )

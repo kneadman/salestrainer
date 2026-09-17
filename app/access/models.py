@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Boolean, DateTime, ForeignKey, Text, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON, Uuid
 
@@ -164,3 +164,53 @@ class RuntimeTrainingConfig(BaseModel):
     persona_generation_context: str = ""
     seed_config: dict | None = None
     is_active: bool = True
+
+
+class PersonaPoolEntry(Base):
+    """A pre-generated persona waiting to be claimed by a new training session.
+
+    Generating a persona costs one full LLM call (seconds, sometimes tens of
+    seconds on a reasoning model) and blocks the session-start request. Keeping a
+    reserve of ready personas per training config makes starting a session instant.
+
+    Entries are keyed by ``(training_config_id, scenario_id, context_hash)``. The
+    hash covers the resolved generation context, so editing a training config's
+    seed config invalidates the stale reserve instead of serving a persona that no
+    longer matches the configured business context.
+    """
+
+    __tablename__ = "persona_pool_entries"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    training_config_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("client_training_configs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    client_account_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("client_accounts.id"),
+        nullable=False,
+    )
+    scenario_id: Mapped[str] = mapped_column(Text, nullable=False)
+    context_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    persona: Mapped[dict] = mapped_column(JSON, nullable=False)
+    persona_schema_version: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'persona-profile-v3.1'")
+    )
+    persona_prompt_version: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_persona_pool_lookup",
+            "training_config_id",
+            "scenario_id",
+            "context_hash",
+            "created_at",
+        ),
+    )

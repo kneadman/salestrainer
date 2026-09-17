@@ -11,6 +11,7 @@ from app.api.client_ip import client_ip_from_request
 from app.api.dependencies import (
     get_app_settings,
     get_persona_generation_service,
+    get_persona_pool_service,
     get_report_service,
     get_runtime_activity_service,
     get_session_service,
@@ -36,6 +37,7 @@ from app.api.schemas import (
 )
 from app.application.projections import build_session_public_dto, build_turn_public_dto
 from app.application.persona_generation_service import PersonaGenerationService
+from app.application.persona_pool_service import PersonaPoolService
 from app.application.report_service import ReportService
 from app.application.runtime_activity_service import RuntimeActivityService
 from app.application.session_service import TrainingSessionService
@@ -283,6 +285,8 @@ def create_session(
     access_service: AccessService = Depends(get_access_service),
     history_service: HistoryService = Depends(get_history_service),
     persona_generation_service: PersonaGenerationService = Depends(get_persona_generation_service),
+    persona_pool_service: PersonaPoolService = Depends(get_persona_pool_service),
+    app_settings: Settings = Depends(get_app_settings),
     current_session: CurrentSession = Depends(require_current_user),
 ) -> SessionStateResponse:
     try:
@@ -341,14 +345,20 @@ def create_session(
                 persona_id=request.persona_id,
             )
         else:
-            persona_result = persona_generation_service.generate_for_training_config(
+            scenario_id = request.scenario_id or app_settings.default_training_scenario_id
+            persona = persona_pool_service.claim(
                 training_config=training_config,
-                scenario_id=request.scenario_id,
+                scenario_id=scenario_id,
             )
-            persona = persona_result.value
-            persona_tokens = persona_result
+            if persona is None:
+                persona_result = persona_generation_service.generate_for_training_config(
+                    training_config=training_config,
+                    scenario_id=scenario_id,
+                )
+                persona = persona_result.value
+                persona_tokens = persona_result
             session = session_service.start_session(
-                scenario_id=request.scenario_id,
+                scenario_id=scenario_id,
                 training_config=training_config,
                 persona_override=persona,
             )

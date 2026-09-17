@@ -69,6 +69,23 @@ services:
     command: ["python", "/app/deploy/snapshot_scheduler.py"]
     restart: unless-stopped
 
+  persona-pool-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sales_trainer_persona_pool
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/sales_trainer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "/app/deploy/persona_pool_worker.py"]
+    restart: unless-stopped
+
   frontend:
     build:
       context: .

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     llm_judge_model: str = ""
     llm_summary_model: str = ""
     llm_response_format: str = "json_schema"
+    # "provider_default" | "off" | "effort:<minimal|low|medium|high>".
+    # Reasoning models add seconds of hidden thinking to every turn; "off" trades
+    # some reasoning quality for latency. See reasoning_params() for the wire shape.
+    llm_reasoning_mode: str = "provider_default"
     yandex_api_key: str = ""
     yandex_folder_id: str = ""
     yandex_agent_id: str = ""
@@ -43,6 +47,15 @@ class Settings(BaseSettings):
     yandex_base_url: str = "https://ai.api.cloud.yandex.net/v1"
     recent_turn_limit: int = Field(default=6, ge=1, le=20)
     persona_random_seed: int | None = None
+    # Pre-generated persona reserve per training config. 0 disables the pool and
+    # falls back to generating a persona inline on every session start.
+    # ``target`` is the reserve size, ``low`` the watermark at which a refill starts.
+    persona_pool_enabled: bool = True
+    persona_pool_target_size: int = Field(default=8, ge=0, le=50)
+    persona_pool_low_watermark: int = Field(default=3, ge=0, le=49)
+    persona_pool_refill_batch_size: int = Field(default=4, ge=1, le=25)
+    # Seconds between background refill sweeps of the reserve.
+    persona_pool_refill_interval_seconds: int = Field(default=120, ge=10, le=3600)
     default_training_scenario_id: str = "first_contact_discovery"
     auth_cookie_name: str = "salestrainer_session"
     auth_session_ttl_seconds: int = 1209600

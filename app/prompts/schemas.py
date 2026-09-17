@@ -28,12 +28,47 @@ def load_persona_generator_prompt() -> str:
 
 
 def build_strict_json_schema(model_class: type[BaseModel]) -> dict[str, Any]:
-    """Build the validation JSON schema directly from the Pydantic model.
+    """Build a provider-safe strict JSON schema from a Pydantic model.
 
-    "Strict" here relies on model-level constraints such as ``extra="forbid"``.
-    This helper does not add any provider-specific schema adapter semantics.
+    Pydantic omits fields that carry a default from ``required``. OpenAI-style
+    strict validators reject such schemas outright with
+    ``'required' is required to be supplied and to be an array including every
+    key in properties``, which used to break every GPT-class model on the router.
+
+    The fix is mechanical and applies to the whole tree: every object node lists
+    all of its properties in ``required`` and sets ``additionalProperties`` to
+    ``false``. Fields that are optional for the caller stay optional in the
+    Pydantic model - the prompt is responsible for filling them with a sensible
+    value, and a missing field still validates because defaults are applied
+    during model construction, not during JSON-schema validation.
     """
-    return model_class.model_json_schema(mode="validation")
+    return make_strict_json_schema(model_class)
+
+
+def make_strict_json_schema(schema: dict[str, Any] | type[BaseModel]) -> dict[str, Any]:
+    """Return a copy of ``schema`` where every object node is strict-validatable.
+
+    Accepts either a raw JSON schema dict or a Pydantic model class.
+    """
+    raw = schema.model_json_schema(mode="validation") if isinstance(schema, type) else schema
+    strict_schema = json.loads(json.dumps(raw))
+    _strictify(strict_schema)
+    return strict_schema
+
+
+def _strictify(node: Any) -> None:
+    """Recursively force ``required`` completeness and ``additionalProperties: false``."""
+    if isinstance(node, dict):
+        properties = node.get("properties")
+        if isinstance(properties, dict) and properties:
+            node["required"] = sorted(properties.keys())
+            node["additionalProperties"] = False
+        for value in node.values():
+            _strictify(value)
+        return
+    if isinstance(node, list):
+        for item in node:
+            _strictify(item)
 
 
 def llm_turn_response_schema() -> dict[str, Any]:

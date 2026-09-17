@@ -36,6 +36,9 @@ services:
   snapshot-scheduler:
     restart: unless-stopped
 
+  persona-pool-worker:
+    restart: unless-stopped
+
 networks:
   default:
     ipam:

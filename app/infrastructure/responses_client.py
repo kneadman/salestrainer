@@ -242,6 +242,41 @@ def _http_error_body(error: Exception) -> str:
 _API_STYLES = {"responses", "chat_completions"}
 _RESPONSE_FORMATS = {"json_schema", "json_object", "none"}
 
+# ``LLM_REASONING_MODE`` values. Reasoning models (deepseek-v4-flash and friends)
+# spend seconds of hidden thinking before producing a 1-3 sentence client reply.
+# The savings are real but provider support is uneven, so the default keeps
+# whatever the router decides and disabling is an explicit opt-in.
+REASONING_MODE_PROVIDER_DEFAULT = "provider_default"
+REASONING_MODE_OFF = "off"
+_REASONING_EFFORT_LEVELS = {"minimal", "low", "medium", "high"}
+
+
+def reasoning_params(mode: str) -> dict[str, Any]:
+    """Translate ``LLM_REASONING_MODE`` into provider request parameters.
+
+    Supported values:
+
+    - ``provider_default`` — send nothing and let the router/model decide.
+    - ``off`` — disable hidden thinking. Sent as ``thinking: {"type": "disabled"}``,
+      which OpenAI-compatible routers map onto the underlying vendor control.
+    - ``effort:<minimal|low|medium|high>`` — send ``reasoning_effort``.
+
+    Unknown values are rejected early instead of silently sending a parameter the
+    provider would ignore.
+    """
+    resolved = (mode or REASONING_MODE_PROVIDER_DEFAULT).strip().lower()
+    if resolved == REASONING_MODE_PROVIDER_DEFAULT:
+        return {}
+    if resolved == REASONING_MODE_OFF:
+        return {"thinking": {"type": "disabled"}}
+    if resolved.startswith("effort:"):
+        level = resolved.split(":", 1)[1].strip()
+        if level in _REASONING_EFFORT_LEVELS:
+            return {"reasoning_effort": level}
+    raise LLMClientError(
+        f"Unsupported llm_reasoning_mode '{mode}'."
+    )
+
 
 class OpenAICompatibleClient:
     """Shared transport base for OpenAI-compatible LLM clients.
@@ -267,6 +302,7 @@ class OpenAICompatibleClient:
         system_prompt: str | None = None,
         api_style: str = "responses",
         response_format: str = "json_schema",
+        reasoning_mode: str = REASONING_MODE_PROVIDER_DEFAULT,
         timeout_seconds: int = 30,
         max_retries: int = 1,
         transport: Transport | None = None,
@@ -278,6 +314,8 @@ class OpenAICompatibleClient:
         resolved_format = response_format.strip().lower()
         if resolved_format not in _RESPONSE_FORMATS:
             raise LLMClientError(f"Unsupported llm_response_format '{response_format}'.")
+        # Validate eagerly so a typo fails at startup, not on the first session.
+        resolved_reasoning = reasoning_params(reasoning_mode)
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._model = model
@@ -285,6 +323,8 @@ class OpenAICompatibleClient:
         self._system_prompt = system_prompt
         self._api_style = resolved_style
         self._response_format = resolved_format
+        self._reasoning_mode = (reasoning_mode or REASONING_MODE_PROVIDER_DEFAULT).strip().lower()
+        self._reasoning_params = resolved_reasoning
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
         self._transport = transport or self._default_transport
@@ -346,4 +386,5 @@ class OpenAICompatibleClient:
                 }
             else:
                 request["response_format"] = {"type": "json_object"}
+        request.update(self._reasoning_params)
         return request

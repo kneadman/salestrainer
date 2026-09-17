@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.domain.errors import LLMProviderConfigurationError
 from app.infrastructure.config import Settings, is_fake_fallback_allowed
+from app.infrastructure.responses_client import LLMClientError, reasoning_params
 from app.infrastructure.secrets import SecretEncryptionError, require_secret_encryption_key
 
 _DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/sales_trainer"
@@ -41,6 +42,7 @@ def _validate_llm_runtime(settings: Settings) -> None:
     backend = settings.llm_backend.lower().strip()
     if backend not in _ALLOWED_LLM_BACKENDS:
         raise LLMProviderConfigurationError(f"Unknown llm_backend '{settings.llm_backend}'.")
+    _validate_reasoning_mode(settings)
     if settings.allow_fake_llm_fallback:
         raise LLMProviderConfigurationError(
             "ALLOW_FAKE_LLM_FALLBACK is not permitted outside local/dev/test/demo environments."
@@ -76,6 +78,14 @@ def _validate_llm_runtime(settings: Settings) -> None:
 
 class RuntimeConfigurationError(RuntimeError):
     """Raised when startup configuration is unsafe for production-like environments."""
+
+
+def _validate_reasoning_mode(settings: Settings) -> None:
+    """Fail fast on a typo in LLM_REASONING_MODE instead of ignoring it silently."""
+    try:
+        reasoning_params(settings.llm_reasoning_mode)
+    except LLMClientError as error:
+        raise LLMProviderConfigurationError(str(error)) from error
 
 
 def _validate_openai_compatible_config(settings: Settings) -> None:

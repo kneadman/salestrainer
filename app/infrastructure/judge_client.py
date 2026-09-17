@@ -21,7 +21,7 @@ from app.domain.judgement_models import (
 from app.domain.models import TurnEvaluation
 from app.domain.token_counter import TokenCountedResult, TokenCounterService
 from app.infrastructure.config import Settings
-from app.prompts.schemas import load_judge_prompt
+from app.prompts.schemas import load_judge_prompt, make_strict_json_schema
 from app.infrastructure.responses_client import (
     LLMClientError,
     OpenAICompatibleClient,
@@ -510,6 +510,7 @@ class StructuredJudgeClient(OpenAICompatibleClient):
         system_prompt: str | None = None,
         api_style: str = "responses",
         response_format: str = "json_schema",
+        reasoning_mode: str = "provider_default",
         timeout_seconds: int = 30,
         max_retries: int = 1,
         fallback_client: JudgeClient | None = None,
@@ -526,6 +527,7 @@ class StructuredJudgeClient(OpenAICompatibleClient):
             system_prompt=system_prompt,
             api_style=api_style,
             response_format=response_format,
+            reasoning_mode=reasoning_mode,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             transport=transport,
@@ -586,7 +588,7 @@ class StructuredJudgeClient(OpenAICompatibleClient):
                 "format": {
                     "type": "json_schema",
                     "name": "judge_session_output",
-                    "schema": JudgeSessionOutput.model_json_schema(),
+                    "schema": make_strict_json_schema(JudgeSessionOutput),
                     "strict": True,
                 }
             },
@@ -667,6 +669,7 @@ def build_judge_client(settings: Settings) -> JudgeClient:
             system_prompt=load_judge_prompt(),
             api_style=settings.llm_api_style,
             response_format=settings.llm_response_format,
+            reasoning_mode=settings.llm_reasoning_mode,
             timeout_seconds=settings.llm_request_timeout_seconds,
             max_retries=1,
             fallback_client=FakeJudgeClient() if is_fake_fallback_allowed(settings) else None,

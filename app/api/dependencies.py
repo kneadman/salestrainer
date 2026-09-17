@@ -6,6 +6,7 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.application.persona_generation_service import PersonaGenerationService
+from app.application.persona_pool_service import PersonaPoolService
 from app.application.report_service import ReportService
 from app.application.runtime_activity_service import RuntimeActivityService
 from app.application.session_service import TrainingSessionService
@@ -76,3 +77,18 @@ def get_persona_generation_service(
 ) -> PersonaGenerationService:
     """Build the request-scoped persona generation service."""
     return PersonaGenerationService(db_session, settings=settings)
+
+
+def get_persona_pool_service(
+    db_session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+    persona_generation_service: PersonaGenerationService = Depends(get_persona_generation_service),
+) -> PersonaPoolService:
+    """Build the request-scoped persona reserve service."""
+    return PersonaPoolService(
+        db_session,
+        generation_service=persona_generation_service,
+        low_watermark=settings.persona_pool_low_watermark,
+        target_size=settings.persona_pool_target_size if settings.persona_pool_enabled else 0,
+        refill_batch_size=settings.persona_pool_refill_batch_size,
+    )

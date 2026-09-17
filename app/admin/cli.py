@@ -7,6 +7,9 @@ from datetime import UTC, datetime
 from sqlalchemy.exc import IntegrityError
 
 from app.access.repository import AccessRepository
+from app.application.persona_generation_service import PersonaGenerationService
+from app.application.persona_pool_service import PersonaPoolService
+from app.domain.scenarios import list_scenarios
 from app.identity.repository import IdentityRepository
 from app.identity.roles import UserRole
 from app.identity.security import hash_password, PasswordValidationError, validate_permanent_password
@@ -315,6 +318,24 @@ def _snapshot_token_usage(
     return f"created {created} snapshots for date {snapshot_date.date()}"
 
 
+def _warm_persona_pool(*, db_session, scenario_ids: list[str] | None) -> str:  # type: ignore[no-untyped-def]
+    """Refill the pre-generated persona reserve for active training configs."""
+    settings = get_settings()
+    resolved_scenario_ids = scenario_ids or [scenario.id for scenario in list_scenarios()]
+    generation_service = PersonaGenerationService(db_session, settings=settings)
+    pool_service = PersonaPoolService(
+        db_session,
+        generation_service=generation_service,
+        low_watermark=settings.persona_pool_low_watermark,
+        target_size=settings.persona_pool_target_size if settings.persona_pool_enabled else 0,
+        refill_batch_size=settings.persona_pool_refill_batch_size,
+    )
+    if not pool_service.enabled:
+        return "persona pool is disabled (PERSONA_POOL_TARGET_SIZE=0 or PERSONA_POOL_ENABLED=false)"
+    results = pool_service.refill_all_active_configs(scenario_ids=resolved_scenario_ids)
+    return f"generated {len(results)} personas for {len(resolved_scenario_ids)} scenario(s)"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m app.admin.cli",
@@ -362,6 +383,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     snapshot_parser = subparsers.add_parser("snapshot-token-usage")
     snapshot_parser.add_argument("--date", help="YYYY-MM-DD (default: yesterday)")
+
+    warm_pool_parser = subparsers.add_parser("warm-persona-pool")
+    warm_pool_parser.add_argument(
+        "--scenario-id",
+        action="append",
+        dest="scenario_ids",
+        help="Scenario id to refill (repeatable; default: all universal scenarios)",
+    )
 
     return parser
 
@@ -442,6 +471,11 @@ def run_cli(argv: list[str] | None = None) -> int:
                 message = _snapshot_token_usage(
                     history_service=history_service,
                     date_str=args.date,
+                )
+            elif args.command == "warm-persona-pool":
+                message = _warm_persona_pool(
+                    db_session=session,
+                    scenario_ids=args.scenario_ids,
                 )
             else:
                 message = _cleanup_expired_sessions(identity_repository=identity_repository)
